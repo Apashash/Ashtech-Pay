@@ -28,7 +28,8 @@ import {
   CreditCard,
   Loader2,
   X,
-  Image as ImageIcon
+  Image as ImageIcon,
+  RefreshCw,
 } from "lucide-react";
 import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import { createPortal } from "react-dom";
@@ -129,11 +130,13 @@ async function compressKycImage(file: File): Promise<File> {
 export default function KYCPage() {
   const { toast } = useToast();
   const { t } = useLanguage();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const { data: kycSubmission, isLoading: isLoadingKyc } = useQuery<KycSubmission | null>({
     queryKey: ["/api/kyc"],
   });
+  const isUpdateRequested = new URLSearchParams(location.split("?")[1] || "").get("update") === "true";
+  const [allowKycUpdate, setAllowKycUpdate] = useState(false);
 
   const [documentType, setDocumentType] = useState("");
   const [documentNumber, setDocumentNumber] = useState("");
@@ -369,6 +372,7 @@ export default function KYCPage() {
       businessType: string;
       businessCategory: string;
       businessDescription: string;
+      isUpdate?: boolean;
     }) => {
       const response = await apiRequest("POST", "/api/kyc", data);
       return response.json();
@@ -551,6 +555,7 @@ export default function KYCPage() {
       businessType,
       businessCategory,
       businessDescription,
+      isUpdate: isAlreadyVerified && allowKycUpdate,
     });
   };
 
@@ -744,7 +749,10 @@ export default function KYCPage() {
     );
   };
 
-  const canSubmitForm = !kycSubmission || kycSubmission.status === "rejected";
+  const isAlreadyVerified =
+    kycSubmission?.status === "approved" ||
+    (!kycSubmission && (user?.isVerified || user?.kycStatus === "approved" || user?.kycStatus === "verified"));
+  const canSubmitForm = !kycSubmission || kycSubmission.status === "rejected" || (isAlreadyVerified && allowKycUpdate);
   const currentWizardStep = wizardSteps[currentStep - 1];
   const CurrentStepIcon = currentWizardStep.icon;
 
@@ -773,6 +781,32 @@ export default function KYCPage() {
         </div>
 
         {renderStatusCard()}
+
+        {isAlreadyVerified && isUpdateRequested && !allowKycUpdate && (
+          <Card className="border-green-500/30 bg-green-500/5">
+            <CardHeader className="text-center">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-500/15">
+                <Shield className="h-9 w-9 text-green-500" />
+              </div>
+              <CardTitle>Compte déjà vérifié</CardTitle>
+              <CardDescription>
+                Votre compte est déjà vérifié. Voulez-vous mettre à jour vos informations KYC ?
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3 sm:flex-row sm:justify-center">
+              <Button variant="outline" onClick={() => setLocation("/dashboard")}>
+                Non, retourner au tableau de bord
+              </Button>
+              <Button
+                onClick={() => setAllowKycUpdate(true)}
+                className="bg-amber-500 text-white hover:bg-amber-600"
+              >
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Oui, mettre à jour
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
         {canSubmitForm && (
           <>

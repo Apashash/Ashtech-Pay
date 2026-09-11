@@ -5,7 +5,7 @@ import { format } from "date-fns";
 import { fr, enUS } from "date-fns/locale";
 import {
   Bell, ChevronLeft, ChevronRight, CheckCheck, Trash2, ArrowDownCircle,
-  ArrowUpCircle, Send, Megaphone, MessageSquare, X, Loader2, ExternalLink,
+  ArrowUpCircle, Send, Megaphone, MessageSquare, ShieldCheck, X, Loader2, ExternalLink,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { Button } from "@/components/ui/button";
@@ -86,6 +86,8 @@ export default function NotificationsPage() {
         return "/dashboard/support";
       case "global_message":
         return "/dashboard/global-message";
+      case "kyc_update_required":
+        return "/dashboard/kyc?update=true";
       default:
         return "/dashboard/transactions";
     }
@@ -138,6 +140,7 @@ export default function NotificationsPage() {
       case "transfer_received":    return <Send            className="w-5 h-5 text-blue-500" />;
       case "global_message":       return <Megaphone       className="w-5 h-5 text-purple-500" />;
       case "admin_message":        return <MessageSquare   className="w-5 h-5 text-purple-500" />;
+      case "kyc_update_required":  return <ShieldCheck    className="w-5 h-5 text-amber-500" />;
       default:                     return <Bell            className="w-5 h-5 text-muted-foreground" />;
     }
   }

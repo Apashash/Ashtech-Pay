@@ -11529,6 +11529,61 @@ export async function registerRoutes(
     }
   });
 
+  // Admin: Ask selected users to update their KYC information.
+  // This creates one private notification per selected account; it is not a
+  // broadcast to users who were not selected.
+  app.post("/api/admin/users/kyc-update-request", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const rawUserIds: unknown[] = Array.isArray(req.body?.userIds) ? req.body.userIds : [];
+      const normalizedUserIds = rawUserIds.reduce<string[]>((ids, id) => {
+        if (typeof id === "string" && id.trim().length > 0) ids.push(id.trim());
+        return ids;
+      }, []);
+      const userIds: string[] = [...new Set(normalizedUserIds)];
+      if (userIds.length === 0) {
+        return res.status(400).json({ message: "Sélectionnez au moins un utilisateur." });
+      }
+      if (userIds.length > 200) {
+        return res.status(400).json({ message: "La sélection ne peut pas dépasser 200 utilisateurs." });
+      }
+
+      const selectedUsers = await storage.getUsersByIds(userIds);
+      const selectedById = selectedUsers;
+      const skippedUserIds: string[] = [];
+      let sentCount = 0;
+
+      for (const userId of userIds) {
+        const target = selectedById.get(userId);
+        if (!target) {
+          skippedUserIds.push(userId);
+          continue;
+        }
+        await storage.createUserNotification({
+          userId,
+          type: "kyc_update_required",
+          title: "Mise à jour KYC requise",
+          message: "L’administration vous demande de mettre à jour vos informations KYC. Ouvrez cette notification pour continuer.",
+          transactionId: null,
+        });
+        sentCount += 1;
+      }
+
+      await storage.createAdminLog({
+        adminId: req.userId!,
+        action: "request_kyc_update",
+        targetType: "users",
+        targetId: null,
+        details: JSON.stringify({ userIds, sentCount, skippedUserIds }),
+        ipAddress: req.ip || null,
+      });
+
+      res.json({ success: true, sentCount, skippedCount: skippedUserIds.length });
+    } catch (error) {
+      console.error("Request KYC update error:", error);
+      res.status(500).json({ message: "Erreur lors de l’envoi des notifications KYC." });
+    }
+  });
+
   // Admin: Update user balance
   // Security: every mutation is fully audited (before/after), creates a compensating
   // transaction record, and requires a mandatory justification reason.
@@ -14545,10 +14600,11 @@ export async function registerRoutes(
       
       // Check if user already has a pending KYC submission
       const existingSubmission = await storage.getKycSubmissionByUserId(userId);
+      const updateRequested = req.body?.isUpdate === true;
       if (existingSubmission && existingSubmission.status === "pending") {
         return res.status(400).json({ message: "Vous avez déjà une demande KYC en attente" });
       }
-      if (existingSubmission && existingSubmission.status === "approved") {
+      if (existingSubmission && existingSubmission.status === "approved" && !updateRequested) {
         return res.status(400).json({ message: "Votre compte est déjà vérifié" });
       }
       
@@ -14575,6 +14631,10 @@ export async function registerRoutes(
       
       const kycSubmitter = await storage.getUser(userId);
       if (!kycSubmitter) return res.status(404).json({ message: "Utilisateur introuvable" });
+      const isKycUpdate =
+        kycSubmitter.isVerified ||
+        kycSubmitter.kycStatus === "verified" ||
+        existingSubmission?.status === "approved";
 
       privateBundle = await createPrivateKycDocumentBundle({
         userId,
@@ -14645,6 +14705,7 @@ export async function registerRoutes(
 
           await notifyKycSubmittedFull({
             submissionId: submission.id,
+            isUpdate: isKycUpdate,
             userName: kycSubmitter.fullName || kycSubmitter.username,
             userEmail: kycSubmitter.email || "",
             userId: kycSubmitter.id,
@@ -14666,7 +14727,7 @@ export async function registerRoutes(
         }
       })();
 
-      res.json(submission);
+      res.json({ ...submission, isUpdate: isKycUpdate });
     } catch (error) {
       if (privateBundle) await removePrivateKycBundle(privateBundle);
       // Keep the original inbox documents after a failed submission so the
@@ -14736,6 +14797,12 @@ export async function registerRoutes(
 
       const enrichedSubmissions = submissions.map((sub) => {
         const user = userMap.get(sub.userId);
+        const isUpdate = allSubmissions.some((previous) =>
+          previous.userId === sub.userId &&
+          previous.id !== sub.id &&
+          previous.status === "approved" &&
+          new Date(previous.createdAt || 0).getTime() < new Date(sub.createdAt || 0).getTime()
+        );
         const key = sub.documentNumber?.trim().toLowerCase() || "";
         const duplicates = (allDocMap.get(key) || []).filter(d => d.id !== sub.id);
         const duplicateAccounts = duplicates.map((dup) => {
@@ -14759,6 +14826,7 @@ export async function registerRoutes(
             username: user.username,
             createdAt: user.createdAt,
           } : null,
+          isUpdate,
           duplicateAccounts,
         };
       });

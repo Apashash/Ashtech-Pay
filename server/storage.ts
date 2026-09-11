@@ -2422,11 +2422,29 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createGlobalMessage(message: InsertGlobalMessage): Promise<GlobalMessage> {
+    if (isMysqlDialect) {
+      const id = randomUUID();
+      await db.insert(globalMessages).values({ ...message, id } as any);
+      const [created] = await db.select()
+        .from(globalMessages)
+        .where(eq(globalMessages.id, id));
+      if (!created) throw new Error("GLOBAL_MESSAGE_INSERT_READBACK_FAILED");
+      return created;
+    }
     const [newMessage] = await db.insert(globalMessages).values(message).returning();
     return newMessage;
   }
 
   async updateGlobalMessage(id: string, updates: Partial<InsertGlobalMessage>): Promise<GlobalMessage | undefined> {
+    if (isMysqlDialect) {
+      await db.update(globalMessages)
+        .set(updates)
+        .where(eq(globalMessages.id, id));
+      const [updated] = await db.select()
+        .from(globalMessages)
+        .where(eq(globalMessages.id, id));
+      return updated || undefined;
+    }
     const [updated] = await db.update(globalMessages).set(updates).where(eq(globalMessages.id, id)).returning();
     return updated || undefined;
   }

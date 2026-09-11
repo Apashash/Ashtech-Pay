@@ -71,6 +71,7 @@ interface KycSubmission {
   summaryPdfPath: string | null;
   createdAt: string | null;
   updatedAt: string | null;
+  isUpdate?: boolean;
   user: {
     id: string;
     fullName: string;
@@ -309,6 +310,7 @@ export default function AdminKYC() {
                     <TableRow>
                       <TableHead className="min-w-[140px]">Utilisateur</TableHead>
                       <TableHead className="min-w-[120px]">Document</TableHead>
+                      <TableHead className="min-w-[115px]">Type</TableHead>
                       <TableHead className="min-w-[110px]">Activité</TableHead>
                       <TableHead className="w-[100px]">Statut</TableHead>
                       <TableHead className="w-[110px]">Date</TableHead>
@@ -344,6 +346,17 @@ export default function AdminKYC() {
                             <p className="text-sm truncate">{getDocumentTypeName(sub.documentType)}</p>
                             <p className="text-xs text-muted-foreground font-mono truncate">{sub.documentNumber}</p>
                           </div>
+                        </TableCell>
+                        <TableCell>
+                          {sub.isUpdate ? (
+                            <Badge className="bg-amber-500/20 text-amber-600 border-amber-500/30 whitespace-nowrap">
+                              Mise à jour
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="whitespace-nowrap">
+                              Nouveau
+                            </Badge>
+                          )}
                         </TableCell>
                         <TableCell className="max-w-[120px]">
                           <div className="space-y-1">

@@ -1251,6 +1251,7 @@ export async function notifySupportMessage(opts: {
 
 export async function notifyKycSubmittedFull(opts: {
   submissionId: string;
+  isUpdate?: boolean;
   userName: string;
   userEmail: string;
   userId: number | string;
@@ -1293,7 +1294,7 @@ export async function notifyKycSubmittedFull(opts: {
 
   // 2. Info message + inline keyboard
   const infoText =
-    `📋 <b>NOUVELLE DEMANDE DE VÉRIFICATION KYC</b>\n` +
+    `${opts.isUpdate ? "🔄 <b>MISE À JOUR KYC À VÉRIFIER</b>" : "📋 <b>NOUVELLE DEMANDE DE VÉRIFICATION KYC</b>"}\n` +
     `──────────────────\n` +
     `👤 <b>${opts.userName}</b>\n` +
     `📧 ${opts.userEmail}\n` +

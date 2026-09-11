@@ -34,6 +34,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { 
   Search, 
   Ban, 
@@ -111,6 +112,7 @@ export default function AdminUsers() {
   const [filter, setFilter] = useState("all");
   const [page, setPage] = useState(1);
   const [debouncedSearch, setDebouncedSearch] = useState(search);
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
 
   useEffect(() => {
     const t = setTimeout(() => { setDebouncedSearch(search); setPage(1); }, 400);
@@ -266,6 +268,23 @@ export default function AdminUsers() {
     },
   });
 
+  const requestKycUpdateMutation = useMutation({
+    mutationFn: async (userIds: string[]) => {
+      const response = await apiRequest("POST", "/api/admin/users/kyc-update-request", { userIds });
+      return response.json();
+    },
+    onSuccess: (data: { sentCount: number; skippedCount?: number }) => {
+      setSelectedUserIds([]);
+      toast({
+        title: "Notification envoyée",
+        description: `${data.sentCount} compte(s) ont reçu une demande de mise à jour KYC.`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erreur", description: error.message, variant: "destructive" });
+    },
+  });
+
   const setRoleMutation = useMutation({
     mutationFn: async ({ id, role }: { id: string; role: string }) => {
       return apiRequest("PATCH", `/api/admin/users/${id}/role`, { role });
@@ -387,6 +406,20 @@ export default function AdminUsers() {
   };
 
   const filteredUsers = users || [];
+  const selectedOnPage = filteredUsers.filter(user => selectedUserIds.includes(user.id));
+  const allPageUsersSelected = filteredUsers.length > 0 && selectedOnPage.length === filteredUsers.length;
+
+  const toggleUserSelection = (userId: string, checked: boolean) => {
+    setSelectedUserIds(current => checked
+      ? current.includes(userId) ? current : [...current, userId]
+      : current.filter(id => id !== userId));
+  };
+
+  const togglePageSelection = (checked: boolean) => {
+    setSelectedUserIds(current => checked
+      ? [...new Set([...current, ...filteredUsers.map(user => user.id)])]
+      : current.filter(id => !filteredUsers.some(user => user.id === id)));
+  };
 
   const getRoleBadge = (role: string) => {
     switch (role) {
@@ -523,12 +556,38 @@ export default function AdminUsers() {
                 </SelectContent>
               </Select>
             </div>
+          {selectedUserIds.length > 0 && (
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+              <p className="text-sm">
+                <span className="font-semibold">{selectedUserIds.length}</span> compte(s) sélectionné(s)
+              </p>
+              <Button
+                onClick={() => {
+                  if (window.confirm(`Envoyer une demande de mise à jour KYC à ${selectedUserIds.length} compte(s) ?`)) {
+                    requestKycUpdateMutation.mutate(selectedUserIds);
+                  }
+                }}
+                disabled={requestKycUpdateMutation.isPending}
+                className="gap-2 bg-amber-500 text-white hover:bg-amber-600"
+              >
+                <RefreshCw className={requestKycUpdateMutation.isPending ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+                {requestKycUpdateMutation.isPending ? "Envoi..." : "Demander mise à jour KYC"}
+              </Button>
+            </div>
+          )}
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-[48px]">
+                    <Checkbox
+                      checked={allPageUsersSelected}
+                      onCheckedChange={(checked) => togglePageSelection(checked === true)}
+                      aria-label="Sélectionner les utilisateurs de cette page"
+                    />
+                  </TableHead>
                   <TableHead className="min-w-[140px]">Utilisateur</TableHead>
                   <TableHead className="min-w-[160px]">Contact</TableHead>
                   <TableHead className="min-w-[70px]">Pays</TableHead>
@@ -542,13 +601,13 @@ export default function AdminUsers() {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8">
+                    <TableCell colSpan={9} className="text-center py-8">
                       Chargement...
                     </TableCell>
                   </TableRow>
                 ) : filteredUsers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                       Aucun utilisateur trouvé
                     </TableCell>
                   </TableRow>
@@ -560,6 +619,16 @@ export default function AdminUsers() {
                       className="cursor-pointer hover:bg-muted/50 transition-colors"
                       onClick={() => navigate(`${A}/users/${user.id}`)}
                     >
+                      <TableCell
+                        onClick={(event) => event.stopPropagation()}
+                        className="w-[48px]"
+                      >
+                        <Checkbox
+                          checked={selectedUserIds.includes(user.id)}
+                          onCheckedChange={(checked) => toggleUserSelection(user.id, checked === true)}
+                          aria-label={`Sélectionner ${user.fullName}`}
+                        />
+                      </TableCell>
                       <TableCell className="max-w-[160px]">
                         <div className="space-y-0.5">
                           <p className="font-medium text-sm truncate">{user.fullName}</p>
