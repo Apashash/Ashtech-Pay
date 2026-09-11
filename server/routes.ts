@@ -369,10 +369,24 @@ async function reconcilePawaPayIncomingAttempt(transaction: any): Promise<"compl
 const uploadsDir = process.env.UPLOADS_DIR
   ? path.resolve(process.env.UPLOADS_DIR)
   : appPath("uploads");
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+function prepareStorageDirectory(directory: string, label: string): boolean {
+  try {
+    if (!fs.existsSync(directory)) {
+      fs.mkdirSync(directory, { recursive: true });
+    }
+    console.log(`[${label}] Storage directory: ${directory}`);
+    return true;
+  } catch (error: any) {
+    console.error(`[${label}] Storage directory is not writable; uploads will fail explicitly:`, {
+      directory,
+      code: error?.code || null,
+      message: error?.message || String(error),
+    });
+    return false;
+  }
 }
-console.log(`[Uploads] Storage directory: ${uploadsDir}`);
+
+const uploadsDirectoryReady = prepareStorageDirectory(uploadsDir, "Uploads");
 
 const privateProfileUploadsDir = (() => {
   const configuredRoot = process.env.PRIVATE_DOCUMENTS_ROOT?.trim();
@@ -383,9 +397,10 @@ const privateProfileUploadsDir = (() => {
     : path.resolve(applicationRoot, "private-documents");
   return path.resolve(configuredRoot || defaultRoot, "profile-avatars");
 })();
-if (!fs.existsSync(privateProfileUploadsDir)) {
-  fs.mkdirSync(privateProfileUploadsDir, { recursive: true });
-}
+const privateProfileUploadsDirectoryReady = prepareStorageDirectory(
+  privateProfileUploadsDir,
+  "ProfileUploads",
+);
 
 const fileStorage = multer.diskStorage({
   destination: (_req, _file, cb) => {
@@ -2856,6 +2871,11 @@ export async function registerRoutes(
         });
       } else {
         // Fallback: write buffer to disk
+        if (!uploadsDirectoryReady) {
+          const storageError = new Error("UPLOADS_DIRECTORY_UNAVAILABLE") as NodeJS.ErrnoException;
+          storageError.code = "EACCES";
+          throw storageError;
+        }
         const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
         // Sanitize extension — only allow alphanumeric to prevent path traversal
         const rawExt = path.extname(req.file.originalname).toLowerCase();
@@ -2955,6 +2975,11 @@ export async function registerRoutes(
       if (supabaseResult) {
         profileImagePath = supabaseResult.path;
       } else {
+        if (!privateProfileUploadsDirectoryReady) {
+          const storageError = new Error("PROFILE_UPLOADS_DIRECTORY_UNAVAILABLE") as NodeJS.ErrnoException;
+          storageError.code = "EACCES";
+          throw storageError;
+        }
         const diskFilename = `profile-${req.userId}-${Date.now()}${extension}`;
         fs.writeFileSync(path.join(privateProfileUploadsDir, diskFilename), req.file.buffer);
         profileImagePath = `profile-avatars/${diskFilename}`;
