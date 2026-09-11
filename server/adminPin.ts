@@ -29,7 +29,7 @@ import crypto from "crypto";
 
 const MAX_ATTEMPTS = 4;
 const LOCKOUT_MS = 20 * 60 * 1000; // 20 minutes
-const ADMIN_PIN_PROTECTION_ENABLED = false;
+const ADMIN_PIN_PROTECTION_ENABLED = true;
 
 interface AttemptRecord {
   count: number;

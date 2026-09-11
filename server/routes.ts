@@ -10021,7 +10021,7 @@ export async function registerRoutes(
         verified: true,
         totpEnabled: !!user.totpEnabled,
         enforcementEnabled: false,
-        pinEnabled: false,
+        pinEnabled: isAdminPinProtectionEnabled(),
       });
     }
     const now = Date.now();
