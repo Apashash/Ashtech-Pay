@@ -14594,7 +14594,13 @@ export async function registerRoutes(
       // The submission is already persisted, so a status-sync failure must not
       // make the client retry and create a duplicate dossier.
       try {
-        await storage.updateUser(userId, { kycStatus: "pending" });
+        const syncedUser = await storage.updateUser(userId, { kycStatus: "pending" });
+        if (!syncedUser || syncedUser.kycStatus !== "pending") {
+          console.error("[KYC] User status sync did not read back as pending:", {
+            userId,
+            syncedStatus: syncedUser?.kycStatus || null,
+          });
+        }
       } catch (statusError) {
         console.error("KYC user status sync failed:", statusError);
       }

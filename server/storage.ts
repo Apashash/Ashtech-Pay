@@ -2448,7 +2448,12 @@ export class DatabaseStorage implements IStorage {
   
   // KYC Submissions
   async getKycSubmissionByUserId(userId: string): Promise<KycSubmission | undefined> {
-    const [submission] = await db.select().from(kycSubmissions).where(eq(kycSubmissions.userId, userId));
+    const [submission] = await db
+      .select()
+      .from(kycSubmissions)
+      .where(eq(kycSubmissions.userId, userId))
+      .orderBy(desc(kycSubmissions.createdAt))
+      .limit(1);
     return submission || undefined;
   }
 

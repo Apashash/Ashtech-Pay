@@ -172,6 +172,7 @@ export default function KYCPage() {
   const frontInputRef = useRef<HTMLInputElement>(null);
   const backInputRef = useRef<HTMLInputElement>(null);
   const selfieInputRef = useRef<HTMLInputElement>(null);
+  const previewObjectUrlsRef = useRef<Partial<Record<UploadField, string>>>({});
 
   // Camera (selfie — front camera only, no file import)
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -186,6 +187,15 @@ export default function KYCPage() {
   // Cleanup on unmount
   useEffect(() => {
     return () => { streamRef.current?.getTracks().forEach(t => t.stop()); };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      Object.values(previewObjectUrlsRef.current).forEach((url) => {
+        if (url) URL.revokeObjectURL(url);
+      });
+      previewObjectUrlsRef.current = {};
+    };
   }, []);
 
   // Attach stream to video element once it appears in the DOM, and wait for
@@ -436,14 +446,17 @@ export default function KYCPage() {
 
       const result = await response.json();
       const storedPath = result.url || result.objectPath;
+      if (typeof storedPath !== "string" || !storedPath.trim()) {
+        throw new Error("Le serveur n'a pas retourné le chemin du fichier.");
+      }
 
       setUploadedPaths(prev => ({ ...prev, [field]: storedPath }));
 
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setUploadPreviews(prev => ({ ...prev, [field]: e.target?.result as string }));
-      };
-      reader.readAsDataURL(uploadFile);
+      const previousPreviewUrl = previewObjectUrlsRef.current[field];
+      if (previousPreviewUrl) URL.revokeObjectURL(previousPreviewUrl);
+      const previewUrl = URL.createObjectURL(uploadFile);
+      previewObjectUrlsRef.current[field] = previewUrl;
+      setUploadPreviews(prev => ({ ...prev, [field]: previewUrl }));
 
       toast({
         title: t.kyc.toastFileUploaded,
@@ -468,6 +481,11 @@ export default function KYCPage() {
   };
 
   const removeUpload = (field: UploadField) => {
+    const previewUrl = previewObjectUrlsRef.current[field];
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+      delete previewObjectUrlsRef.current[field];
+    }
     setUploadedPaths(prev => ({ ...prev, [field]: null }));
     setUploadPreviews(prev => ({ ...prev, [field]: null }));
     if (field === "front" && frontInputRef.current) frontInputRef.current.value = "";
