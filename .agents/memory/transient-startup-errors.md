@@ -20,3 +20,9 @@ Safe no-database public endpoints may bypass the migration gate so the shell can
 **Why:** Node can serve country-independent bootstrap data in milliseconds while MySQL is warming up, without exposing an API that could read or mutate incomplete database state.
 
 **How to apply:** Keep the startup allowlist explicit and small; never make the entire `/api/public` namespace available during a database outage.
+
+MySQL cold-start probes use a short bounded connection timeout and fast initial retry delays, while continuing to retry for later database restarts.
+
+**Why:** A five-second socket timeout plus a 1/2/4/8/30-second backoff made a recoverable database restart look like a frozen application.
+
+**How to apply:** Keep the connection timeout configurable and bounded, and use fast early retries without removing the long-lived retry loop.
