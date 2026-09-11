@@ -4271,7 +4271,14 @@ export async function registerRoutes(
         const newTokenTs = extractTokenTimestamp(newToken);
         if (newTokenTs && req.session) {
           req.session.tokenIssuedAt = newTokenTs;
-          req.session.save(() => {});
+          await new Promise<void>((resolve) => {
+            req.session.save((saveError) => {
+              if (saveError) {
+                console.error("[Sessions] Impossible de sauvegarder le nouveau token courant:", saveError.message);
+              }
+              resolve();
+            });
+          });
         }
       } catch { /* non-critical */ }
 
