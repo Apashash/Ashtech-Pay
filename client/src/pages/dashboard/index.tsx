@@ -622,10 +622,10 @@ export default function DashboardHome() {
   const logoClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [logoFlash, setLogoFlash] = useState(false);
   const [logoClickDisplay, setLogoClickDisplay] = useState(0);
-  const isAdminRole = ["admin", "support", "finance"].includes(user?.role ?? "");
+  const isAdminAccount = user?.role === "admin";
 
   const handleLogoClick = useCallback(() => {
-    if (!isAdminRole) return;
+    if (!isAdminAccount) return;
     logoClickCount.current += 1;
     const count = logoClickCount.current;
     setLogoFlash(true);
@@ -642,7 +642,7 @@ export default function DashboardHome() {
       logoClickCount.current = 0;
       setLogoClickDisplay(0);
     }, 2000);
-  }, [isAdminRole, setLocation]);
+  }, [isAdminAccount, setLocation]);
 
   const localCurrency = user?.preferredCurrency || "XAF";
   const secondaryWallets = useMemo(() => (
@@ -761,10 +761,10 @@ export default function DashboardHome() {
                   {/* Zone de clic invisible — gesture admin uniquement */}
                   <div className="relative">
                     <div
-                      onClick={isAdminRole ? handleLogoClick : undefined}
-                      className={`h-16 sm:h-28 w-12 ${isAdminRole ? "cursor-pointer select-none" : "pointer-events-none"}`}
+                      onClick={isAdminAccount ? handleLogoClick : undefined}
+                      className={`h-16 sm:h-28 w-12 ${isAdminAccount ? "cursor-pointer select-none" : "pointer-events-none"}`}
                     />
-                    {isAdminRole && logoClickDisplay > 0 && (
+                    {isAdminAccount && logoClickDisplay > 0 && (
                       <div className="absolute -bottom-4 sm:-bottom-5 left-0 right-0 flex justify-center gap-1">
                         {[1, 2, 3, 4, 5].map((dot) => (
                           <span

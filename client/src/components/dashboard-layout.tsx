@@ -108,11 +108,20 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { rates } = useExchangeRates();
   const { t, language } = useLanguage();
 
-  // ── Logo click counter — 5 clicks to access admin panel secretly ──────────
+  // ── Logo click counter — admin account only ───────────────────────────────
   const [logoClickCount, setLogoClickCount] = useState(0);
   const logoClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const menuItems = MENU_URLS.map(item => ({ title: t.sidebar[item.key], url: item.url, icon: item.icon, imageSrc: item.imageSrc, color: item.color }));
+  const settingsItems = SETTINGS_URLS.map(item => ({ title: t.sidebar[item.key], url: item.url, icon: item.icon, imageSrc: item.imageSrc, color: item.color }));
+
+  const { data: user, isLoading } = useQuery<User>({
+    queryKey: ["/api/user"],
+  });
+  const isAdminAccount = user?.role === "admin";
+
   const handleLogoClick = useCallback((e: React.MouseEvent) => {
+    if (!isAdminAccount) return;
     e.preventDefault();
     setLogoClickCount(prev => {
       const next = prev + 1;
@@ -125,14 +134,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       logoClickTimer.current = setTimeout(() => setLogoClickCount(0), 2000);
       return next;
     });
-  }, [setLocation]);
-
-  const menuItems = MENU_URLS.map(item => ({ title: t.sidebar[item.key], url: item.url, icon: item.icon, imageSrc: item.imageSrc, color: item.color }));
-  const settingsItems = SETTINGS_URLS.map(item => ({ title: t.sidebar[item.key], url: item.url, icon: item.icon, imageSrc: item.imageSrc, color: item.color }));
-
-  const { data: user, isLoading } = useQuery<User>({
-    queryKey: ["/api/user"],
-  });
+  }, [isAdminAccount, setLocation]);
 
   const { data: maintenanceData } = useQuery<{ active: boolean }>({
     queryKey: ["/api/public/maintenance"],
@@ -313,8 +315,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         <Sidebar>
           <SidebarHeader className="p-4 border-b border-sidebar-border">
             <div
-              className="flex items-center gap-2 cursor-pointer select-none"
-              onClick={handleLogoClick}
+              className={`flex items-center gap-2 select-none ${isAdminAccount ? "cursor-pointer" : "cursor-default"}`}
+              onClick={isAdminAccount ? handleLogoClick : undefined}
               data-testid="logo-ashtech"
             >
               <img src="/logo.png" alt="AshTech Pay" className="h-12 w-auto" />
