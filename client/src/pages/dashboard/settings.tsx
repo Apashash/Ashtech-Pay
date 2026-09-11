@@ -452,7 +452,6 @@ export default function SettingsPage() {
         <div className="px-4 pt-2 pb-4 flex items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold text-foreground">{t.settings.title}</h1>
-            <p className="text-sm text-muted-foreground">{t.settings.subtitle}</p>
           </div>
           <Link
             href="/dashboard/updates"
