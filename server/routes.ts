@@ -4571,20 +4571,38 @@ export async function registerRoutes(
         storage.getPaymentLinksByUserId(userId),
         storage.getUserWallets(userId),
         storage.getUserNotifications(userId, 20),
-        // Compute stats in a single SQL aggregate query instead of JS iteration
-        db.execute(drizzleSql`
-          SELECT
-            COALESCE(SUM(amount::numeric) FILTER (WHERE status='completed' AND type IN ('deposit','transfer_in','payment_link')), 0) AS total_received,
-            COALESCE(SUM(amount::numeric) FILTER (WHERE status='completed' AND type IN ('withdrawal','transfer_out')), 0) AS total_sent,
-            COUNT(*)::int AS total_transactions,
-            COUNT(*) FILTER (WHERE created_at >= date_trunc('month', NOW()))::int AS monthly_transactions,
-            COUNT(*) FILTER (WHERE status='pending')::int AS pending_transactions,
-            COUNT(*) FILTER (WHERE status='completed' AND type='payment_link')::int AS link_payments,
-            COALESCE(SUM(amount::numeric) FILTER (WHERE status='completed' AND type='payment_link'), 0) AS total_collected
-          FROM transactions
-          WHERE user_id = ${userId}
-            AND type NOT IN ('admin_debit', 'admin_credit')
-        `),
+        // Compute stats in one aggregate query. The SQL syntax must match the
+        // active dialect: PostgreSQL's ::numeric/FILTER/date_trunc syntax
+        // causes the entire dashboard request to fail on MySQL, leaving the
+        // mobile client in its retrying skeleton state.
+        db.execute(isMysqlDialect
+          ? drizzleSql`
+              SELECT
+                COALESCE(SUM(CASE WHEN status = 'completed' AND type IN ('deposit','transfer_in','payment_link') THEN CAST(amount AS DECIMAL(20,2)) ELSE 0 END), 0) AS total_received,
+                COALESCE(SUM(CASE WHEN status = 'completed' AND type IN ('withdrawal','transfer_out') THEN CAST(amount AS DECIMAL(20,2)) ELSE 0 END), 0) AS total_sent,
+                COUNT(*) AS total_transactions,
+                SUM(CASE WHEN created_at >= DATE_FORMAT(NOW(), '%Y-%m-01 00:00:00') THEN 1 ELSE 0 END) AS monthly_transactions,
+                SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending_transactions,
+                SUM(CASE WHEN status = 'completed' AND type = 'payment_link' THEN 1 ELSE 0 END) AS link_payments,
+                COALESCE(SUM(CASE WHEN status = 'completed' AND type = 'payment_link' THEN CAST(amount AS DECIMAL(20,2)) ELSE 0 END), 0) AS total_collected
+              FROM transactions
+              WHERE user_id = ${userId}
+                AND type NOT IN ('admin_debit', 'admin_credit')
+            `
+          : drizzleSql`
+              SELECT
+                COALESCE(SUM(amount::numeric) FILTER (WHERE status='completed' AND type IN ('deposit','transfer_in','payment_link')), 0) AS total_received,
+                COALESCE(SUM(amount::numeric) FILTER (WHERE status='completed' AND type IN ('withdrawal','transfer_out')), 0) AS total_sent,
+                COUNT(*)::int AS total_transactions,
+                COUNT(*) FILTER (WHERE created_at >= date_trunc('month', NOW()))::int AS monthly_transactions,
+                COUNT(*) FILTER (WHERE status='pending')::int AS pending_transactions,
+                COUNT(*) FILTER (WHERE status='completed' AND type='payment_link')::int AS link_payments,
+                COALESCE(SUM(amount::numeric) FILTER (WHERE status='completed' AND type='payment_link'), 0) AS total_collected
+              FROM transactions
+              WHERE user_id = ${userId}
+                AND type NOT IN ('admin_debit', 'admin_credit')
+            `
+        ),
         // Global messages (banner announcements)
         storage.getActiveGlobalMessages().then(all => {
           const now = new Date();
