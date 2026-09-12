@@ -509,13 +509,15 @@ export default function SendMoneyPage() {
               <SelectTrigger className="h-8 w-auto border-white/30 rounded-lg text-xs font-semibold bg-white/10 text-white gap-1">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
-                {wallets.map((w) => (
-                  <SelectItem key={w.currency} value={w.currency}>
-                    {w.currency} {parseFloat(w.balance || "0").toLocaleString()}
-                  </SelectItem>
-                ))}
-              </SelectContent>
+              <SearchableSelectContent
+                options={wallets.map((w) => ({
+                  value: w.currency,
+                  label: w.currency,
+                  sub: parseFloat(w.balance || "0").toLocaleString(),
+                }))}
+                searchPlaceholder={t.send.searchCurrency}
+                emptyMessage={t.send.noCurrencyResults}
+              />
             </Select>
           )}
         </div>
