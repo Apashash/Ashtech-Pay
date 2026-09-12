@@ -545,7 +545,7 @@ const translations = {
       selectDestination: "Sélectionner la destination",
       internalTransfer: "Transfert Interne Ashtech Pay",
       loading: "Chargement...",
-      searchCurrency: "Rechercher une devise...",
+      searchCurrency: "Rechercher une devise ou un pays...",
       noCurrencyResults: "Aucune devise trouvée",
       // Internal
       internalFree: "Frais: 0 — Transfert gratuit et instantané",
@@ -1950,7 +1950,7 @@ const translations = {
       selectDestination: "Select destination",
       internalTransfer: "Internal Ashtech Pay Transfer",
       loading: "Loading...",
-      searchCurrency: "Search currency...",
+      searchCurrency: "Search currency or country...",
       noCurrencyResults: "No currency found",
       internalFree: "Fees: 0 — Free and instant transfer",
       zeroFeeMsg: "Fees: 0 — Free and instant transfer",

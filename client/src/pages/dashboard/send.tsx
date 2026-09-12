@@ -8,12 +8,13 @@ import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { User, SupportedCurrency, Wallet } from "@shared/schema";
+import { SUPPORTED_CURRENCIES, type User, type SupportedCurrency, type Wallet } from "@shared/schema";
 import { Send, Globe, Loader2, AlertCircle, Shield, CheckCircle2, Smartphone, TrendingDown, Wallet as WalletIcon, UserCheck, Users, X, CheckCircle, RefreshCw, Clock } from "lucide-react";
 import { SearchableSelectContent } from "@/components/ui/searchable-select-content";
 import { useLanguage } from "@/lib/language";
 import { BottomSheet, BottomSheetContent, BottomSheetHeader, BottomSheetTitle, BottomSheetFooter } from "@/components/ui/bottom-sheet";
 import { getOperatorLogo } from "@/lib/operator-logos";
+import { getCountryFlagEmoji } from "@/lib/country-flags";
 import { z } from "zod";
 import { formatCurrency, formatWalletBalance } from "@/lib/currency";
 import { useMemo, useEffect, useState, useCallback } from "react";
@@ -84,6 +85,38 @@ const COUNTRY_FLAGS: Record<string, string> = {
   "Tanzanie": "🇹🇿", "Tchad": "🇹🇩", "Togo": "🇹🇬", "USA": "🇺🇸"
 };
 
+const CURRENCY_FALLBACK_FLAGS: Record<string, string> = {
+  XAF: "🇨🇲",
+  XAFCF: "🇨🇫",
+  XAFC: "🇨🇬",
+  XAFG: "🇬🇦",
+  XAFTD: "🇹🇩",
+  XOFB: "🇧🇯",
+  XOFF: "🇧🇫",
+  XOFC: "🇨🇮",
+  XOFGW: "🇬🇼",
+  XOFM: "🇲🇱",
+  XOFN: "🇳🇪",
+  XOFS: "🇸🇳",
+  XOFT: "🇹🇬",
+  CDF: "🇨🇩",
+  RWF: "🇷🇼",
+  TZS: "🇹🇿",
+  UGX: "🇺🇬",
+  GHS: "🇬🇭",
+  KES: "🇰🇪",
+  MWK: "🇲🇼",
+  MZN: "🇲🇿",
+  NGN: "🇳🇬",
+  ETB: "🇪🇹",
+  LSL: "🇱🇸",
+  SLE: "🇸🇱",
+  ZMW: "🇿🇲",
+  INR: "🇮🇳",
+  USD: "🇺🇸",
+  USDT: "₮",
+};
+
 export default function SendMoneyPage() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
@@ -107,6 +140,32 @@ export default function SendMoneyPage() {
   const isInternal = destination === INTERNAL_KEY;
   const balance = parseFloat(wallets.find(w => w.currency === selectedWallet)?.balance || "0");
   const localCurrency = primaryCurrency;
+  const currencyOptions = useMemo(() => {
+    const walletBalances = new Map(wallets.map(wallet => [wallet.currency, wallet.balance || "0"]));
+    const countryFlags = new Map<string, string>();
+    const countryNames = new Map<string, string[]>();
+
+    for (const country of countries ?? []) {
+      if (!countryFlags.has(country.currency)) {
+        countryFlags.set(country.currency, getCountryFlagEmoji(country.code));
+      }
+      const names = countryNames.get(country.currency) || [];
+      names.push(country.name);
+      countryNames.set(country.currency, names);
+    }
+
+    return SUPPORTED_CURRENCIES.map(currency => {
+      const balanceValue = parseFloat(walletBalances.get(currency) || "0");
+      const balanceLabel = balanceValue.toLocaleString("fr-FR");
+      return {
+        value: currency,
+        label: `${currency} ${balanceLabel}`,
+        flag: countryFlags.get(currency) || CURRENCY_FALLBACK_FLAGS[currency] || "🌍",
+        searchText: [currency, ...(countryNames.get(currency) || [])].join(" "),
+      };
+    });
+  }, [countries, wallets]);
+  const selectedCurrencyOption = currencyOptions.find(option => option.value === selectedWallet);
 
   const { data: limits } = useQuery<{ minTransfer: number; maxTransfer: number }>({
     queryKey: ["/api/public/limits"],
@@ -504,17 +563,16 @@ export default function SendMoneyPage() {
               {formatWalletBalance(balance, selectedWallet)}
             </p>
           </div>
-          {wallets.length > 1 && (
+          {currencyOptions.length > 1 && (
             <Select value={selectedWallet} onValueChange={setSelectedWallet}>
               <SelectTrigger className="h-8 w-auto border-white/30 rounded-lg text-xs font-semibold bg-white/10 text-white gap-1">
-                <SelectValue />
+                <span className="flex items-center gap-1.5">
+                  <span aria-hidden="true">{selectedCurrencyOption?.flag || "🌍"}</span>
+                  <span>{selectedWallet} {balance.toLocaleString("fr-FR")}</span>
+                </span>
               </SelectTrigger>
               <SearchableSelectContent
-                options={wallets.map((w) => ({
-                  value: w.currency,
-                  label: w.currency,
-                  sub: parseFloat(w.balance || "0").toLocaleString(),
-                }))}
+                options={currencyOptions}
                 searchPlaceholder={t.send.searchCurrency}
                 emptyMessage={t.send.noCurrencyResults}
               />

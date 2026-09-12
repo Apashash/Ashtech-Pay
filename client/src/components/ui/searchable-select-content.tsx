@@ -8,6 +8,7 @@ export interface SelectOption {
   label: string;
   flag?: string;
   sub?: string;
+  searchText?: string;
   testId?: string;
   iconUrl?: string;
 }
@@ -39,6 +40,7 @@ export function SearchableSelectContent({
     ? options.filter(o =>
         o.label.toLowerCase().includes(search.toLowerCase()) ||
         o.value.toLowerCase().includes(search.toLowerCase()) ||
+        (o.searchText && o.searchText.toLowerCase().includes(search.toLowerCase())) ||
         (o.sub && o.sub.toLowerCase().includes(search.toLowerCase()))
       )
     : options;
