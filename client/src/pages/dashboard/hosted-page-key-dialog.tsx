@@ -8,13 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
   BottomSheet,
   BottomSheetContent,
   BottomSheetDescription,
@@ -80,18 +73,18 @@ export function CreateHostedPageKeyDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-lg">
+    <BottomSheet open={open} onOpenChange={handleOpenChange}>
+      <BottomSheetContent>
         {createdKey ? (
           <>
-            <DialogHeader>
-              <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-green-500/10">
-                <CheckCircle2 className="h-6 w-6 text-green-600" />
-              </div>
-              <DialogTitle>{hp.keyGenerated}</DialogTitle>
-              <DialogDescription>{hp.keyGeneratedDesc}</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
+            <BottomSheetHeader>
+              <BottomSheetTitle className="flex items-center gap-2 text-green-600 dark:text-green-400">
+                <CheckCircle2 className="h-5 w-5" />
+                {hp.keyGenerated}
+              </BottomSheetTitle>
+              <BottomSheetDescription>{hp.keyGeneratedDesc}</BottomSheetDescription>
+            </BottomSheetHeader>
+            <div className="space-y-4 py-3">
               <div className="rounded-lg border bg-muted/30 px-4 py-3">
                 <p className="text-xs text-muted-foreground">{hp.keyNameLabel}</p>
                 <p className="mt-1 font-medium">{createdKey.name}</p>
@@ -102,6 +95,8 @@ export function CreateHostedPageKeyDialog({
                 <CopyableKey label={hp.checkoutKey} value={createdKey.hpLive} testId="generated-checkout" />
               </div>
               <p className="text-xs text-muted-foreground">{hp.generatedKeyWarning}</p>
+            </div>
+            <BottomSheetFooter>
               <Button
                 className="w-full gap-2"
                 onClick={() => {
@@ -112,16 +107,19 @@ export function CreateHostedPageKeyDialog({
                 <Key className="h-4 w-4" />
                 {hp.viewMyKeys}
               </Button>
-            </div>
+            </BottomSheetFooter>
           </>
         ) : (
           <>
-            <DialogHeader>
-              <DialogTitle>{hp.generateTitle}</DialogTitle>
-              <DialogDescription>{hp.generateSubtitle}</DialogDescription>
-            </DialogHeader>
+            <BottomSheetHeader>
+              <BottomSheetTitle className="flex items-center gap-2">
+                <Key className="h-5 w-5 text-primary" />
+                {hp.generateTitle}
+              </BottomSheetTitle>
+              <BottomSheetDescription>{hp.generateSubtitle}</BottomSheetDescription>
+            </BottomSheetHeader>
             <form
-              className="space-y-5"
+              className="space-y-5 py-4"
               onSubmit={(event) => {
                 event.preventDefault();
                 if (name.trim()) createMutation.mutate();
@@ -140,29 +138,34 @@ export function CreateHostedPageKeyDialog({
                 />
                 <p className="text-xs text-muted-foreground">{hp.keyNameLimit}</p>
               </div>
-              <Button
-                type="submit"
-                disabled={!name.trim() || createMutation.isPending}
-                className="gap-2"
-                data-testid="button-create-checkout-key"
-              >
-                {createMutation.isPending ? (
-                  <>
-                    <RefreshCw className="h-4 w-4 animate-spin" />
-                    {hp.generating}
-                  </>
-                ) : (
-                  <>
-                    <Key className="h-4 w-4" />
-                    {hp.generateKey}
-                  </>
-                )}
-              </Button>
+              <BottomSheetFooter>
+                <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
+                  {hp.cancel}
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={!name.trim() || createMutation.isPending}
+                  className="gap-2"
+                  data-testid="button-create-checkout-key"
+                >
+                  {createMutation.isPending ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                      {hp.generating}
+                    </>
+                  ) : (
+                    <>
+                      <Key className="h-4 w-4" />
+                      {hp.generateKey}
+                    </>
+                  )}
+                </Button>
+              </BottomSheetFooter>
             </form>
           </>
         )}
-      </DialogContent>
-    </Dialog>
+      </BottomSheetContent>
+    </BottomSheet>
   );
 }
 
