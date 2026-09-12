@@ -644,6 +644,18 @@ export default function AutoConversionPage() {
           </div>
         </div>
 
+        {!showForm && sourceOptions.length > 0 && (
+          <div className="mx-4 mb-4">
+            <Button
+              className="w-full bg-[#1A237E] text-white hover:bg-[#151c68]"
+              onClick={() => setShowForm(true)}
+            >
+              <img src="/exchange-icon.png" alt="" aria-hidden="true" className="mr-2 h-5 w-5 object-contain" />
+              Ajouter une conversion automatique
+            </Button>
+          </div>
+        )}
+
         {/* Existing rules grouped */}
         {rulesLoading ? (
           <div className="flex justify-center py-10">
@@ -846,16 +858,7 @@ export default function AutoConversionPage() {
               </Button>
             </div>
           </div>
-        ) : (
-          sourceOptions.length > 0 && (
-            <div className="mx-4">
-              <Button className="w-full" variant="outline" onClick={() => setShowForm(true)}>
-                <Plus className="w-4 h-4 mr-2" />
-                Ajouter une conversion automatique
-              </Button>
-            </div>
-          )
-        )}
+        ) : null}
 
         {rules.length > 0 && (
           <p className="text-center text-xs text-muted-foreground mt-6 px-4">
