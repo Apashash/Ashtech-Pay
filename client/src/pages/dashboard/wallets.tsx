@@ -4,19 +4,11 @@ import { useLocation } from "wouter";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { Button } from "@/components/ui/button";
 import { BottomSheet, BottomSheetContent, BottomSheetHeader, BottomSheetTitle, BottomSheetDescription, BottomSheetFooter } from "@/components/ui/bottom-sheet";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Plus, X, ChevronRight, ChevronDown, Check, Loader2, AlertTriangle } from "lucide-react";
+import { Plus, X, ChevronRight, Check, Loader2, AlertTriangle, Search } from "lucide-react";
 import { ALL_FX_CURRENCIES, CURRENCY_SYMBOLS } from "@shared/schema";
 import type { User, Transaction } from "@shared/schema";
 import { useLanguage } from "@/lib/language";
@@ -90,9 +82,9 @@ export default function WalletsPage() {
   const { t } = useLanguage();
   const [, navigate] = useLocation();
   const [addWalletOpen, setAddWalletOpen] = useState(false);
-  const [currencyPickerOpen, setCurrencyPickerOpen] = useState(false);
   const [walletToDelete, setWalletToDelete] = useState<WalletEntry | null>(null);
   const [newWalletCurrency, setNewWalletCurrency] = useState("");
+  const [walletCurrencySearch, setWalletCurrencySearch] = useState("");
   const currencyListRef = useRef<HTMLDivElement>(null);
   const currencyTouchRef = useRef({ startY: 0, startScrollTop: 0 });
 
@@ -122,7 +114,14 @@ export default function WalletsPage() {
 
   const existingCurrencies = new Set(walletList.map(w => w.currency));
   const availableCurrencies = ALL_FX_CURRENCIES.filter(c => !existingCurrencies.has(c.code));
-  const selectedCurrency = availableCurrencies.find(c => c.code === newWalletCurrency);
+  const filteredAvailableCurrencies = useMemo(() => {
+    const query = walletCurrencySearch.trim().toLowerCase();
+    if (!query) return availableCurrencies;
+    return availableCurrencies.filter((currency) => {
+      const country = CURRENCY_COUNTRIES[currency.code] || "";
+      return `${currency.code} ${currency.name} ${country}`.toLowerCase().includes(query);
+    });
+  }, [availableCurrencies, walletCurrencySearch]);
 
   const walletSymbol = (currency: string) => (CURRENCY_SYMBOLS as Record<string, string>)[currency] || currency;
 
@@ -148,6 +147,14 @@ export default function WalletsPage() {
     event.preventDefault();
     list.scrollTop = currencyTouchRef.current.startScrollTop
       + currencyTouchRef.current.startY - touch.clientY;
+  };
+
+  const handleAddWalletOpenChange = (open: boolean) => {
+    setAddWalletOpen(open);
+    if (!open) {
+      setNewWalletCurrency("");
+      setWalletCurrencySearch("");
+    }
   };
 
   const addWalletMutation = useMutation({
@@ -334,99 +341,83 @@ export default function WalletsPage() {
         </button>
       </div>
 
-      {/* ── Add Wallet Bottom Sheet ── */}
-      <BottomSheet open={addWalletOpen} onOpenChange={setAddWalletOpen}>
-        <BottomSheetContent>
-          <BottomSheetHeader>
-            <BottomSheetTitle>{t.wallets.addDialogTitle}</BottomSheetTitle>
-            <BottomSheetDescription>{t.wallets.addDialogDesc}</BottomSheetDescription>
-          </BottomSheetHeader>
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t.wallets.currencyLabel}</Label>
-              <Popover open={currencyPickerOpen} onOpenChange={setCurrencyPickerOpen}>
-                <PopoverTrigger asChild>
-                  <button
-                    type="button"
-                    className="flex h-12 w-full items-center justify-between rounded-xl border border-input bg-background px-3 text-left text-sm shadow-sm transition-colors hover:bg-muted/40"
-                    data-testid="select-new-wallet-currency"
-                  >
-                    {selectedCurrency ? (
-                      <span className="flex min-w-0 items-center gap-2">
-                        <span className="text-xl leading-none">{CURRENCY_FLAGS[selectedCurrency.code] || "🌍"}</span>
-                        <span className="truncate">
-                          {selectedCurrency.code}{" "}
-                          {CURRENCY_COUNTRIES[selectedCurrency.code] || selectedCurrency.name}
-                        </span>
-                      </span>
-                    ) : (
-                      <span className="text-muted-foreground">{t.wallets.chooseCurrency}</span>
-                    )}
-                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 text-muted-foreground" />
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent
-                  align="start"
-                  className="w-[var(--radix-popover-trigger-width)] min-w-[280px] p-0"
-                  data-vaul-no-drag
-                >
-                  <Command>
-                    <CommandInput placeholder="Rechercher un pays ou une devise..." />
-                    <CommandList
-                      ref={currencyListRef}
-                      className="!h-[220px] !max-h-none !overflow-y-scroll overscroll-contain"
-                      style={{ WebkitOverflowScrolling: "touch", touchAction: "none" }}
-                      data-testid="wallet-currency-options"
-                      data-vaul-no-drag
-                      onTouchStart={handleCurrencyTouchStart}
-                      onTouchMove={handleCurrencyTouchMove}
-                    >
-                      <CommandEmpty>Aucun pays ou devise trouvé.</CommandEmpty>
-                      <CommandGroup>
-                        {availableCurrencies.map((c) => {
-                          const country = CURRENCY_COUNTRIES[c.code] || c.name;
-                          return (
-                            <CommandItem
-                              key={c.code}
-                              value={`${c.code} ${country} ${c.name}`}
-                              onSelect={() => {
-                                setNewWalletCurrency(c.code);
-                                setCurrencyPickerOpen(false);
-                              }}
-                              className="min-h-10 py-2"
-                            >
-                              <span className="w-7 shrink-0 text-xl leading-none">{CURRENCY_FLAGS[c.code] || "🌍"}</span>
-                              <span className="min-w-0 flex-1 truncate">
-                                <span className="font-medium">{c.code}</span>
-                                <span className="text-muted-foreground"> {country}</span>
-                              </span>
-                              <Check className={`ml-2 h-4 w-4 shrink-0 ${newWalletCurrency === c.code ? "opacity-100" : "opacity-0"}`} />
-                            </CommandItem>
-                          );
-                        })}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-            </div>
-            <div className="flex gap-3">
-              <Button variant="outline" className="flex-1" onClick={() => setAddWalletOpen(false)} data-testid="button-cancel-wallet">
-                {t.wallets.cancel}
-              </Button>
-              <Button
-                className="flex-1 font-bold"
-                disabled={!newWalletCurrency || addWalletMutation.isPending}
-                onClick={() => addWalletMutation.mutate()}
-                data-testid="button-create-wallet"
-              >
-                {addWalletMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                {t.wallets.create}
-              </Button>
+      {/* ── Add Wallet dialog ── */}
+      <Dialog open={addWalletOpen} onOpenChange={handleAddWalletOpenChange}>
+        <DialogContent className="max-w-sm w-full p-0 gap-0 overflow-hidden">
+          <DialogHeader className="px-4 pt-4 pb-3 border-b border-border">
+            <DialogTitle className="text-base font-semibold">{t.wallets.addDialogTitle}</DialogTitle>
+            <p className="text-xs text-muted-foreground mt-0.5">{t.wallets.addDialogDesc}</p>
+          </DialogHeader>
+
+          <div className="px-3 py-2.5 border-b border-border">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+              <Input
+                placeholder="Rechercher un pays ou une devise..."
+                value={walletCurrencySearch}
+                onChange={(event) => setWalletCurrencySearch(event.target.value)}
+                className="pl-8 h-9 text-sm"
+                autoFocus
+              />
             </div>
           </div>
-        </BottomSheetContent>
-      </BottomSheet>
+
+          <div
+            ref={currencyListRef}
+            className="overflow-y-auto max-h-[55vh] overscroll-contain"
+            style={{ WebkitOverflowScrolling: "touch", touchAction: "none" }}
+            data-testid="wallet-currency-options"
+            onTouchStart={handleCurrencyTouchStart}
+            onTouchMove={handleCurrencyTouchMove}
+          >
+            {filteredAvailableCurrencies.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-8">Aucun pays ou devise trouvé.</p>
+            ) : (
+              filteredAvailableCurrencies.map((currency) => {
+                const country = CURRENCY_COUNTRIES[currency.code] || currency.name;
+                const isSelected = newWalletCurrency === currency.code;
+                return (
+                  <button
+                    key={currency.code}
+                    type="button"
+                    onClick={() => setNewWalletCurrency(currency.code)}
+                    className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors border-b border-border/50 last:border-0 ${
+                      isSelected ? "bg-primary/8" : "hover:bg-muted/40"
+                    }`}
+                    data-testid={`wallet-currency-option-${currency.code}`}
+                  >
+                    <span className="text-xl leading-none shrink-0">{CURRENCY_FLAGS[currency.code] || "🌍"}</span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block font-semibold text-sm text-foreground leading-tight">{currency.code}</span>
+                      <span className="block text-xs text-muted-foreground truncate">{country}</span>
+                    </span>
+                    <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${
+                      isSelected ? "bg-primary border-primary" : "border-border"
+                    }`}>
+                      {isSelected && <Check className="w-3 h-3 text-primary-foreground" />}
+                    </span>
+                  </button>
+                );
+              })
+            )}
+          </div>
+
+          <div className="px-4 py-3 border-t border-border bg-muted/20 flex gap-2">
+            <Button variant="outline" className="flex-1 h-9" onClick={() => handleAddWalletOpenChange(false)} data-testid="button-cancel-wallet">
+              {t.wallets.cancel}
+            </Button>
+            <Button
+              className="flex-1 h-9 font-bold"
+              disabled={!newWalletCurrency || addWalletMutation.isPending}
+              onClick={() => addWalletMutation.mutate()}
+              data-testid="button-create-wallet"
+            >
+              {addWalletMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+              {t.wallets.create}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Delete Wallet Confirmation ── */}
       <BottomSheet open={!!walletToDelete} onOpenChange={(open) => { if (!open) setWalletToDelete(null); }}>
