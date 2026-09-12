@@ -38,9 +38,9 @@ function OptionCard({
         <div className={`mb-5 flex h-12 w-12 items-center justify-center rounded-2xl ${iconClassName}`}>
           <Icon className="h-6 w-6" />
         </div>
-        <h2 className="text-lg font-semibold text-foreground">{title}</h2>
-        <p className="mt-2 min-h-[3.5rem] text-sm leading-6 text-muted-foreground">{description}</p>
-        <ul className="mt-5 space-y-3 text-sm text-foreground">
+        <h2 className="text-lg font-semibold leading-6 text-foreground">{title}</h2>
+        <p className="mt-2 min-h-[3.5rem] text-[15px] leading-6 text-muted-foreground">{description}</p>
+        <ul className="mt-5 space-y-3 text-[15px] leading-6 text-foreground">
           {points.map((point) => (
             <li key={point} className="flex items-start gap-2.5">
               <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
@@ -69,10 +69,10 @@ export default function ApiKeysPage() {
           <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-purple-500/10 text-purple-500">
             <Sparkles className="h-5 w-5" />
           </div>
-          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+          <p className="mb-2 text-sm font-semibold leading-6 text-foreground">
             {copy.eyebrow}
           </p>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+          <h1 className="text-2xl font-semibold leading-8 tracking-tight text-foreground sm:text-3xl">
             {copy.title}
           </h1>
         </div>
@@ -102,7 +102,7 @@ export default function ApiKeysPage() {
 
         <div className="flex items-start gap-3 rounded-2xl border border-border bg-card p-5">
           <Globe2 className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
-          <p className="text-sm leading-6 text-muted-foreground">{copy.footer}</p>
+          <p className="text-[15px] leading-6 text-muted-foreground">{copy.footer}</p>
         </div>
       </div>
     </DashboardLayout>
