@@ -313,12 +313,19 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       <div className="flex min-h-dvh w-full">
         <Sidebar>
           <SidebarHeader className="p-4 border-b border-sidebar-border">
-            <div
-              className={`flex items-center gap-2 select-none ${isAdminAccount ? "cursor-pointer" : "cursor-default"}`}
-              onClick={isAdminAccount ? handleLogoClick : undefined}
-              data-testid="logo-ashtech"
-            >
-              <img src="/logo.png" alt="AshTech Pay" className="h-12 w-auto" />
+            <div className="flex items-center justify-between gap-2">
+              <div
+                className={`flex items-center gap-2 select-none ${isAdminAccount ? "cursor-pointer" : "cursor-default"}`}
+                onClick={isAdminAccount ? handleLogoClick : undefined}
+                data-testid="logo-ashtech"
+              >
+                <img src="/logo.png" alt="AshTech Pay" className="h-12 w-auto" />
+              </div>
+              <SidebarTrigger
+                data-testid="button-sidebar-close"
+                aria-label="Fermer la sidebar"
+                className="shrink-0"
+              />
             </div>
           </SidebarHeader>
           
