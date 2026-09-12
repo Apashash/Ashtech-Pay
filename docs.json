@@ -16,18 +16,14 @@
   "navbar": {
     "links": [
       {
-        "label": "Dashboard",
-        "url": "https://ashtechpay.com/dashboard"
-      },
-      {
-        "label": "Support",
-        "url": "https://ashtechpay.com/dashboard/support"
+        "type": "github",
+        "href": "https://github.com/Apashash/Ashtech-Pay"
       }
     ],
     "primary": {
       "type": "button",
       "label": "Ouvrir le dashboard",
-      "url": "https://ashtechpay.com/dashboard"
+      "href": "https://ashtechpay.com/dashboard"
     }
   },
   "footer": {
