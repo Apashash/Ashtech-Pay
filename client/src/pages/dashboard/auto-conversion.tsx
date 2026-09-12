@@ -24,8 +24,20 @@ const CURRENCY_FLAGS: Record<string, string> = {
   XAF: "🇨🇲", XAFC: "🇨🇬", XAFG: "🇬🇦",
   XOF: "🇸🇳", XOFC: "🇨🇮", XOFF: "🇧🇫", XOFN: "🇳🇪", XOFB: "🇧🇯", XOFT: "🇹🇬", XOFS: "🇸🇳", XOFM: "🇲🇱",
   RWF: "🇷🇼", TZS: "🇹🇿",
-  UGX: "🇺🇬", CDF: "🇨🇩", INR: "🇮🇳",
-  USD: "🇺🇸", EUR: "🇪🇺", GBP: "🇬🇧", USDT: "₮",
+  UGX: "🇺🇬", CDF: "🇨🇩", SLE: "🇸🇱",
+  GHS: "🇬🇭", KES: "🇰🇪", NGN: "🇳🇬", MWK: "🇲🇼", LSL: "🇱🇸", ZMW: "🇿🇲", ZMK: "🇿🇲",
+  ZAR: "🇿🇦", EGP: "🇪🇬", MAD: "🇲🇦", ETB: "🇪🇹", MZN: "🇲🇿", ZWE: "🇿🇼", CVE: "🇨🇻",
+  XAFCF: "🇨🇫", XAFTD: "🇹🇩", XOFGW: "🇬🇼",
+  USD: "🇺🇸", EUR: "🇪🇺", GBP: "🇬🇧", CHF: "🇨🇭", USDT: "₮",
+  CAD: "🇨🇦", AUD: "🇦🇺", NZD: "🇳🇿",
+  INR: "🇮🇳", PKR: "🇵🇰", BDT: "🇧🇩", LRK: "🇱🇰",
+  PHP: "🇵🇭", IDR: "🇮🇩", MYR: "🇲🇾", THB: "🇹🇭",
+  VND: "🇻🇳", KRW: "🇰🇷", JPY: "🇯🇵", HKD: "🇭🇰", CHN: "🇨🇳",
+  SAR: "🇸🇦", AED: "🇦🇪", QAR: "🇶🇦", KWD: "🇰🇼", BHD: "🇧🇭",
+  ILS: "🇮🇱", TRY: "🇹🇷",
+  SEK: "🇸🇪", NOK: "🇳🇴", DKK: "🇩🇰", PLN: "🇵🇱",
+  CZK: "🇨🇿", HUF: "🇭🇺", RON: "🇷🇴", BGN: "🇧🇬", ISK: "🇮🇸",
+  BRL: "🇧🇷", MXN: "🇲🇽", ARS: "🇦🇷", CLP: "🇨🇱", COP: "🇨🇴",
 };
 
 const CURRENCY_NAMES: Record<string, string> = {};
@@ -128,7 +140,7 @@ function SourcePickerModal({
                     isSelected ? "bg-primary/8" : "hover:bg-muted/40"
                   }`}
                 >
-                  <span className="text-xl leading-none shrink-0">{CURRENCY_FLAGS[c.code] || "💱"}</span>
+                  <span className="text-xl leading-none shrink-0">{CURRENCY_FLAGS[c.code] || "🌍"}</span>
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-sm text-foreground leading-tight">{c.code}</p>
                     <p className="text-xs text-muted-foreground truncate">{c.name}</p>
@@ -753,7 +765,7 @@ export default function AutoConversionPage() {
                             key={code}
                             className="inline-flex items-center gap-1 text-xs font-medium bg-primary/10 text-primary rounded-full pl-2 pr-1 py-0.5"
                           >
-                            <span>{CURRENCY_FLAGS[code] || "💱"}</span>
+                            <span>{CURRENCY_FLAGS[code] || "🌍"}</span>
                             <span>{code}</span>
                             {hasBal && (
                               <span className="text-[10px] text-primary/70">
@@ -802,7 +814,7 @@ export default function AutoConversionPage() {
                     {targetOptions.map((c) => (
                       <SelectItem key={c.code} value={c.code}>
                         <span className="flex items-center gap-2">
-                          <span>{CURRENCY_FLAGS[c.code] || "💱"}</span>
+                          <span>{CURRENCY_FLAGS[c.code] || "🌍"}</span>
                           <span className="font-medium">{c.code}</span>
                           <span className="text-muted-foreground text-xs">— {c.name}</span>
                         </span>
