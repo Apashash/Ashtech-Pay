@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
   ChevronLeft, ArrowRight, Trash2, Plus, RefreshCw,
-  Loader2, Zap, Info, Check, Pencil, X, Search, Wallet,
+  Loader2, Zap, Check, Pencil, X, Search, Wallet,
 } from "lucide-react";
 import { ALL_FX_CURRENCIES } from "@shared/schema";
 import type { User, AutoConversionRule } from "@shared/schema";
@@ -629,19 +629,7 @@ export default function AutoConversionPage() {
               <Zap className="w-5 h-5 text-primary" />
               Conversion automatique
             </h1>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Dès que vous recevez de l'argent, il est converti automatiquement
-            </p>
           </div>
-        </div>
-
-        {/* Info banner */}
-        <div className="mx-4 mb-5 rounded-xl bg-primary/8 border border-primary/20 p-3.5 flex gap-2.5">
-          <Info className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            Chaque wallet source est converti automatiquement vers le wallet de destination dès réception des fonds,
-            ou immédiatement si un solde est déjà présent.
-          </p>
         </div>
 
         {/* Existing rules grouped */}
