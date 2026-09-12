@@ -7,14 +7,13 @@ import { useLocation } from "wouter";
 import {
   ArrowRight,
   CheckCircle2,
-  Code2,
-  CreditCard,
   Globe2,
   Sparkles,
 } from "lucide-react";
 
 function OptionCard({
-  icon: Icon,
+  iconSrc,
+  iconAlt,
   iconClassName,
   title,
   description,
@@ -23,7 +22,8 @@ function OptionCard({
   onClick,
   testId,
 }: {
-  icon: React.ElementType;
+  iconSrc: string;
+  iconAlt: string;
   iconClassName: string;
   title: string;
   description: string;
@@ -35,8 +35,8 @@ function OptionCard({
   return (
     <Card className="h-full overflow-hidden border-border/80 transition-all hover:-translate-y-0.5 hover:shadow-md">
       <CardContent className="flex h-full flex-col p-5 sm:p-6">
-        <div className={`mb-5 flex h-12 w-12 items-center justify-center rounded-2xl ${iconClassName}`}>
-          <Icon className="h-6 w-6" />
+        <div className={`mb-5 flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl p-1 ${iconClassName}`}>
+          <img src={iconSrc} alt={iconAlt} className="h-full w-full object-contain" />
         </div>
         <h2 className="text-lg font-semibold leading-6 text-foreground">{title}</h2>
         <p className="mt-2 min-h-[3.5rem] text-[15px] leading-6 text-muted-foreground">{description}</p>
@@ -79,7 +79,8 @@ export default function ApiKeysPage() {
 
         <div className="grid gap-4 lg:grid-cols-2">
           <OptionCard
-            icon={CreditCard}
+            iconSrc="/embedded-checkout-icon.png"
+            iconAlt="Embedded checkout"
             iconClassName="bg-violet-500/10 text-violet-500"
             title={copy.embeddedTitle}
             description={copy.embeddedDescription}
@@ -89,7 +90,8 @@ export default function ApiKeysPage() {
             testId="button-api-embedded-checkout"
           />
           <OptionCard
-            icon={Code2}
+            iconSrc="/api-integration-icon.png"
+            iconAlt="Direct API"
             iconClassName="bg-blue-500/10 text-blue-500"
             title={copy.directTitle}
             description={copy.directDescription}
