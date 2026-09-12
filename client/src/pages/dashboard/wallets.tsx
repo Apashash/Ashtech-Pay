@@ -4,11 +4,19 @@ import { useLocation } from "wouter";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { Button } from "@/components/ui/button";
 import { BottomSheet, BottomSheetContent, BottomSheetHeader, BottomSheetTitle, BottomSheetDescription, BottomSheetFooter } from "@/components/ui/bottom-sheet";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Plus, X, ChevronRight, Loader2, AlertTriangle } from "lucide-react";
+import { Plus, X, ChevronRight, ChevronDown, Check, Loader2, AlertTriangle } from "lucide-react";
 import { ALL_FX_CURRENCIES, CURRENCY_SYMBOLS } from "@shared/schema";
 import type { User, Transaction } from "@shared/schema";
 import { useLanguage } from "@/lib/language";
@@ -23,9 +31,10 @@ const CURRENCY_FLAGS: Record<string, string> = {
   XAF: "🇨🇲", XAFC: "🇨🇬", XAFG: "🇬🇦",
   XOF: "🇸🇳", XOFC: "🇨🇮", XOFF: "🇧🇫", XOFN: "🇳🇪", XOFB: "🇧🇯", XOFT: "🇹🇬", XOFS: "🇸🇳", XOFM: "🇲🇱",
   RWF: "🇷🇼", TZS: "🇹🇿",
-  UGX: "🇺🇬", CDF: "🇨🇩", SLL: "🇸🇱",
-  MWK: "🇲🇼", ZMK: "🇿🇲", ZAR: "🇿🇦", EGP: "🇪🇬", MAD: "🇲🇦",
+  UGX: "🇺🇬", CDF: "🇨🇩", SLE: "🇸🇱",
+  GHS: "🇬🇭", KES: "🇰🇪", NGN: "🇳🇬", MWK: "🇲🇼", LSL: "🇱🇸", ZMK: "🇿🇲", ZAR: "🇿🇦", EGP: "🇪🇬", MAD: "🇲🇦",
   ETB: "🇪🇹", MZN: "🇲🇿", ZWE: "🇿🇼", CVE: "🇨🇻",
+  XAFCF: "🇨🇫", XAFTD: "🇹🇩", XOFGW: "🇬🇼",
   USD: "🇺🇸", EUR: "🇪🇺", GBP: "🇬🇧", CHF: "🇨🇭", USDT: "₮",
   CAD: "🇨🇦", AUD: "🇦🇺", NZD: "🇳🇿",
   INR: "🇮🇳", PKR: "🇵🇰", BDT: "🇧🇩", LRK: "🇱🇰",
@@ -41,11 +50,47 @@ const CURRENCY_FLAGS: Record<string, string> = {
 const CURRENCY_NAMES: Record<string, string> = {};
 ALL_FX_CURRENCIES.forEach(c => { CURRENCY_NAMES[c.code] = c.name; });
 
+const CURRENCY_COUNTRIES: Record<string, string> = {
+  USD: "États-Unis",
+  EUR: "Europe",
+  GBP: "Royaume-Uni",
+  XAF: "Cameroun",
+  XOF: "Afrique de l’Ouest",
+  XOFC: "Côte d’Ivoire",
+  XOFF: "Burkina Faso",
+  XOFN: "Niger",
+  XOFB: "Bénin",
+  XOFT: "Togo",
+  XOFS: "Sénégal",
+  XOFM: "Mali",
+  XAFC: "Congo Brazzaville",
+  XAFG: "Gabon",
+  RWF: "Rwanda",
+  TZS: "Tanzanie",
+  UGX: "Ouganda",
+  GHS: "Ghana",
+  KES: "Kenya",
+  MWK: "Malawi",
+  MZN: "Mozambique",
+  NGN: "Nigeria",
+  ETB: "Éthiopie",
+  LSL: "Lesotho",
+  SLE: "Sierra Leone",
+  ZMW: "Zambie",
+  XAFCF: "Centrafrique",
+  XAFTD: "Tchad",
+  XOFGW: "Guinée-Bissau",
+  CDF: "République démocratique du Congo",
+  INR: "Inde",
+  USDT: "Crypto · Tron",
+};
+
 export default function WalletsPage() {
   const { toast } = useToast();
   const { t } = useLanguage();
   const [, navigate] = useLocation();
   const [addWalletOpen, setAddWalletOpen] = useState(false);
+  const [currencyPickerOpen, setCurrencyPickerOpen] = useState(false);
   const [walletToDelete, setWalletToDelete] = useState<WalletEntry | null>(null);
   const [newWalletCurrency, setNewWalletCurrency] = useState("");
 
@@ -75,6 +120,7 @@ export default function WalletsPage() {
 
   const existingCurrencies = new Set(walletList.map(w => w.currency));
   const availableCurrencies = ALL_FX_CURRENCIES.filter(c => !existingCurrencies.has(c.code));
+  const selectedCurrency = availableCurrencies.find(c => c.code === newWalletCurrency);
 
   const walletSymbol = (currency: string) => (CURRENCY_SYMBOLS as Record<string, string>)[currency] || currency;
 
@@ -278,18 +324,61 @@ export default function WalletsPage() {
           <div className="space-y-4">
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t.wallets.currencyLabel}</Label>
-              <Select value={newWalletCurrency} onValueChange={setNewWalletCurrency}>
-                <SelectTrigger className="h-12 rounded-xl" data-testid="select-new-wallet-currency">
-                  <SelectValue placeholder={t.wallets.chooseCurrency} />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableCurrencies.map(c => (
-                    <SelectItem key={c.code} value={c.code}>
-                      {CURRENCY_FLAGS[c.code] || "🌍"} {c.code} — {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={currencyPickerOpen} onOpenChange={setCurrencyPickerOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex h-12 w-full items-center justify-between rounded-xl border border-input bg-background px-3 text-left text-sm shadow-sm transition-colors hover:bg-muted/40"
+                    data-testid="select-new-wallet-currency"
+                  >
+                    {selectedCurrency ? (
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="text-xl leading-none">{CURRENCY_FLAGS[selectedCurrency.code] || "🌍"}</span>
+                        <span className="truncate">
+                          {selectedCurrency.code} — {CURRENCY_COUNTRIES[selectedCurrency.code] || selectedCurrency.name}
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">{t.wallets.chooseCurrency}</span>
+                    )}
+                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 text-muted-foreground" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent
+                  align="start"
+                  className="w-[var(--radix-popover-trigger-width)] min-w-[280px] p-0"
+                >
+                  <Command>
+                    <CommandInput placeholder="Rechercher un pays ou une devise..." />
+                    <CommandList className="max-h-[220px]">
+                      <CommandEmpty>Aucun pays ou devise trouvé.</CommandEmpty>
+                      <CommandGroup>
+                        {availableCurrencies.map((c) => {
+                          const country = CURRENCY_COUNTRIES[c.code] || c.name;
+                          return (
+                            <CommandItem
+                              key={c.code}
+                              value={`${c.code} ${country} ${c.name}`}
+                              onSelect={() => {
+                                setNewWalletCurrency(c.code);
+                                setCurrencyPickerOpen(false);
+                              }}
+                              className="min-h-10 py-2"
+                            >
+                              <span className="w-7 shrink-0 text-xl leading-none">{CURRENCY_FLAGS[c.code] || "🌍"}</span>
+                              <span className="min-w-0 flex-1 truncate">
+                                <span className="font-medium">{c.code}</span>
+                                <span className="text-muted-foreground"> — {country}</span>
+                              </span>
+                              <Check className={`ml-2 h-4 w-4 shrink-0 ${newWalletCurrency === c.code ? "opacity-100" : "opacity-0"}`} />
+                            </CommandItem>
+                          );
+                        })}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
             <div className="flex gap-3">
               <Button variant="outline" className="flex-1" onClick={() => setAddWalletOpen(false)} data-testid="button-cancel-wallet">
