@@ -658,7 +658,7 @@ const translations = {
       newPassword: "Nouveau mot de passe",
       confirmPassword: "Confirmer le mot de passe",
       changePasswordBtn: "Changer le mot de passe",
-      apiKeysLabel: "Clés API & Développeur",
+      apiKeysLabel: "API & intégrations",
       // Danger
       deleteAccount: "Supprimer mon compte",
       deleteAccountDesc: "Action irréversible",
