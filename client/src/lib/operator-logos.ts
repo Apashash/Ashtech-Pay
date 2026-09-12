@@ -1,5 +1,12 @@
 export function getOperatorLogo(name: string): string | null {
   const n = name.toLowerCase();
+  if (n.includes("celtiis") || n.includes("celtis")) return "/op-celtiis.jpeg";
+  if (n.includes("coris")) return "/op-coris.png";
+  if (n.includes("ligdicash") || n.includes("ligdi cash") || n.includes("ligdi")) return "/op-ligdi-cash.jpeg";
+  if (n.includes("djamo") || n.includes("diamo")) return "/op-djamo.jpg";
+  if (n.includes("mynita") || n.includes("my nita")) return "/op-mynita.png";
+  if (n.includes("amana")) return "/op-amana.png";
+  if (n.includes("e-money") || n.includes("e money") || n.includes("emoney") || n === "money") return "/op-e-money.png";
   if (n.includes("mtn")) return "/op-mtn.jpeg";
   if (n.includes("wave")) return "/op-wave.png";
   if (n.includes("airtel")) return "/op-airtel.png";
