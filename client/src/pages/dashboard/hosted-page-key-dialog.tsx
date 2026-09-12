@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Globe2, Key, Link2, RefreshCw, Save, ShieldCheck, Webhook } from "lucide-react";
+import { CheckCircle2, Globe2, Key, Link2, RefreshCw, Save, Webhook } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/lib/language";
@@ -215,9 +215,6 @@ export function EditHostedPageUrlsDialog({
               </div>
               <DialogHeader className="space-y-1 text-left">
                 <DialogTitle className="text-lg font-semibold text-white sm:text-xl">{hp.editUrlsTitle}</DialogTitle>
-                <DialogDescription className="text-sm leading-5 text-indigo-100">
-                  {hp.editUrlsDesc}
-                </DialogDescription>
               </DialogHeader>
             </div>
             {keyToEdit && (
@@ -247,13 +244,6 @@ export function EditHostedPageUrlsDialog({
               if (keyToEdit) updateMutation.mutate();
             }}
           >
-            <div className="flex gap-3 rounded-xl border border-violet-200/60 bg-violet-50/70 p-3.5 text-sm dark:border-violet-400/20 dark:bg-violet-950/20">
-              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-violet-600 dark:text-violet-300" />
-              <p className="leading-5 text-muted-foreground">
-                {hp.editUrlsDesc} {hp.urlsApplyToKey}
-              </p>
-            </div>
-
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="key-success-url" className="flex items-center gap-2 text-sm font-semibold">
