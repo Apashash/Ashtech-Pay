@@ -17538,6 +17538,27 @@ export async function registerRoutes(
     }
   });
 
+  // PATCH /api/hosted-page/keys/:id/urls — update URLs linked to one Checkout key
+  app.patch("/api/hosted-page/keys/:id/urls", async (req: Request, res: Response) => {
+    if (!req.session?.userId) return res.status(401).json({ error: "Unauthorized" });
+    try {
+      const normalizeUrl = (value: unknown): string | null => {
+        if (value === null || value === undefined) return null;
+        return typeof value === "string" ? value.trim() || null : null;
+      };
+      const key = await storage.updateHostedPageKeyUrls(req.session.userId, req.params.id, {
+        successUrl: normalizeUrl(req.body?.successUrl),
+        cancelUrl: normalizeUrl(req.body?.cancelUrl),
+        notifyUrl: normalizeUrl(req.body?.notifyUrl),
+      });
+      if (!key) return res.status(404).json({ error: "not_found" });
+      res.json(key);
+    } catch (e: any) {
+      console.error("[hosted-page/keys:update-urls]", e);
+      res.status(500).json({ error: "server_error" });
+    }
+  });
+
   // DELETE /api/hosted-page/keys/:id — remove a named Checkout key
   app.delete("/api/hosted-page/keys/:id", async (req: Request, res: Response) => {
     if (!req.session?.userId) return res.status(401).json({ error: "Unauthorized" });

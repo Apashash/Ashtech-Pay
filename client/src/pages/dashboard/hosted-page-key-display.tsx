@@ -11,6 +11,9 @@ export interface HostedPageKey {
   pkLive: string;
   skLive: string;
   hpLive: string;
+  successUrl?: string | null;
+  cancelUrl?: string | null;
+  notifyUrl?: string | null;
   createdAt?: string | null;
   isLegacy?: boolean;
 }

@@ -212,6 +212,9 @@ export const hostedPageKeys = mysqlTable("hosted_page_keys", {
   skLive: varchar("sk_live", { length: 191 }).notNull().unique(),
   hpLive: varchar("hp_live", { length: 191 }).notNull().unique(),
   hpLiveHash: varchar("hp_live_hash", { length: 191 }).unique(),
+  successUrl: text("success_url"),
+  cancelUrl: text("cancel_url"),
+  notifyUrl: text("notify_url"),
   createdAt: dt("created_at"),
   updatedAt: dt("updated_at"),
 }, t => ({

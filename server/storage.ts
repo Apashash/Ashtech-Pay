@@ -372,6 +372,7 @@ export interface IStorage {
   getHostedPageKeys(userId: string): Promise<HostedPageKey[]>;
   createHostedPageKey(userId: string, name: string): Promise<HostedPageKey>;
   regenerateHostedPageKey(userId: string, keyId: string): Promise<HostedPageKey | undefined>;
+  updateHostedPageKeyUrls(userId: string, keyId: string, urls: Pick<HostedPageKey, "successUrl" | "cancelUrl" | "notifyUrl">): Promise<HostedPageKey | undefined>;
   deleteHostedPageKey(userId: string, keyId: string): Promise<boolean>;
   getUserByHpKey(hpLive: string): Promise<User | undefined>;
   createHostedPaymentSession(data: Omit<HostedPaymentSession, "createdAt">): Promise<HostedPaymentSession>;
@@ -2952,6 +2953,9 @@ export class DatabaseStorage implements IStorage {
         skLive: legacy.skLive,
         hpLive: legacy.hpLive,
         hpLiveHash: hmacField(legacy.hpLive),
+        successUrl: legacy.successUrl,
+        cancelUrl: legacy.cancelUrl,
+        notifyUrl: legacy.notifyUrl,
         createdAt: legacy.createdAt,
         updatedAt: legacy.updatedAt,
         isLegacy: true,
@@ -2964,6 +2968,7 @@ export class DatabaseStorage implements IStorage {
 
   async createHostedPageKey(userId: string, name: string): Promise<HostedPageKey> {
     const id = randomUUID();
+    const config = await this.getHostedPageConfig(userId);
     const pkLive = `pk_live_${randomUUID().replace(/-/g, "")}`;
     const skLive = `sk_live_${randomUUID().replace(/-/g, "")}`;
     const hpLive = `hp_live_${randomUUID().replace(/-/g, "")}`;
@@ -2975,6 +2980,9 @@ export class DatabaseStorage implements IStorage {
       skLive: encryptField(skLive)!,
       hpLive: encryptField(hpLive)!,
       hpLiveHash: hmacField(hpLive),
+      successUrl: config?.successUrl || null,
+      cancelUrl: config?.cancelUrl || null,
+      notifyUrl: config?.notifyUrl || null,
     };
 
     if (isMysqlDialect) {
@@ -3041,6 +3049,47 @@ export class DatabaseStorage implements IStorage {
     const [updated] = await db
       .update(hostedPageKeys)
       .set(updates)
+      .where(and(eq(hostedPageKeys.id, keyId), eq(hostedPageKeys.userId, userId)))
+      .returning();
+    return updated ? this.decryptHostedPageKey(updated) : undefined;
+  }
+
+  async updateHostedPageKeyUrls(
+    userId: string,
+    keyId: string,
+    urls: Pick<HostedPageKey, "successUrl" | "cancelUrl" | "notifyUrl">,
+  ): Promise<HostedPageKey | undefined> {
+    if (keyId === "legacy") {
+      const config = await this.getHostedPageConfig(userId);
+      if (!config) return undefined;
+      const updated = await this.saveHostedPageConfig(userId, urls);
+      return {
+        id: "legacy",
+        userId,
+        name: "default",
+        pkLive: updated.pkLive || "",
+        skLive: updated.skLive || "",
+        hpLive: updated.hpLive || "",
+        hpLiveHash: hmacField(updated.hpLive || ""),
+        successUrl: updated.successUrl,
+        cancelUrl: updated.cancelUrl,
+        notifyUrl: updated.notifyUrl,
+        createdAt: updated.createdAt,
+        updatedAt: updated.updatedAt,
+      } as HostedPageKey;
+    }
+
+    if (isMysqlDialect) {
+      await db
+        .update(hostedPageKeys)
+        .set({ ...urls, updatedAt: new Date() })
+        .where(and(eq(hostedPageKeys.id, keyId), eq(hostedPageKeys.userId, userId)));
+      return this.getHostedPageKeyById(keyId, userId);
+    }
+
+    const [updated] = await db
+      .update(hostedPageKeys)
+      .set({ ...urls, updatedAt: new Date() })
       .where(and(eq(hostedPageKeys.id, keyId), eq(hostedPageKeys.userId, userId)))
       .returning();
     return updated ? this.decryptHostedPageKey(updated) : undefined;

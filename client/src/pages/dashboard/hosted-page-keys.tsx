@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useLanguage } from "@/lib/language";
 import { CopyableKey, HostedPageKey } from "./hosted-page-key-display";
-import { CreateHostedPageKeyDialog } from "./hosted-page-key-dialog";
+import { CreateHostedPageKeyDialog, EditHostedPageUrlsDialog } from "./hosted-page-key-dialog";
 
 export default function HostedPageKeys() {
   const [, setLocation] = useLocation();
@@ -19,6 +19,7 @@ export default function HostedPageKeys() {
   const { t } = useLanguage();
   const hp = t.hostedPage;
   const [generateOpen, setGenerateOpen] = useState(false);
+  const [editingKey, setEditingKey] = useState<HostedPageKey | null>(null);
 
   const { data: keys = [], isLoading } = useQuery<HostedPageKey[]>({
     queryKey: ["/api/hosted-page/keys"],
@@ -74,16 +75,10 @@ export default function HostedPageKeys() {
               <p className="mt-1 text-sm leading-6 text-muted-foreground">{hp.keysDesc}</p>
             </div>
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Button variant="outline" onClick={() => setLocation("/dashboard/hosted-page")} className="gap-2">
-              <Pencil className="h-4 w-4" />
-              {hp.editUrls}
-            </Button>
-            <Button onClick={() => setGenerateOpen(true)} className="gap-2">
-              <Plus className="h-4 w-4" />
-              {hp.generateKey}
-            </Button>
-          </div>
+          <Button onClick={() => setGenerateOpen(true)} className="gap-2">
+            <Plus className="h-4 w-4" />
+            {hp.generateKey}
+          </Button>
         </div>
 
         {isLoading ? (
@@ -129,7 +124,7 @@ export default function HostedPageKeys() {
                     <CopyableKey label={hp.secretKey} value={key.skLive} testId={`${key.id}-secret`} />
                     <CopyableKey label={hp.checkoutKey} value={key.hpLive} testId={`${key.id}-checkout`} />
                   </div>
-                  <div className="flex flex-wrap gap-2 border-t pt-4">
+                  <div className="flex flex-wrap items-center gap-2 border-t pt-4">
                     <Button
                       variant="outline"
                       size="sm"
@@ -152,6 +147,15 @@ export default function HostedPageKeys() {
                         {hp.deleteKey}
                       </Button>
                     )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setEditingKey(key)}
+                      className="ml-auto gap-2"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                      {hp.editUrls}
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -164,6 +168,13 @@ export default function HostedPageKeys() {
         open={generateOpen}
         onOpenChange={setGenerateOpen}
         onViewKeys={() => setGenerateOpen(false)}
+      />
+      <EditHostedPageUrlsDialog
+        keyToEdit={editingKey}
+        open={Boolean(editingKey)}
+        onOpenChange={(open) => {
+          if (!open) setEditingKey(null);
+        }}
       />
     </DashboardLayout>
   );

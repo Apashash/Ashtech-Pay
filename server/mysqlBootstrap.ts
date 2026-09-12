@@ -105,10 +105,16 @@ export async function ensureMysqlAuxiliarySchema(): Promise<void> {
       sk_live VARCHAR(191) NOT NULL UNIQUE,
       hp_live VARCHAR(191) NOT NULL UNIQUE,
       hp_live_hash VARCHAR(191) UNIQUE,
+      success_url TEXT NULL,
+      cancel_url TEXT NULL,
+      notify_url TEXT NULL,
       created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
       updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
       INDEX hosted_page_keys_user_id_idx (user_id)
     ) ENGINE=InnoDB`,
+    `ALTER TABLE hosted_page_keys ADD COLUMN IF NOT EXISTS success_url TEXT NULL`,
+    `ALTER TABLE hosted_page_keys ADD COLUMN IF NOT EXISTS cancel_url TEXT NULL`,
+    `ALTER TABLE hosted_page_keys ADD COLUMN IF NOT EXISTS notify_url TEXT NULL`,
     `CREATE TABLE IF NOT EXISTS admin_pending_logins (
       token VARCHAR(191) NOT NULL PRIMARY KEY,
       user_id VARCHAR(191) NOT NULL,

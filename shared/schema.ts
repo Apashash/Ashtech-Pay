@@ -1181,6 +1181,9 @@ export const hostedPageKeys = pgTable("hosted_page_keys", {
   skLive: text("sk_live").notNull().unique(),
   hpLive: text("hp_live").notNull().unique(),
   hpLiveHash: text("hp_live_hash").unique(),
+  successUrl: text("success_url"),
+  cancelUrl: text("cancel_url"),
+  notifyUrl: text("notify_url"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (t) => ({
