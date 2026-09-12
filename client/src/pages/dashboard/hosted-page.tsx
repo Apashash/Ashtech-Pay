@@ -132,16 +132,17 @@ export default function HostedPageDashboard() {
           </div>
         </div>
 
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)] lg:items-start">
-          <Card>
+        <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)] lg:items-start">
+          <Card className="min-w-0 overflow-hidden">
             <CardHeader className="pb-4">
               <CardTitle className="text-base">{hp.configTitle}</CardTitle>
               <CardDescription>{hp.redirectsDesc}</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-5">
+            <CardContent className="min-w-0 space-y-5">
               <div className="space-y-2">
                 <Label htmlFor="success-url">{hp.successUrlLabel}</Label>
                 <Input
+                  className="min-w-0 max-w-full truncate"
                   id="success-url"
                   data-testid="input-success-url"
                   placeholder="https://monsite.com/payment/success"
@@ -153,6 +154,7 @@ export default function HostedPageDashboard() {
               <div className="space-y-2">
                 <Label htmlFor="cancel-url">{hp.cancelUrlLabel}</Label>
                 <Input
+                  className="min-w-0 max-w-full truncate"
                   id="cancel-url"
                   data-testid="input-cancel-url"
                   placeholder="https://monsite.com/payment/cancel"
@@ -162,13 +164,14 @@ export default function HostedPageDashboard() {
               </div>
 
               <div className="space-y-2 border-t pt-4">
-                <Label htmlFor="notify-url" className="flex items-center gap-2">
-                  {hp.notifyUrlLabel}
-                  <span className="rounded border border-violet-500/20 bg-violet-500/10 px-1.5 py-0.5 font-mono text-[10px] text-violet-500">
+                <Label htmlFor="notify-url" className="flex min-w-0 items-center gap-2">
+                  <span className="min-w-0 truncate">{hp.notifyUrlLabel}</span>
+                  <span className="shrink-0 rounded border border-violet-500/20 bg-violet-500/10 px-1.5 py-0.5 font-mono text-[10px] text-violet-500">
                     {hp.recommended}
                   </span>
                 </Label>
                 <Input
+                  className="min-w-0 max-w-full truncate"
                   id="notify-url"
                   data-testid="input-notify-url"
                   placeholder="https://monsite.com/webhooks/ashtechpay"
@@ -210,7 +213,7 @@ export default function HostedPageDashboard() {
           </Card>
 
           {hasKeys && (
-            <Card>
+            <Card className="min-w-0 overflow-hidden">
               <CardHeader className="pb-4">
                 <div className="flex items-start justify-between gap-3">
                   <CardTitle className="text-base">{hp.keysTitle}</CardTitle>
