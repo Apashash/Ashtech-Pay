@@ -1,7 +1,7 @@
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ShieldCheck, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { useLocation } from "wouter";
 import { useLanguage } from "@/lib/language";
 
@@ -22,9 +22,12 @@ export default function KYCVerifiedPage() {
       <div className="flex items-center justify-center min-h-[60vh]">
         <Card className="max-w-md w-full text-center">
           <CardHeader className="pb-4">
-            <div className="mx-auto w-20 h-20 rounded-full bg-green-500/20 flex items-center justify-center mb-4">
-              <ShieldCheck className="w-10 h-10 text-green-500" />
-            </div>
+            <img
+              src="/kyc-verified-badge.png"
+              alt=""
+              aria-hidden="true"
+              className="mx-auto w-20 h-20 object-contain mb-4"
+            />
             <CardTitle className="text-2xl">{t.kycVerified.title}</CardTitle>
             <CardDescription className="text-base mt-2">
               {t.kycVerified.desc}
