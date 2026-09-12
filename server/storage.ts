@@ -2872,8 +2872,22 @@ export class DatabaseStorage implements IStorage {
       toStore.hpLiveHash = hmacField(plainHpLive) ?? undefined;
     }
     const existing = await db.select().from(hostedPageConfigs).where(eq(hostedPageConfigs.userId, userId));
+    const readBack = async (): Promise<HostedPageConfig | undefined> => {
+      const [row] = await db.select().from(hostedPageConfigs).where(eq(hostedPageConfigs.userId, userId));
+      return row;
+    };
+
     let raw: HostedPageConfig;
     if (existing.length > 0) {
+      if (isMysqlDialect) {
+        await db
+          .update(hostedPageConfigs)
+          .set({ ...toStore, updatedAt: new Date() })
+          .where(eq(hostedPageConfigs.userId, userId));
+        const updated = await readBack();
+        if (!updated) throw new Error("HOSTED_PAGE_CONFIG_UPDATE_READBACK_FAILED");
+        return this.decryptHostedPageConfig(updated);
+      }
       const [updated] = await db
         .update(hostedPageConfigs)
         .set({ ...toStore, updatedAt: new Date() })
@@ -2881,6 +2895,14 @@ export class DatabaseStorage implements IStorage {
         .returning();
       raw = updated;
     } else {
+      if (isMysqlDialect) {
+        await db
+          .insert(hostedPageConfigs)
+          .values({ id: randomUUID(), userId, ...toStore });
+        const created = await readBack();
+        if (!created) throw new Error("HOSTED_PAGE_CONFIG_INSERT_READBACK_FAILED");
+        return this.decryptHostedPageConfig(created);
+      }
       const [created] = await db
         .insert(hostedPageConfigs)
         .values({ userId, ...toStore })
