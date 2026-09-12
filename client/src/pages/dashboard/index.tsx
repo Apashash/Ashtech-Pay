@@ -784,7 +784,7 @@ export default function DashboardHome() {
                     className="flex items-center gap-2 px-3 py-2 rounded-xl bg-primary/20 hover:bg-primary/30 text-primary text-sm font-semibold transition-all border border-primary/30"
                     data-testid="button-wallets"
                   >
-                    <Wallet className="w-4 h-4" />
+                    <img src="/exchange-icon.png" alt="" aria-hidden="true" className="w-5 h-5 object-contain" />
                     Conversion
                   </button>
                   {/* Zone de clic invisible — gesture admin uniquement */}
