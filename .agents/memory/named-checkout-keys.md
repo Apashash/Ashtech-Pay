@@ -7,4 +7,4 @@ Keep additional Checkout credentials and their success/cancel/webhook URLs in a 
 
 **Why:** Merchants need separate credentials and redirect behavior for different stores or applications, but rotating or migrating the original `hp_live` credential can break a live integration without warning.
 
-**How to apply:** New keys must require a merchant-provided name, inherit the current URLs on creation, support per-key URL editing and independent rotation/deletion, and be included in `hp_live` lookup by hash. Dashboard key management may expose decrypted values only to the authenticated merchant.
+**How to apply:** New keys must require a merchant-provided name, save the URLs currently entered in the generation form (falling back to the existing config when generated elsewhere), support per-key URL editing and independent rotation/deletion, and be included in `hp_live` lookup by hash. Dashboard key management may expose decrypted values only to the authenticated merchant.
