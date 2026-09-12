@@ -4,9 +4,9 @@
   "description": "Documentation officielle de l'API AshTech Pay pour les paiements Mobile Money et crypto en Afrique.",
   "theme": "mint",
   "colors": {
-    "primary": "#1A237E",
-    "light": "#F0B90B",
-    "dark": "#10164A"
+    "primary": "#16A34A",
+    "light": "#22C55E",
+    "dark": "#15803D"
   },
   "favicon": "/docs-favicon.png",
   "logo": {
