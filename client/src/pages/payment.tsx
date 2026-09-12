@@ -1557,6 +1557,7 @@ export default function PaymentPage() {
                   {operators.map((op) => {
                     const logo = getOperatorLogo(op.name);
                     const isSelected = operator === op.id;
+                    const isOrangeMoney = op.name.toLowerCase().includes("orange");
                     return (
                       <button
                         key={op.id}
@@ -1570,7 +1571,7 @@ export default function PaymentPage() {
                         }`}
                       >
                         {logo ? (
-                          <img src={logo} alt={op.name} className="w-12 h-12 object-contain rounded-lg bg-white" loading="eager" decoding="async" />
+                          <img src={logo} alt={op.name} className={`${isOrangeMoney ? "w-16 h-12" : "w-12 h-12"} object-contain rounded-lg bg-white`} loading="eager" decoding="async" />
                         ) : (
                           <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
                             <Smartphone className="w-6 h-6 text-primary" />

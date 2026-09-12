@@ -1428,6 +1428,7 @@ export default function DepositPage() {
                                 {selectedCountry.operators.map((op) => {
                                   const logo = getOperatorLogo(op.name);
                                   const isSelected = field.value === op.id;
+                                  const isOrangeMoney = op.name.toLowerCase().includes("orange");
                                   return (
                                     <button
                                       key={op.id}
@@ -1441,7 +1442,7 @@ export default function DepositPage() {
                                       }`}
                                     >
                                       {logo
-                                        ? <img src={logo} alt={op.name} className="w-12 h-12 object-contain rounded-xl" />
+                                        ? <img src={logo} alt={op.name} className={`${isOrangeMoney ? "w-16 h-12" : "w-12 h-12"} object-contain rounded-xl`} />
                                         : <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center"><Smartphone className="w-6 h-6 text-primary" /></div>
                                       }
                                       <span className={`text-xs font-semibold text-center leading-tight px-1 ${isSelected ? "text-primary" : "text-foreground"}`}>{op.name}</span>

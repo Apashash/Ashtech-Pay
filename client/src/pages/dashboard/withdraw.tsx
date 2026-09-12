@@ -586,6 +586,7 @@ export default function WithdrawPage() {
                       {operators.map((op) => {
                         const logo = getOperatorLogo(op.name);
                         const isSelected = selectedOperator === op.id;
+                        const isOrangeMoney = op.name.toLowerCase().includes("orange");
                         return (
                           <button
                             key={op.id}
@@ -599,7 +600,7 @@ export default function WithdrawPage() {
                             }`}
                           >
                             {logo ? (
-                              <img src={logo} alt={op.name} className="w-11 h-11 object-contain rounded-xl" />
+                              <img src={logo} alt={op.name} className={`${isOrangeMoney ? "w-16 h-12" : "w-11 h-11"} object-contain rounded-xl`} />
                             ) : (
                               <div className="w-11 h-11 rounded-xl bg-muted flex items-center justify-center">
                                 <Smartphone className="w-6 h-6 text-muted-foreground" />
