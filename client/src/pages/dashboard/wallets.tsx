@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { DashboardLayout } from "@/components/dashboard-layout";
@@ -93,6 +93,8 @@ export default function WalletsPage() {
   const [currencyPickerOpen, setCurrencyPickerOpen] = useState(false);
   const [walletToDelete, setWalletToDelete] = useState<WalletEntry | null>(null);
   const [newWalletCurrency, setNewWalletCurrency] = useState("");
+  const currencyListRef = useRef<HTMLDivElement>(null);
+  const currencyTouchRef = useRef({ startY: 0, startScrollTop: 0 });
 
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const { data: rawWalletList = [], isLoading } = useQuery<WalletEntry[]>({
@@ -128,6 +130,24 @@ export default function WalletsPage() {
     const targetWallet = walletList.find((wallet) => wallet.currency !== sourceCurrency);
     if (!targetWallet) return;
     navigate(`/dashboard/convert?from=${encodeURIComponent(sourceCurrency)}&to=${encodeURIComponent(targetWallet.currency)}`);
+  };
+
+  const handleCurrencyTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
+    const touch = event.touches[0];
+    if (!touch || !currencyListRef.current) return;
+    currencyTouchRef.current = {
+      startY: touch.clientY,
+      startScrollTop: currencyListRef.current.scrollTop,
+    };
+  };
+
+  const handleCurrencyTouchMove = (event: React.TouchEvent<HTMLDivElement>) => {
+    const touch = event.touches[0];
+    const list = currencyListRef.current;
+    if (!touch || !list) return;
+    event.preventDefault();
+    list.scrollTop = currencyTouchRef.current.startScrollTop
+      + currencyTouchRef.current.startY - touch.clientY;
   };
 
   const addWalletMutation = useMutation({
@@ -353,10 +373,13 @@ export default function WalletsPage() {
                   <Command>
                     <CommandInput placeholder="Rechercher un pays ou une devise..." />
                     <CommandList
-                      className="!h-[220px] !max-h-none !overflow-y-scroll overscroll-contain touch-pan-y"
-                      style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-y" }}
+                      ref={currencyListRef}
+                      className="!h-[220px] !max-h-none !overflow-y-scroll overscroll-contain"
+                      style={{ WebkitOverflowScrolling: "touch", touchAction: "none" }}
                       data-testid="wallet-currency-options"
                       data-vaul-no-drag
+                      onTouchStart={handleCurrencyTouchStart}
+                      onTouchMove={handleCurrencyTouchMove}
                     >
                       <CommandEmpty>Aucun pays ou devise trouvé.</CommandEmpty>
                       <CommandGroup>
