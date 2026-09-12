@@ -494,19 +494,19 @@ export default function SendMoneyPage() {
         </div>
 
         {/* Wallet selector + balance */}
-        <div className="flex items-center gap-3 bg-gradient-to-r from-primary/10 to-transparent border border-primary/20 rounded-2xl px-4 py-3">
-          <div className="w-9 h-9 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
-            <WalletIcon className="w-4 h-4 text-primary" />
+        <div className="flex items-center gap-3 bg-[#1A237E] border border-[#1A237E] rounded-2xl px-4 py-3">
+          <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center shrink-0">
+            <WalletIcon className="w-4 h-4 text-white" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs text-muted-foreground">{t.send.yourBalance}</p>
-            <p className="text-base font-bold text-foreground tabular-nums">
+            <p className="text-xs text-white/75">{t.send.yourBalance}</p>
+            <p className="text-base font-bold text-white tabular-nums">
               {formatWalletBalance(balance, selectedWallet)}
             </p>
           </div>
           {wallets.length > 1 && (
             <Select value={selectedWallet} onValueChange={setSelectedWallet}>
-              <SelectTrigger className="h-8 w-auto border-primary/30 rounded-lg text-xs font-semibold bg-primary/5 gap-1">
+              <SelectTrigger className="h-8 w-auto border-white/30 rounded-lg text-xs font-semibold bg-white/10 text-white gap-1">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
