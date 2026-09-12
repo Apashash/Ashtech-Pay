@@ -512,7 +512,7 @@ export default function SendMoneyPage() {
               <SelectContent>
                 {wallets.map((w) => (
                   <SelectItem key={w.currency} value={w.currency}>
-                    {w.currency} — {parseFloat(w.balance || "0").toLocaleString()}
+                    {w.currency} {parseFloat(w.balance || "0").toLocaleString()}
                   </SelectItem>
                 ))}
               </SelectContent>
