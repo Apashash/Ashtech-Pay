@@ -47,6 +47,9 @@ const TestCryptoPage = React.lazy(() => import("@/pages/docs/test-crypto"));
 const HPayPage = React.lazy(() => import("@/pages/hpay"));
 const SettingsPage = React.lazy(() => import("@/pages/dashboard/settings"));
 const AutoConversionPage = React.lazy(() => import("@/pages/dashboard/auto-conversion"));
+const AutoConversionSourcesPage = React.lazy(() =>
+  import("@/pages/dashboard/auto-conversion").then((module) => ({ default: module.AutoConversionSourcesPage }))
+);
 const UpdatesPage = React.lazy(() => import("@/pages/dashboard/updates"));
 const NotificationsPage = React.lazy(() => import("@/pages/dashboard/notifications"));
 const PaymentPage = React.lazy(() => import("@/pages/payment"));
@@ -198,6 +201,7 @@ function Router() {
       <Route path="/dashboard/hosted-page/generate" component={HostedPageGenerate} />
       <Route path="/hpay/:id" component={HPayPage} />
       <Route path="/dashboard/settings" component={SettingsPage} />
+      <Route path="/dashboard/auto-conversion/sources" component={AutoConversionSourcesPage} />
       <Route path="/dashboard/auto-conversion" component={AutoConversionPage} />
       <Route path="/dashboard/updates" component={UpdatesPage} />
       <Route path="/dashboard/notifications" component={NotificationsPage} />

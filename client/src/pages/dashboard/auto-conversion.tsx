@@ -405,7 +405,7 @@ function GroupedRuleCard({
                     <span className="flex items-center gap-2">
                       <span>{CURRENCY_FLAGS[c.code] || "💱"}</span>
                       <span className="font-medium">{c.code}</span>
-                      <span className="text-muted-foreground text-xs">— {c.name}</span>
+                      <span className="text-muted-foreground text-xs">{c.name}</span>
                     </span>
                   </SelectItem>
                 ))}
@@ -453,11 +453,23 @@ export default function AutoConversionPage() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
 
-  const [selectedSources, setSelectedSources] = useState<Set<string>>(new Set());
+  const [selectedSources, setSelectedSources] = useState<Set<string>>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const selection = params.get("sourceSelection");
+    return new Set(selection ? selection.split(",").filter(Boolean) : []);
+  });
   const [toCurrency, setToCurrency] = useState("");
-  const [showForm, setShowForm] = useState(false);
-  const [showPicker, setShowPicker] = useState(false);
+  const [showForm, setShowForm] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.has("sourceSelection") || params.get("openForm") === "1";
+  });
   const [creating, setCreating] = useState(false);
+
+  useEffect(() => {
+    if (window.location.search) {
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
 
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const { data: wallets = [] } = useQuery<WalletEntry[]>({ queryKey: ["/api/wallets"] });
@@ -741,7 +753,7 @@ export default function AutoConversionPage() {
                   {/* Trigger button */}
                   <button
                     type="button"
-                    onClick={() => setShowPicker(true)}
+                    onClick={() => navigate("/dashboard/auto-conversion/sources")}
                     className={`w-full flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition-all ${
                       selectedSources.size > 0
                         ? "border-primary bg-primary/8"
@@ -828,7 +840,7 @@ export default function AutoConversionPage() {
                         <span className="flex items-center gap-2">
                           <span>{CURRENCY_FLAGS[c.code] || "🌍"}</span>
                           <span className="font-medium">{c.code}</span>
-                          <span className="text-muted-foreground text-xs">— {c.name}</span>
+                          <span className="text-muted-foreground text-xs">{c.name}</span>
                         </span>
                       </SelectItem>
                     ))}
@@ -867,15 +879,156 @@ export default function AutoConversionPage() {
         )}
       </div>
 
-      {/* Source picker modal */}
-      <SourcePickerModal
-        open={showPicker}
-        onClose={() => setShowPicker(false)}
-        onConfirm={(confirmed) => setSelectedSources(confirmed)}
-        options={sourceOptions}
-        initialSelected={selectedSources}
-        balanceMap={balanceMap}
-      />
+    </DashboardLayout>
+  );
+}
+
+// ─── Dedicated source-wallet page ─────────────────────────────────────────────
+// Kept separate from the edit modal because selecting sources for a new rule is
+// a complete mobile step, not a transient popup.
+export function AutoConversionSourcesPage() {
+  const [, navigate] = useLocation();
+  const [search, setSearch] = useState("");
+  const [selectedSources, setSelectedSources] = useState<Set<string>>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const selection = params.get("selected");
+    return new Set(selection ? selection.split(",").filter(Boolean) : []);
+  });
+
+  const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
+  const { data: wallets = [] } = useQuery<WalletEntry[]>({ queryKey: ["/api/wallets"] });
+  const { data: rules = [] } = useQuery<AutoConversionRule[]>({
+    queryKey: ["/api/auto-conversion"],
+  });
+
+  const balanceMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    if (user) map[user.preferredCurrency || "XAF"] = user.balance;
+    wallets.forEach((wallet) => { map[wallet.currency] = wallet.balance; });
+    return map;
+  }, [wallets, user]);
+
+  const lockedCurrencies = useMemo(
+    () => new Set(rules.flatMap((rule) => [rule.fromCurrency, rule.toCurrency])),
+    [rules]
+  );
+
+  const sourceOptions = useMemo(
+    () => ALL_FX_CURRENCIES.filter((currency) => !lockedCurrencies.has(currency.code)),
+    [lockedCurrencies]
+  );
+
+  const filteredOptions = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return sourceOptions;
+    return sourceOptions.filter((currency) =>
+      `${currency.code} ${currency.name}`.toLowerCase().includes(query)
+    );
+  }, [search, sourceOptions]);
+
+  function toggleSource(code: string) {
+    setSelectedSources((previous) => {
+      const next = new Set(previous);
+      if (next.has(code)) next.delete(code);
+      else next.add(code);
+      return next;
+    });
+  }
+
+  function cancel() {
+    navigate("/dashboard/auto-conversion");
+  }
+
+  function confirm() {
+    const selection = Array.from(selectedSources).join(",");
+    navigate(`/dashboard/auto-conversion?sourceSelection=${encodeURIComponent(selection)}`);
+  }
+
+  return (
+    <DashboardLayout>
+      <div className="min-h-[calc(100vh-4rem)] bg-background">
+        <div className="max-w-lg mx-auto">
+          <div className="px-4 pt-3 pb-4 flex items-start gap-3 border-b border-border">
+            <button
+              type="button"
+              onClick={cancel}
+              className="p-2 -ml-2 rounded-xl hover:bg-muted/60 transition-colors text-muted-foreground"
+              aria-label="Retour"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <div className="flex-1 text-center pr-7">
+              <h1 className="text-xl font-semibold text-foreground">Wallets source</h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                Sélectionnez une ou plusieurs devises à convertir automatiquement
+              </p>
+            </div>
+          </div>
+
+          <div className="px-4 py-3 border-b border-border">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Rechercher une devise…"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                className="pl-9 h-11 text-sm"
+                autoFocus
+              />
+            </div>
+          </div>
+
+          <div className="divide-y divide-border/60 pb-24">
+            {filteredOptions.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-12">Aucun résultat</p>
+            ) : (
+              filteredOptions.map((currency) => {
+                const isSelected = selectedSources.has(currency.code);
+                const balance = balanceMap[currency.code];
+                const hasBalance = balance !== undefined && parseFloat(balance) > 0;
+                return (
+                  <button
+                    key={currency.code}
+                    type="button"
+                    onClick={() => toggleSource(currency.code)}
+                    className={`w-full flex items-center gap-3 px-5 py-4 text-left transition-colors ${
+                      isSelected ? "bg-primary/8" : "hover:bg-muted/40"
+                    }`}
+                  >
+                    <span className="text-2xl leading-none shrink-0">{CURRENCY_FLAGS[currency.code] || "🌍"}</span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block font-semibold text-base text-foreground leading-tight">{currency.code}</span>
+                      <span className="block text-sm text-muted-foreground truncate">{currency.name}</span>
+                      {hasBalance && (
+                        <span className="block text-xs text-primary font-medium mt-1">
+                          Solde : {parseFloat(balance).toLocaleString()} {currency.code}
+                        </span>
+                      )}
+                    </span>
+                    <span className={`w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                      isSelected ? "bg-primary border-primary" : "border-border"
+                    }`}>
+                      {isSelected && <Check className="w-3.5 h-3.5 text-primary-foreground" />}
+                    </span>
+                  </button>
+                );
+              })
+            )}
+          </div>
+
+          <div className="fixed bottom-0 left-0 right-0 z-20 border-t border-border bg-background/95 backdrop-blur px-4 py-3">
+            <div className="max-w-lg mx-auto flex gap-3">
+              <Button variant="outline" className="flex-1 h-11" onClick={cancel}>
+                Annuler
+              </Button>
+              <Button className="flex-1 h-11" onClick={confirm} disabled={selectedSources.size === 0}>
+                <Check className="w-4 h-4 mr-1.5" />
+                Confirmer ({selectedSources.size})
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
     </DashboardLayout>
   );
 }
