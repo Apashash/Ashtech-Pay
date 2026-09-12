@@ -699,12 +699,14 @@ export default function SettingsPage() {
               <div className="border-t border-border divide-y divide-border">
                 {[
                   { key: "email" as const, icon: Mail, label: t.settings.notifEmail, desc: t.settings.notifEmailDesc, color: "text-blue-500" },
-                  { key: "push" as const, icon: Bell, label: t.settings.notifPush, desc: t.settings.notifPushDesc, color: "text-purple-500" },
+                  { key: "push" as const, icon: null, label: t.settings.notifPush, desc: t.settings.notifPushDesc, color: "text-purple-500" },
                   { key: "sms" as const, icon: Smartphone, label: t.settings.notifSms, desc: t.settings.notifSmsDesc, color: "text-green-500" },
                   { key: "marketing" as const, icon: Globe, label: t.settings.notifMarketing, desc: t.settings.notifMarketingDesc, color: "text-orange-500" },
                 ].map(({ key, icon: Icon, label, desc, color }) => (
                   <div key={key} className="flex items-center gap-3 px-4 py-3.5 bg-muted/20">
-                    <Icon className={`w-4 h-4 ${color} shrink-0`} />
+                    {Icon
+                      ? <Icon className={`w-4 h-4 ${color} shrink-0`} />
+                      : <img src="/notification-icon.png" alt="" aria-hidden="true" className="w-4 h-4 object-contain shrink-0" />}
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-foreground">{label}</p>
                       <p className="text-xs text-muted-foreground">{desc}</p>
