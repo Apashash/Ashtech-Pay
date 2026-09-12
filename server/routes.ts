@@ -17517,7 +17517,15 @@ export async function registerRoutes(
       if (!name || name.length > 80) {
         return res.status(400).json({ error: "invalid_name", message: "Le nom doit contenir entre 1 et 80 caractères." });
       }
-      const key = await storage.createHostedPageKey(req.session.userId, name);
+      const normalizeUrl = (value: unknown): string | null => {
+        if (value === null || value === undefined) return null;
+        return typeof value === "string" ? value.trim() || null : null;
+      };
+      const key = await storage.createHostedPageKey(req.session.userId, name, {
+        successUrl: normalizeUrl(req.body?.successUrl),
+        cancelUrl: normalizeUrl(req.body?.cancelUrl),
+        notifyUrl: normalizeUrl(req.body?.notifyUrl),
+      });
       res.status(201).json(key);
     } catch (e: any) {
       console.error("[hosted-page/keys:create]", e);

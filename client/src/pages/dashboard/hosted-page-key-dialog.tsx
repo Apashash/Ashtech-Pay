@@ -20,12 +20,18 @@ interface CreateHostedPageKeyDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onViewKeys: () => void;
+  urls?: {
+    successUrl: string;
+    cancelUrl: string;
+    notifyUrl: string;
+  };
 }
 
 export function CreateHostedPageKeyDialog({
   open,
   onOpenChange,
   onViewKeys,
+  urls,
 }: CreateHostedPageKeyDialogProps) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -36,7 +42,12 @@ export function CreateHostedPageKeyDialog({
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/hosted-page/keys", { name: name.trim() });
+      const response = await apiRequest("POST", "/api/hosted-page/keys", {
+        name: name.trim(),
+        successUrl: urls?.successUrl || null,
+        cancelUrl: urls?.cancelUrl || null,
+        notifyUrl: urls?.notifyUrl || null,
+      });
       return response.json() as Promise<HostedPageKey>;
     },
     onSuccess: (key) => {

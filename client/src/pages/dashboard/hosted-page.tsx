@@ -1,9 +1,7 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Globe, KeyRound, BookOpen, ExternalLink, Save } from "lucide-react";
-import { apiRequest } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
+import { Globe, KeyRound, BookOpen, ExternalLink } from "lucide-react";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,8 +18,6 @@ interface HostedPageConfig {
 }
 
 export default function HostedPageDashboard() {
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
   const { t } = useLanguage();
   const hp = t.hostedPage;
@@ -43,18 +39,6 @@ export default function HostedPageDashboard() {
     setNotifyUrl(config.notifyUrl || "");
     setInitialized(true);
   }
-
-  const saveMutation = useMutation({
-    mutationFn: (data: { successUrl: string; cancelUrl: string; notifyUrl: string }) =>
-      apiRequest("POST", "/api/hosted-page/config", data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/hosted-page/config"] });
-      toast({ title: hp.configSaved, description: hp.configSavedDesc });
-    },
-    onError: () => {
-      toast({ title: hp.configError, description: hp.configErrorDesc, variant: "destructive" });
-    },
-  });
 
   return (
     <DashboardLayout>
@@ -131,20 +115,10 @@ export default function HostedPageDashboard() {
                   />
                 </div>
 
-                <div className="flex flex-col gap-3 border-t pt-5 sm:flex-row sm:items-center">
-                  <Button
-                    variant="outline"
-                    onClick={() => saveMutation.mutate({ successUrl, cancelUrl, notifyUrl })}
-                    disabled={saveMutation.isPending}
-                    data-testid="button-save-urls"
-                    className="gap-2"
-                  >
-                    <Save className="h-4 w-4" />
-                    {saveMutation.isPending ? hp.saving : hp.saveUrls}
-                  </Button>
+                <div className="border-t pt-5">
                   <Button
                     onClick={() => setGenerateOpen(true)}
-                    className="gap-2"
+                    className="w-full gap-2 sm:w-auto"
                     data-testid="button-generate-checkout-key"
                   >
                     <KeyRound className="h-4 w-4" />
@@ -175,6 +149,7 @@ export default function HostedPageDashboard() {
         open={generateOpen}
         onOpenChange={setGenerateOpen}
         onViewKeys={() => setLocation("/dashboard/hosted-page/keys")}
+        urls={{ successUrl, cancelUrl, notifyUrl }}
       />
     </DashboardLayout>
   );

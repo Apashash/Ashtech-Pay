@@ -370,7 +370,7 @@ export interface IStorage {
   getHostedPageConfig(userId: string): Promise<HostedPageConfig | undefined>;
   saveHostedPageConfig(userId: string, data: Partial<HostedPageConfig>): Promise<HostedPageConfig>;
   getHostedPageKeys(userId: string): Promise<HostedPageKey[]>;
-  createHostedPageKey(userId: string, name: string): Promise<HostedPageKey>;
+  createHostedPageKey(userId: string, name: string, urls?: Pick<HostedPageKey, "successUrl" | "cancelUrl" | "notifyUrl">): Promise<HostedPageKey>;
   regenerateHostedPageKey(userId: string, keyId: string): Promise<HostedPageKey | undefined>;
   updateHostedPageKeyUrls(userId: string, keyId: string, urls: Pick<HostedPageKey, "successUrl" | "cancelUrl" | "notifyUrl">): Promise<HostedPageKey | undefined>;
   deleteHostedPageKey(userId: string, keyId: string): Promise<boolean>;
@@ -2966,9 +2966,18 @@ export class DatabaseStorage implements IStorage {
     return keys;
   }
 
-  async createHostedPageKey(userId: string, name: string): Promise<HostedPageKey> {
+  async createHostedPageKey(
+    userId: string,
+    name: string,
+    urls?: Pick<HostedPageKey, "successUrl" | "cancelUrl" | "notifyUrl">,
+  ): Promise<HostedPageKey> {
     const id = randomUUID();
     const config = await this.getHostedPageConfig(userId);
+    const linkedUrls = urls || {
+      successUrl: config?.successUrl || null,
+      cancelUrl: config?.cancelUrl || null,
+      notifyUrl: config?.notifyUrl || null,
+    };
     const pkLive = `pk_live_${randomUUID().replace(/-/g, "")}`;
     const skLive = `sk_live_${randomUUID().replace(/-/g, "")}`;
     const hpLive = `hp_live_${randomUUID().replace(/-/g, "")}`;
@@ -2980,9 +2989,9 @@ export class DatabaseStorage implements IStorage {
       skLive: encryptField(skLive)!,
       hpLive: encryptField(hpLive)!,
       hpLiveHash: hmacField(hpLive),
-      successUrl: config?.successUrl || null,
-      cancelUrl: config?.cancelUrl || null,
-      notifyUrl: config?.notifyUrl || null,
+      successUrl: linkedUrls.successUrl || null,
+      cancelUrl: linkedUrls.cancelUrl || null,
+      notifyUrl: linkedUrls.notifyUrl || null,
     };
 
     if (isMysqlDialect) {
