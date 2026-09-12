@@ -124,6 +124,9 @@ export default function SendMoneyPage() {
 
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const { data: wallets = [] } = useQuery<Wallet[]>({ queryKey: ["/api/wallets"] });
+  const { data: countries, isLoading: isLoadingConfig } = useQuery<CountryConfig[]>({
+    queryKey: ["/api/transfers/config"],
+  });
 
   const primaryCurrency = user?.preferredCurrency || "XAF";
   const [selectedWallet, setSelectedWallet] = useState<string>(primaryCurrency);
@@ -181,10 +184,6 @@ export default function SendMoneyPage() {
   const senderRate = fxRates[senderCurrency] || 1; // XAF per 1 unit of senderCurrency
   const minTransfer = Math.ceil((limits?.minTransfer ?? 150) / senderRate);
   const maxTransfer = Math.floor((limits?.maxTransfer ?? 5000000) / senderRate);
-
-  const { data: countries, isLoading: isLoadingConfig } = useQuery<CountryConfig[]>({
-    queryKey: ["/api/transfers/config"],
-  });
 
   const form = useForm<ExternalFormData>({
     resolver: zodResolver(externalFormSchema),
