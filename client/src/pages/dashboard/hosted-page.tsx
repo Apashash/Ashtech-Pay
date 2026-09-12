@@ -52,8 +52,12 @@ function CopyableKey({ label, value }: { label: string; value: string }) {
     <div className="space-y-1.5">
       <Label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</Label>
       <div className="flex items-center gap-2">
-        <div className="flex min-w-0 flex-1 items-center rounded-lg border bg-muted/50 px-3 py-2">
-          <code className="min-w-0 flex-1 truncate font-mono text-sm text-foreground">
+        <div className="flex min-w-0 max-w-full flex-1 items-center overflow-hidden rounded-lg border bg-muted/50 px-3 py-2">
+          <code
+            className={`min-w-0 max-w-full flex-1 font-mono text-sm text-foreground ${
+              visible ? "break-all whitespace-normal" : "truncate whitespace-nowrap"
+            }`}
+          >
             {visible ? value : masked}
           </code>
         </div>
