@@ -75,6 +75,8 @@ import {
   type InsertConversionRequest,
   hostedPageConfigs,
   type HostedPageConfig,
+  hostedPageKeys,
+  type HostedPageKey,
   hostedPaymentSessions,
   type HostedPaymentSession,
   autoConversionRules,
@@ -367,6 +369,9 @@ export interface IStorage {
   // Hosted Page
   getHostedPageConfig(userId: string): Promise<HostedPageConfig | undefined>;
   saveHostedPageConfig(userId: string, data: Partial<HostedPageConfig>): Promise<HostedPageConfig>;
+  getHostedPageKeys(userId: string): Promise<HostedPageKey[]>;
+  createHostedPageKey(userId: string, name: string): Promise<HostedPageKey>;
+  regenerateHostedPageKey(userId: string, keyId: string): Promise<HostedPageKey | undefined>;
   getUserByHpKey(hpLive: string): Promise<User | undefined>;
   createHostedPaymentSession(data: Omit<HostedPaymentSession, "createdAt">): Promise<HostedPaymentSession>;
   getHostedPaymentSession(id: string): Promise<HostedPaymentSession | undefined>;
@@ -2912,13 +2917,145 @@ export class DatabaseStorage implements IStorage {
     return this.decryptHostedPageConfig(raw);
   }
 
+  private decryptHostedPageKey(key: HostedPageKey): HostedPageKey {
+    return {
+      ...key,
+      skLive: decryptField(key.skLive) || "",
+      pkLive: decryptField(key.pkLive) || "",
+      hpLive: decryptField(key.hpLive) || "",
+    };
+  }
+
+  private async getHostedPageKeyById(id: string, userId?: string): Promise<HostedPageKey | undefined> {
+    const conditions = [eq(hostedPageKeys.id, id)];
+    if (userId) conditions.push(eq(hostedPageKeys.userId, userId));
+    const [key] = await db.select().from(hostedPageKeys).where(and(...conditions));
+    return key ? this.decryptHostedPageKey(key) : undefined;
+  }
+
+  async getHostedPageKeys(userId: string): Promise<HostedPageKey[]> {
+    const rows = await db
+      .select()
+      .from(hostedPageKeys)
+      .where(eq(hostedPageKeys.userId, userId))
+      .orderBy(desc(hostedPageKeys.createdAt));
+    const keys = rows.map((row) => this.decryptHostedPageKey(row));
+    const legacy = await this.getHostedPageConfig(userId);
+
+    if (legacy?.pkLive && legacy.skLive && legacy.hpLive) {
+      const legacyKey = {
+        id: "legacy",
+        userId,
+        name: "default",
+        pkLive: legacy.pkLive,
+        skLive: legacy.skLive,
+        hpLive: legacy.hpLive,
+        hpLiveHash: hmacField(legacy.hpLive),
+        createdAt: legacy.createdAt,
+        updatedAt: legacy.updatedAt,
+        isLegacy: true,
+      } as HostedPageKey;
+      return [legacyKey, ...keys];
+    }
+
+    return keys;
+  }
+
+  async createHostedPageKey(userId: string, name: string): Promise<HostedPageKey> {
+    const id = randomUUID();
+    const pkLive = `pk_live_${randomUUID().replace(/-/g, "")}`;
+    const skLive = `sk_live_${randomUUID().replace(/-/g, "")}`;
+    const hpLive = `hp_live_${randomUUID().replace(/-/g, "")}`;
+    const values = {
+      id,
+      userId,
+      name,
+      pkLive: encryptField(pkLive)!,
+      skLive: encryptField(skLive)!,
+      hpLive: encryptField(hpLive)!,
+      hpLiveHash: hmacField(hpLive),
+    };
+
+    if (isMysqlDialect) {
+      return mysqlInsertAndRead(
+        hostedPageKeys,
+        values as Record<string, unknown>,
+        (keyId) => this.getHostedPageKeyById(keyId, userId),
+      ).then((key) => {
+        if (!key) throw new Error("HOSTED_PAGE_KEY_INSERT_READBACK_FAILED");
+        return key;
+      });
+    }
+
+    const [created] = await db.insert(hostedPageKeys).values(values).returning();
+    if (!created) throw new Error("HOSTED_PAGE_KEY_INSERT_FAILED");
+    return this.decryptHostedPageKey(created);
+  }
+
+  async regenerateHostedPageKey(userId: string, keyId: string): Promise<HostedPageKey | undefined> {
+    if (keyId === "legacy") {
+      const config = await this.getHostedPageConfig(userId);
+      if (!config) return undefined;
+      const updated = await this.saveHostedPageConfig(userId, {
+        successUrl: config.successUrl,
+        cancelUrl: config.cancelUrl,
+        notifyUrl: config.notifyUrl,
+        pkLive: `pk_live_${randomUUID().replace(/-/g, "")}`,
+        skLive: `sk_live_${randomUUID().replace(/-/g, "")}`,
+        hpLive: `hp_live_${randomUUID().replace(/-/g, "")}`,
+      });
+      if (!updated.pkLive || !updated.skLive || !updated.hpLive) return undefined;
+      return {
+        id: "legacy",
+        userId,
+        name: "default",
+        pkLive: updated.pkLive,
+        skLive: updated.skLive,
+        hpLive: updated.hpLive,
+        hpLiveHash: hmacField(updated.hpLive),
+        createdAt: updated.createdAt,
+        updatedAt: updated.updatedAt,
+      } as HostedPageKey;
+    }
+
+    const pkLive = `pk_live_${randomUUID().replace(/-/g, "")}`;
+    const skLive = `sk_live_${randomUUID().replace(/-/g, "")}`;
+    const hpLive = `hp_live_${randomUUID().replace(/-/g, "")}`;
+    const updates = {
+      pkLive: encryptField(pkLive)!,
+      skLive: encryptField(skLive)!,
+      hpLive: encryptField(hpLive)!,
+      hpLiveHash: hmacField(hpLive),
+      updatedAt: new Date(),
+    };
+
+    if (isMysqlDialect) {
+      await db
+        .update(hostedPageKeys)
+        .set(updates)
+        .where(and(eq(hostedPageKeys.id, keyId), eq(hostedPageKeys.userId, userId)));
+      return this.getHostedPageKeyById(keyId, userId);
+    }
+
+    const [updated] = await db
+      .update(hostedPageKeys)
+      .set(updates)
+      .where(and(eq(hostedPageKeys.id, keyId), eq(hostedPageKeys.userId, userId)))
+      .returning();
+    return updated ? this.decryptHostedPageKey(updated) : undefined;
+  }
+
   async getUserByHpKey(hpLive: string): Promise<User | undefined> {
     // Look up by HMAC hash (hp_live_hash column) — tolerates legacy plaintext rows too
     const hash = hmacField(hpLive);
     if (hash) {
+      const [key] = await db.select().from(hostedPageKeys).where(eq(hostedPageKeys.hpLiveHash, hash));
+      if (key) return this.getUser(key.userId);
       const [config] = await db.select().from(hostedPageConfigs).where(eq(hostedPageConfigs.hpLiveHash, hash));
       if (config) return this.getUser(config.userId);
     }
+    const [legacyKey] = await db.select().from(hostedPageKeys).where(eq(hostedPageKeys.hpLive, hpLive));
+    if (legacyKey) return this.getUser(legacyKey.userId);
     // Legacy fallback: plaintext hp_live stored before encryption was introduced
     const [legacy] = await db.select().from(hostedPageConfigs).where(eq(hostedPageConfigs.hpLive, hpLive));
     if (legacy) return this.getUser(legacy.userId);

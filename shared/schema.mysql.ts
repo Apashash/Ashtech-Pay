@@ -204,6 +204,19 @@ export const hostedPageConfigs = mysqlTable("hosted_page_configs", {
   id: id(), userId: varchar("user_id", { length: 191 }).notNull().unique(), successUrl: text("success_url"), cancelUrl: text("cancel_url"), notifyUrl: text("notify_url"),
   pkLive: text("pk_live").unique(), skLive: text("sk_live").unique(), hpLive: text("hp_live").unique(), hpLiveHash: text("hp_live_hash").unique(), createdAt: dt("created_at"), updatedAt: dt("updated_at"),
 });
+export const hostedPageKeys = mysqlTable("hosted_page_keys", {
+  id: id(),
+  userId: varchar("user_id", { length: 191 }).notNull(),
+  name: varchar("name", { length: 191 }).notNull(),
+  pkLive: varchar("pk_live", { length: 191 }).notNull().unique(),
+  skLive: varchar("sk_live", { length: 191 }).notNull().unique(),
+  hpLive: varchar("hp_live", { length: 191 }).notNull().unique(),
+  hpLiveHash: varchar("hp_live_hash", { length: 191 }).unique(),
+  createdAt: dt("created_at"),
+  updatedAt: dt("updated_at"),
+}, t => ({
+  userIdx: index("hosted_page_keys_user_id_idx").on(t.userId),
+}));
 export const hostedPaymentSessions = mysqlTable("hosted_payment_sessions", {
   id: text("id").primaryKey(), merchantId: varchar("merchant_id", { length: 191 }).notNull(), amount: money("amount").notNull(), currency: text("currency").notNull(),
   description: text("description"), status: text("status").default("pending").notNull(), transactionId: varchar("transaction_id", { length: 191 }), notifyUrl: text("notify_url"),
@@ -274,4 +287,4 @@ export type KycSubmission = typeof kycSubmissions.$inferSelect; export type Inse
 export type ConversionRequest = typeof conversionRequests.$inferSelect; export type InsertConversionRequest = z.infer<typeof insertConversionRequestSchema>;
 export type AutoConversionRule = typeof autoConversionRules.$inferSelect; export type InsertAutoConversionRule = z.infer<typeof insertAutoConversionRuleSchema>;
 export type Wallet = typeof wallets.$inferSelect; export type InsertWallet = z.infer<typeof insertWalletSchema>;
-export type HostedPageConfig = typeof hostedPageConfigs.$inferSelect; export type HostedPaymentSession = typeof hostedPaymentSessions.$inferSelect;
+export type HostedPageConfig = typeof hostedPageConfigs.$inferSelect; export type HostedPageKey = typeof hostedPageKeys.$inferSelect; export type HostedPaymentSession = typeof hostedPaymentSessions.$inferSelect;

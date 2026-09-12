@@ -97,6 +97,18 @@ export async function ensureMysqlAuxiliarySchema(): Promise<void> {
       UNIQUE KEY merchant_webhook_transaction_event_unique (transaction_id, event),
       INDEX merchant_webhook_status_due_idx (status, next_attempt_at)
     ) ENGINE=InnoDB`,
+    `CREATE TABLE IF NOT EXISTS hosted_page_keys (
+      id VARCHAR(191) NOT NULL PRIMARY KEY,
+      user_id VARCHAR(191) NOT NULL,
+      name VARCHAR(191) NOT NULL,
+      pk_live VARCHAR(191) NOT NULL UNIQUE,
+      sk_live VARCHAR(191) NOT NULL UNIQUE,
+      hp_live VARCHAR(191) NOT NULL UNIQUE,
+      hp_live_hash VARCHAR(191) UNIQUE,
+      created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+      INDEX hosted_page_keys_user_id_idx (user_id)
+    ) ENGINE=InnoDB`,
     `CREATE TABLE IF NOT EXISTS admin_pending_logins (
       token VARCHAR(191) NOT NULL PRIMARY KEY,
       user_id VARCHAR(191) NOT NULL,

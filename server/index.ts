@@ -67,7 +67,7 @@ const STARTUP_PUBLIC_API_PATHS = new Set([
 // Bump this value whenever the idempotent migration block below gains a new
 // schema change. Completed versions are stored in platform_settings so a
 // normal Passenger restart does not repeat every ALTER TABLE/CREATE INDEX.
-const SCHEMA_MIGRATION_VERSION = "2026-09-11-profile-image-v1";
+const SCHEMA_MIGRATION_VERSION = "2026-09-12-hosted-page-keys-v1";
 
 // ── Gestionnaires d'erreurs globaux ──────────────────────────────────────────
 // unhandledRejection: log + continue — safe, these are async promise failures.
@@ -649,6 +649,20 @@ app.use((req, res, next) => {
         updated_at TIMESTAMP DEFAULT NOW()
       )
     `);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS hosted_page_keys (
+        id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id VARCHAR NOT NULL,
+        name TEXT NOT NULL,
+        pk_live TEXT NOT NULL UNIQUE,
+        sk_live TEXT NOT NULL UNIQUE,
+        hp_live TEXT NOT NULL UNIQUE,
+        hp_live_hash TEXT UNIQUE,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS hosted_page_keys_user_id_idx ON hosted_page_keys(user_id)`);
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS hosted_payment_sessions (
         id TEXT PRIMARY KEY,

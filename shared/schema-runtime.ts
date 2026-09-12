@@ -35,7 +35,9 @@ export const wallets = active.wallets as typeof pg.wallets;
 export const conversionRequests = active.conversionRequests as typeof pg.conversionRequests;
 export const autoConversionRules = active.autoConversionRules as typeof pg.autoConversionRules;
 export const hostedPageConfigs = active.hostedPageConfigs as typeof pg.hostedPageConfigs;
+export const hostedPageKeys = active.hostedPageKeys as typeof pg.hostedPageKeys;
 export const hostedPaymentSessions = active.hostedPaymentSessions as typeof pg.hostedPaymentSessions;
+export type HostedPageKey = pg.HostedPageKey;
 
 // Validation schemas are dialect-neutral. Keeping their PostgreSQL-derived
 // types avoids a union of two otherwise identical Zod object types in callers.

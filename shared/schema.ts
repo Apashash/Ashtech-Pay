@@ -1173,6 +1173,20 @@ export const hostedPageConfigs = pgTable("hosted_page_configs", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const hostedPageKeys = pgTable("hosted_page_keys", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  name: text("name").notNull(),
+  pkLive: text("pk_live").notNull().unique(),
+  skLive: text("sk_live").notNull().unique(),
+  hpLive: text("hp_live").notNull().unique(),
+  hpLiveHash: text("hp_live_hash").unique(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (t) => ({
+  userIdx: index("hosted_page_keys_user_id_idx").on(t.userId),
+}));
+
 export const hostedPaymentSessions = pgTable("hosted_payment_sessions", {
   id: text("id").primaryKey(),
   merchantId: varchar("merchant_id").notNull(),
@@ -1187,6 +1201,7 @@ export const hostedPaymentSessions = pgTable("hosted_payment_sessions", {
 });
 
 export type HostedPageConfig = typeof hostedPageConfigs.$inferSelect;
+export type HostedPageKey = typeof hostedPageKeys.$inferSelect;
 export type HostedPaymentSession = typeof hostedPaymentSessions.$inferSelect;
 
 // Types

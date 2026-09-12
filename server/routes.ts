@@ -17497,18 +17497,57 @@ export async function registerRoutes(
     }
   });
 
-  // POST /api/hosted-page/config — save URLs + generate keys
+  // GET /api/hosted-page/keys — list the merchant's named Checkout keys
+  app.get("/api/hosted-page/keys", async (req: Request, res: Response) => {
+    if (!req.session?.userId) return res.status(401).json({ error: "Unauthorized" });
+    try {
+      const keys = await storage.getHostedPageKeys(req.session.userId);
+      res.json(keys);
+    } catch (e: any) {
+      console.error("[hosted-page/keys:list]", e);
+      res.status(500).json({ error: "server_error" });
+    }
+  });
+
+  // POST /api/hosted-page/keys — create a named Checkout key
+  app.post("/api/hosted-page/keys", async (req: Request, res: Response) => {
+    if (!req.session?.userId) return res.status(401).json({ error: "Unauthorized" });
+    try {
+      const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+      if (!name || name.length > 80) {
+        return res.status(400).json({ error: "invalid_name", message: "Le nom doit contenir entre 1 et 80 caractères." });
+      }
+      const key = await storage.createHostedPageKey(req.session.userId, name);
+      res.status(201).json(key);
+    } catch (e: any) {
+      console.error("[hosted-page/keys:create]", e);
+      res.status(500).json({ error: "server_error" });
+    }
+  });
+
+  // POST /api/hosted-page/keys/:id/regenerate — rotate one named key
+  app.post("/api/hosted-page/keys/:id/regenerate", async (req: Request, res: Response) => {
+    if (!req.session?.userId) return res.status(401).json({ error: "Unauthorized" });
+    try {
+      const key = await storage.regenerateHostedPageKey(req.session.userId, req.params.id);
+      if (!key) return res.status(404).json({ error: "not_found" });
+      res.json(key);
+    } catch (e: any) {
+      console.error("[hosted-page/keys:regenerate]", e);
+      res.status(500).json({ error: "server_error" });
+    }
+  });
+
+  // POST /api/hosted-page/config — save URLs and optionally rotate the legacy key
   app.post("/api/hosted-page/config", async (req: Request, res: Response) => {
     if (!req.session?.userId) return res.status(401).json({ error: "Unauthorized" });
     try {
       const { successUrl, cancelUrl, notifyUrl, regenerate } = req.body;
-      const existing = await storage.getHostedPageConfig(req.session.userId);
-      const hasKeys = existing?.pkLive && existing?.skLive && existing?.hpLive;
       const data: any = {};
       if (successUrl !== undefined) data.successUrl = successUrl;
       if (cancelUrl !== undefined) data.cancelUrl = cancelUrl;
       if (notifyUrl !== undefined) data.notifyUrl = notifyUrl || null;
-      if (!hasKeys || regenerate) {
+      if (regenerate) {
         data.pkLive = generateHpKey("pk_live_");
         data.skLive = generateHpKey("sk_live_");
         data.hpLive = generateHpKey("hp_live_");
