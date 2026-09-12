@@ -40,40 +40,40 @@
       {
         "group": "Démarrer",
         "pages": [
-          "introduction",
-          "quickstart",
-          "authentication"
+          "docs/introduction",
+          "docs/quickstart",
+          "docs/authentication"
         ]
       },
       {
         "group": "Checkout",
         "pages": [
-          "embedded-checkout"
+          "docs/embedded-checkout"
         ]
       },
       {
         "group": "Direct API",
         "pages": [
-          "direct-api/overview",
-          "direct-api/mobile-money",
-          "direct-api/crypto",
-          "direct-api/webhooks"
+          "docs/direct-api/overview",
+          "docs/direct-api/mobile-money",
+          "docs/direct-api/crypto",
+          "docs/direct-api/webhooks"
         ]
       },
       {
         "group": "Référence",
         "pages": [
-          "reference/countries",
-          "reference/transaction",
-          "reference/fees",
-          "errors"
+          "docs/reference/countries",
+          "docs/reference/transaction",
+          "docs/reference/fees",
+          "docs/errors"
         ]
       },
       {
         "group": "Ressources",
         "pages": [
-          "sandbox",
-          "security"
+          "docs/sandbox",
+          "docs/security"
         ]
       }
     ]
