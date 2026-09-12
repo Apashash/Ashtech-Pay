@@ -55,7 +55,6 @@ export default function HostedPageKeys() {
   }
 
   function deleteKey(key: HostedPageKey) {
-    if (key.isLegacy) return;
     if (window.confirm(hp.deleteWarning)) deleteMutation.mutate(key.id);
   }
 
@@ -135,18 +134,16 @@ export default function HostedPageKeys() {
                       <RefreshCw className={`h-3.5 w-3.5 ${regenerateMutation.isPending ? "animate-spin" : ""}`} />
                       {hp.regenerateKey}
                     </Button>
-                    {!key.isLegacy && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => deleteKey(key)}
-                        disabled={deleteMutation.isPending}
-                        className="gap-2 text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        {hp.deleteKey}
-                      </Button>
-                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => deleteKey(key)}
+                      disabled={deleteMutation.isPending}
+                      className="gap-2 text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      {hp.deleteKey}
+                    </Button>
                     <Button
                       variant="outline"
                       size="sm"

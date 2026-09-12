@@ -17575,13 +17575,10 @@ export async function registerRoutes(
     }
   });
 
-  // DELETE /api/hosted-page/keys/:id — remove a named Checkout key
+  // DELETE /api/hosted-page/keys/:id — remove a Checkout key, including the historical one
   app.delete("/api/hosted-page/keys/:id", async (req: Request, res: Response) => {
     const userId = req.userId || req.session?.userId;
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
-    if (req.params.id === "legacy") {
-      return res.status(400).json({ error: "cannot_delete_legacy" });
-    }
     try {
       const deleted = await storage.deleteHostedPageKey(userId, req.params.id);
       if (!deleted) return res.status(404).json({ error: "not_found" });

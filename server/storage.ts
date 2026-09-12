@@ -3106,7 +3106,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteHostedPageKey(userId: string, keyId: string): Promise<boolean> {
-    if (keyId === "legacy") return false;
+    if (keyId === "legacy") {
+      const existing = await this.getHostedPageConfig(userId);
+      if (!existing) return false;
+      await db
+        .delete(hostedPageConfigs)
+        .where(eq(hostedPageConfigs.userId, userId));
+      return true;
+    }
     const existing = await this.getHostedPageKeyById(keyId, userId);
     if (!existing) return false;
     await db
