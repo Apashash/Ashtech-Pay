@@ -1008,10 +1008,6 @@ const translations = {
     apiHub: {
       eyebrow: "Développeurs",
       title: "Connectez Ashtech Pay à votre activité",
-      subtitle: "Choisissez le parcours qui correspond le mieux à votre intégration. Commencez simplement avec un checkout embarqué ou gardez le contrôle avec l'API directe.",
-      bannerTitle: "Une intégration pensée pour votre équipe",
-      bannerDescription: "Des paiements sécurisés, des notifications webhook et une documentation claire pour avancer rapidement.",
-      status: "API disponible",
       embeddedTitle: "Embedded checkout",
       embeddedDescription: "Ajoutez un parcours de paiement hébergé par Ashtech Pay, sans construire toute l'interface de paiement.",
       embeddedPoint1: "Configuration rapide des URLs de retour",
@@ -2350,10 +2346,6 @@ const translations = {
     apiHub: {
       eyebrow: "Developers",
       title: "Connect Ashtech Pay to your business",
-      subtitle: "Choose the integration path that fits your needs. Start quickly with an embedded checkout or keep full control with the Direct API.",
-      bannerTitle: "An integration built for your team",
-      bannerDescription: "Secure payments, webhook notifications and clear documentation to help you move quickly.",
-      status: "API available",
       embeddedTitle: "Embedded checkout",
       embeddedDescription: "Add an Ashtech Pay-hosted payment flow without building the entire payment interface yourself.",
       embeddedPoint1: "Quick return URL configuration",

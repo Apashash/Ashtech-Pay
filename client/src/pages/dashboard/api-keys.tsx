@@ -10,7 +10,6 @@ import {
   Code2,
   CreditCard,
   Globe2,
-  ShieldCheck,
   Sparkles,
 } from "lucide-react";
 
@@ -76,28 +75,7 @@ export default function ApiKeysPage() {
           <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
             {copy.title}
           </h1>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground sm:text-base">
-            {copy.subtitle}
-          </p>
         </div>
-
-        <Card className="overflow-hidden border-primary/15 bg-primary/[0.04]">
-          <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
-            <div className="flex items-start gap-3">
-              <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                <ShieldCheck className="h-4 w-4" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-foreground">{copy.bannerTitle}</p>
-                <p className="mt-1 text-sm leading-5 text-muted-foreground">{copy.bannerDescription}</p>
-              </div>
-            </div>
-            <span className="inline-flex w-fit shrink-0 items-center gap-2 rounded-full border border-green-500/20 bg-green-500/10 px-3 py-1.5 text-xs font-semibold text-green-600">
-              <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-              {copy.status}
-            </span>
-          </CardContent>
-        </Card>
 
         <div className="grid gap-4 lg:grid-cols-2">
           <OptionCard
