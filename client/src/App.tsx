@@ -103,9 +103,8 @@ const BlogPage = React.lazy(() => import("@/pages/blog"));
 const HelpPage = React.lazy(() => import("@/pages/help"));
 const ContactPage = React.lazy(() => import("@/pages/contact"));
 const FAQPage = React.lazy(() => import("@/pages/faq"));
-const CountryBlockedPage = React.lazy(() => import("@/pages/country-blocked"));
 const BlockedPage = React.lazy(() => import("@/pages/blocked"));
-import { getBlockedUntil, getGeoCache, setGeoCache, GEO_BYPASS_PATHS, GEO_CACHE_KEY } from "@/lib/appUtils";
+import { getBlockedUntil } from "@/lib/appUtils";
 import AppInstallBanner from "@/components/app-install-banner";
 import { PushNotificationPrompt } from "@/components/push-notification-prompt";
 
@@ -125,34 +124,6 @@ function BlockGuard({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-
-function GeoGuard({ children }: { children: React.ReactNode }) {
-  const [location] = useLocation();
-
-  const isBypass = GEO_BYPASS_PATHS.some((p) => location.startsWith(p));
-
-  const cachedGeo = isBypass ? null : getGeoCache();
-
-  const { data } = useQuery<{ country: string; countryName: string; isAfrica: boolean }>({
-    queryKey: ["/api/public/geo"],
-    queryFn: async () => {
-      const res = await fetch("/api/public/geo");
-      if (!res.ok) return { country: "XX", countryName: "Unknown", isAfrica: true };
-      const result = await res.json();
-      setGeoCache(result);
-      return result;
-    },
-    staleTime: 5 * 60 * 1000,
-    retry: false,
-    enabled: !isBypass,
-    initialData: cachedGeo ?? undefined,
-  });
-
-  if (isBypass) return <>{children}</>;
-  // Render optimistically — only block if we have confirmed data saying isAfrica === false
-  if (data && data.isAfrica === false) return <CountryBlockedPage />;
-  return <>{children}</>;
-}
 
 function Router() {
   const A = getAdminPath();
@@ -523,9 +494,7 @@ function App() {
             <ForceLogoutGuard />
             <AuthenticatedWatchers />
             <AppInstallBanner />
-            <GeoGuard>
-              <Router />
-            </GeoGuard>
+            <Router />
           </TooltipProvider>
         </ThemeProvider>
       </LanguageProvider>
