@@ -262,7 +262,7 @@ export default function ConvertPage() {
         {/* Title */}
         <div className="mb-6">
           <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
-            <ArrowLeftRight className="w-5 h-5 text-primary" />
+            <img src="/exchange-icon.png" alt="" aria-hidden="true" className="w-6 h-6 object-contain" />
             {t.wallets.convertDialogTitle}
           </h1>
         </div>

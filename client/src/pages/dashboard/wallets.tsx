@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { ArrowLeftRight, Plus, X, ChevronRight, Repeat2, Loader2, AlertTriangle } from "lucide-react";
+import { Plus, X, ChevronRight, Loader2, AlertTriangle } from "lucide-react";
 import { ALL_FX_CURRENCIES, CURRENCY_SYMBOLS } from "@shared/schema";
 import type { User, Transaction } from "@shared/schema";
 import { useLanguage } from "@/lib/language";
@@ -77,6 +77,12 @@ export default function WalletsPage() {
   const availableCurrencies = ALL_FX_CURRENCIES.filter(c => !existingCurrencies.has(c.code));
 
   const walletSymbol = (currency: string) => (CURRENCY_SYMBOLS as Record<string, string>)[currency] || currency;
+
+  const openConversion = (sourceCurrency: string) => {
+    const targetWallet = walletList.find((wallet) => wallet.currency !== sourceCurrency);
+    if (!targetWallet) return;
+    navigate(`/dashboard/convert?from=${encodeURIComponent(sourceCurrency)}&to=${encodeURIComponent(targetWallet.currency)}`);
+  };
 
   const addWalletMutation = useMutation({
     mutationFn: async () => {
@@ -169,7 +175,7 @@ export default function WalletsPage() {
                 className="flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-sm font-semibold text-white transition-all hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-40"
                 data-testid="button-open-convert"
               >
-                <Repeat2 className="w-4 h-4" />
+                <img src="/exchange-icon.png" alt="" aria-hidden="true" className="w-5 h-5 object-contain" />
                 {t.wallets.requestConversion}
               </button>
             </div>
@@ -220,13 +226,13 @@ export default function WalletsPage() {
                   {/* Actions */}
                   <div className="flex items-center gap-1 shrink-0">
                     <button
-                      onClick={() => navigate("/dashboard/convert")}
+                      onClick={() => openConversion(wallet.currency)}
                       disabled={walletList.length < 2}
-                      className="w-8 h-8 flex items-center justify-center rounded-lg bg-primary/10 hover:bg-primary/20 text-primary transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                      className="w-8 h-8 flex items-center justify-center rounded-lg bg-amber-500/10 hover:bg-amber-500/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                       title={t.wallets.requestConversion}
                       data-testid={`button-convert-${wallet.currency}`}
                     >
-                      <ArrowLeftRight className="w-3.5 h-3.5" />
+                      <img src="/exchange-icon.png" alt="" aria-hidden="true" className="w-5 h-5 object-contain" />
                     </button>
                     {!isMain && (
                       <button
