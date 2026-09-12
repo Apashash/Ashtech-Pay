@@ -115,10 +115,121 @@ Exemples de familles de flux actuellement configurées :
 | Pays | Opérateur / cas | Parcours |
 | --- | --- | --- |
 | Côte d'Ivoire | Orange | OTP obtenu par USSD |
+| Côte d'Ivoire | Wave | Redirection Wave |
+| Côte d'Ivoire | MTN, Moov | USSD Push |
 | Sénégal | Orange | OTP obtenu par USSD |
+| Sénégal | Wave | Redirection Wave |
+| Sénégal | Free, Mix, Expresso | USSD Push |
 | Mali | Orange | OTP obtenu par USSD |
 | Burkina Faso | Orange | OTP USSD, avec montant dans certains codes |
+| Burkina Faso | Moov / Flooz | USSD Push |
+| Cameroun | MTN, Orange | USSD Push |
+| Congo RDC | Orange, Airtel, M-Pesa, Afrimoney | USSD Push |
 | Autres opérateurs actifs | Selon le catalogue et le fournisseur | USSD Push, OTP ou redirection |
+
+Cette matrice décrit le routage actuellement configuré pour les opérateurs concernés. Le statut actif peut changer. La réponse de [`GET /v1/countries`](/docs/reference/countries) reste la source de vérité pour votre formulaire.
+
+## Exemples cURL
+
+### Requête commune
+
+La requête de départ est la même pour un flux USSD Push, Wave ou OTP :
+
+```bash
+curl -X POST https://www.ashtechpay.com/v1/collect \
+  -H "Authorization: Bearer $ASHTECH_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "amount": 5000,
+    "currency": "XOF",
+    "phone": "2250XXXXXXXX",
+    "operator": "Orange",
+    "country_code": "CI",
+    "reference": "order_ci_12345",
+    "notify_url": "https://example.com/webhooks/ashtechpay"
+  }'
+```
+
+Utilisez la devise et le nom exacts retournés par `/v1/countries`. Le champ `reference` est votre référence marchand et doit rester unique pour chaque commande.
+
+### Exemple USSD Push — Cameroun
+
+```bash
+curl -X POST https://www.ashtechpay.com/v1/collect \
+  -H "Authorization: Bearer $ASHTECH_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "amount": 5000,
+    "currency": "XAF",
+    "phone": "2376XXXXXXXX",
+    "operator": "MTN",
+    "country_code": "CM",
+    "reference": "order_cm_12345",
+    "notify_url": "https://example.com/webhooks/ashtechpay"
+  }'
+```
+
+Réponse attendue : `202`, `status: "pending"`. Le client valide ensuite la demande reçue sur son téléphone.
+
+### Exemple Wave — Côte d'Ivoire
+
+```bash
+curl -X POST https://www.ashtechpay.com/v1/collect \
+  -H "Authorization: Bearer $ASHTECH_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "amount": 5000,
+    "currency": "XOF",
+    "phone": "2250XXXXXXXX",
+    "operator": "Wave",
+    "country_code": "CI",
+    "reference": "order_wave_12345",
+    "notify_url": "https://example.com/webhooks/ashtechpay"
+  }'
+```
+
+Si le flux est Wave, la réponse `202` contient `flow: "wave"` et `wave_url`. Ouvrez cette URL pour que le client confirme le paiement.
+
+### Exemple OTP Orange — première requête
+
+```bash
+curl -X POST https://www.ashtechpay.com/v1/collect \
+  -H "Authorization: Bearer $ASHTECH_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "amount": 5000,
+    "currency": "XOF",
+    "phone": "2250XXXXXXXX",
+    "operator": "Orange",
+    "country_code": "CI",
+    "reference": "order_orange_12345",
+    "notify_url": "https://example.com/webhooks/ashtechpay"
+  }'
+```
+
+La réponse peut être `400 otp_required` avec un `ussd_code`, ou avec une `reference` si le code est envoyé par SMS. Affichez l'instruction retournée par l'API au client.
+
+### Exemple OTP — confirmation
+
+Après réception du code OTP, reprenez les mêmes paramètres et ajoutez `otp`. Si la première réponse contenait `reference`, envoyez exactement cette valeur :
+
+```bash
+curl -X POST https://www.ashtechpay.com/v1/collect \
+  -H "Authorization: Bearer $ASHTECH_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "amount": 5000,
+    "currency": "XOF",
+    "phone": "2250XXXXXXXX",
+    "operator": "Orange",
+    "country_code": "CI",
+    "reference": "ASHPAY-DEP-XXXXXXXXXX",
+    "otp": "123456",
+    "notify_url": "https://example.com/webhooks/ashtechpay"
+  }'
+```
+
+Ne remplacez pas la référence de session OTP par votre référence de commande. Une session expirée renvoie `400 otp_expired` : recommencez alors une nouvelle collecte sans réutiliser l'ancien OTP.
 
 Après avoir affiché le code, demandez au client de saisir le code OTP reçu, puis relancez la collecte avec le même `amount`, `currency`, `phone`, `operator`, `country_code` et le champ `otp`.
 
