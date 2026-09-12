@@ -335,7 +335,8 @@ export default function WalletsPage() {
                       <span className="flex min-w-0 items-center gap-2">
                         <span className="text-xl leading-none">{CURRENCY_FLAGS[selectedCurrency.code] || "🌍"}</span>
                         <span className="truncate">
-                          {selectedCurrency.code} — {CURRENCY_COUNTRIES[selectedCurrency.code] || selectedCurrency.name}
+                          {selectedCurrency.code}{" "}
+                          {CURRENCY_COUNTRIES[selectedCurrency.code] || selectedCurrency.name}
                         </span>
                       </span>
                     ) : (
@@ -347,41 +348,41 @@ export default function WalletsPage() {
                 <PopoverContent
                   align="start"
                   className="w-[var(--radix-popover-trigger-width)] min-w-[280px] p-0"
+                  data-vaul-no-drag
                 >
                   <Command>
                     <CommandInput placeholder="Rechercher un pays ou une devise..." />
-                    <div
-                      className="h-[220px] touch-pan-y overscroll-contain overflow-y-auto"
-                      style={{ WebkitOverflowScrolling: "touch" }}
+                    <CommandList
+                      className="!h-[220px] !max-h-none !overflow-y-scroll overscroll-contain touch-pan-y"
+                      style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-y" }}
                       data-testid="wallet-currency-options"
+                      data-vaul-no-drag
                     >
-                      <CommandList className="!max-h-none !overflow-visible">
-                        <CommandEmpty>Aucun pays ou devise trouvé.</CommandEmpty>
-                        <CommandGroup>
-                          {availableCurrencies.map((c) => {
-                            const country = CURRENCY_COUNTRIES[c.code] || c.name;
-                            return (
-                              <CommandItem
-                                key={c.code}
-                                value={`${c.code} ${country} ${c.name}`}
-                                onSelect={() => {
-                                  setNewWalletCurrency(c.code);
-                                  setCurrencyPickerOpen(false);
-                                }}
-                                className="min-h-10 py-2"
-                              >
-                                <span className="w-7 shrink-0 text-xl leading-none">{CURRENCY_FLAGS[c.code] || "🌍"}</span>
-                                <span className="min-w-0 flex-1 truncate">
-                                  <span className="font-medium">{c.code}</span>
-                                  <span className="text-muted-foreground"> — {country}</span>
-                                </span>
-                                <Check className={`ml-2 h-4 w-4 shrink-0 ${newWalletCurrency === c.code ? "opacity-100" : "opacity-0"}`} />
-                              </CommandItem>
-                            );
-                          })}
-                        </CommandGroup>
-                      </CommandList>
-                    </div>
+                      <CommandEmpty>Aucun pays ou devise trouvé.</CommandEmpty>
+                      <CommandGroup>
+                        {availableCurrencies.map((c) => {
+                          const country = CURRENCY_COUNTRIES[c.code] || c.name;
+                          return (
+                            <CommandItem
+                              key={c.code}
+                              value={`${c.code} ${country} ${c.name}`}
+                              onSelect={() => {
+                                setNewWalletCurrency(c.code);
+                                setCurrencyPickerOpen(false);
+                              }}
+                              className="min-h-10 py-2"
+                            >
+                              <span className="w-7 shrink-0 text-xl leading-none">{CURRENCY_FLAGS[c.code] || "🌍"}</span>
+                              <span className="min-w-0 flex-1 truncate">
+                                <span className="font-medium">{c.code}</span>
+                                <span className="text-muted-foreground"> {country}</span>
+                              </span>
+                              <Check className={`ml-2 h-4 w-4 shrink-0 ${newWalletCurrency === c.code ? "opacity-100" : "opacity-0"}`} />
+                            </CommandItem>
+                          );
+                        })}
+                      </CommandGroup>
+                    </CommandList>
                   </Command>
                 </PopoverContent>
               </Popover>
