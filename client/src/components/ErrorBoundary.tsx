@@ -27,7 +27,7 @@ export class ErrorBoundary extends React.Component<React.PropsWithChildren, Stat
       try {
         if (sessionStorage.getItem(retryKey) !== "1") {
           sessionStorage.setItem(retryKey, "1");
-          window.setTimeout(() => window.location.reload(), 250);
+          window.setTimeout(() => this.reloadWithCacheBust(), 250);
         } else {
           sessionStorage.removeItem(retryKey);
         }
@@ -48,9 +48,15 @@ export class ErrorBoundary extends React.Component<React.PropsWithChildren, Stat
     );
   }
 
+  private reloadWithCacheBust() {
+    const url = new URL(window.location.href);
+    url.searchParams.set("__ashtech_reload", String(Date.now()));
+    window.location.replace(url.toString());
+  }
+
   handleReload = () => {
     try { sessionStorage.clear(); } catch {}
-    window.location.reload();
+    this.reloadWithCacheBust();
   };
 
   render() {

@@ -36,6 +36,10 @@ export function serveStatic(app: Express) {
       // Keep the HTML shell short-lived so deployments become visible quickly.
       if (filePath.includes(`${path.sep}assets${path.sep}`)) {
         res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      } else if (path.basename(filePath).toLowerCase() === "index.html") {
+        res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+        res.setHeader("Pragma", "no-cache");
+        res.setHeader("Expires", "0");
       }
     },
   }));
@@ -49,7 +53,12 @@ export function serveStatic(app: Express) {
       if (req.path.startsWith("/pay/")) {
         html = await renderPaymentLinkMeta(req, html, req.params.slug);
       }
-      res.set("Content-Type", "text/html").send(html);
+      res
+        .set("Content-Type", "text/html")
+        .set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+        .set("Pragma", "no-cache")
+        .set("Expires", "0")
+        .send(html);
     } catch (error) {
       next(error);
     }
@@ -61,6 +70,11 @@ export function serveStatic(app: Express) {
   // index.html sans modifier le code retour.
   app.use("*", (_req, res) => {
     const indexPath = path.resolve(distPath, "index.html");
-    res.set("Content-Type", "text/html").sendFile(indexPath);
+    res
+      .set("Content-Type", "text/html")
+      .set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+      .set("Pragma", "no-cache")
+      .set("Expires", "0")
+      .sendFile(indexPath);
   });
 }

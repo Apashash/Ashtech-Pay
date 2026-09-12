@@ -16,6 +16,17 @@ Options -Indexes -MultiViews
 RewriteEngine On
 RewriteBase /
 
+# The HTML shell must always be revalidated after a deployment. JavaScript
+# bundles are fingerprinted and can be cached; index.html must not point users
+# at an old bundle after a new build.
+<IfModule mod_headers.c>
+  <FilesMatch "^index\.html$">
+    Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+    Header set Pragma "no-cache"
+    Header set Expires "0"
+  </FilesMatch>
+</IfModule>
+
 # ── Bloquer les scanners de bots / WordPress / exploits connus ───────────────
 RewriteRule ^wp-admin(/.*)?$ - [F,L]
 RewriteRule ^wp-login\.php$ - [F,L]

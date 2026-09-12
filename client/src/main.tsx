@@ -3,6 +3,16 @@ import App from "./App";
 import "./index.css";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
+// Remove the one-time cache-busting parameter after a recovery reload so it
+// does not remain in copied URLs or affect application route query parameters.
+try {
+  const recoveryUrl = new URL(window.location.href);
+  if (recoveryUrl.searchParams.has("__ashtech_reload")) {
+    recoveryUrl.searchParams.delete("__ashtech_reload");
+    window.history.replaceState({}, "", `${recoveryUrl.pathname}${recoveryUrl.search}${recoveryUrl.hash}`);
+  }
+} catch {}
+
 function showFatalError(message: string) {
   const root = document.getElementById("root");
   if (!root || root.children.length > 0) return;
