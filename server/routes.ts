@@ -9111,15 +9111,18 @@ export async function registerRoutes(
       // Increment clicks
       await storage.incrementPaymentLinkClicks(link.slug);
 
-      // Resolve redirect URLs:
-      //  - Hosted Page links (slug starts with "hp-") → use merchant's hosted_page_configs (successUrl / cancelUrl)
-      //  - Standard payment links → fall back to link.redirectUrl for both success & cancel
+       // Resolve redirect URLs:
+       //  - Named Hosted Page links use the exact key attached at creation time.
+       //  - Legacy Hosted Page links keep the historical account-level config.
+       //  - Standard payment links use their own redirectUrl.
       let successUrl: string | null = null;
       let cancelUrl: string | null = null;
       const isHostedPageLink = typeof link.slug === "string" && link.slug.startsWith("hp-");
       if (isHostedPageLink) {
         try {
-          const cfg = await storage.getHostedPageConfig(link.userId);
+           const cfg = (link as any).hostedPageKeyId
+             ? await storage.getHostedPageKeyById((link as any).hostedPageKeyId, link.userId)
+             : await storage.getHostedPageConfig(link.userId);
           successUrl = (cfg as any)?.successUrl || null;
           cancelUrl = (cfg as any)?.cancelUrl || null;
         } catch (_) {}
@@ -17620,8 +17623,9 @@ export async function registerRoutes(
       if (!hpKey.startsWith("hp_live_")) {
         return res.status(401).json({ error: "unauthorized", message: "Invalid hp_live key." });
       }
-      const merchant = await storage.getUserByHpKey(hpKey);
-      if (!merchant) return res.status(401).json({ error: "unauthorized", message: "Key not found." });
+       const merchant = await storage.getUserByHpKey(hpKey);
+       if (!merchant) return res.status(401).json({ error: "unauthorized", message: "Key not found." });
+       const hostedKey = await storage.getHostedPageKeyByHpLive(hpKey);
       if (!merchant.isVerified) {
         return res.status(403).json({ error: "account_not_verified", message: "Votre compte n'est pas vérifié. Complétez la vérification KYC pour accéder à l'API." });
       }
@@ -17710,8 +17714,11 @@ export async function registerRoutes(
 
       const expiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30 min
 
-      // Use merchant's default notify_url if none provided in request
-      const merchantConfig = await storage.getHostedPageConfig(merchant.id).catch(() => null);
+       // Use the selected key's notify_url. The legacy key keeps the
+       // historical account-level configuration for compatibility.
+       const merchantConfig = hostedKey?.id === "legacy"
+         ? hostedKey
+         : await storage.getHostedPageConfig(merchant.id).catch(() => null);
       const effectiveNotifyUrl = notify_url || (merchantConfig as any)?.notifyUrl || null;
 
       // Create a real payment link in the existing system → uses the existing /pay/:slug page
@@ -17727,6 +17734,7 @@ export async function registerRoutes(
         pdfPath: null,
         hasPdfDelivery: false,
         redirectUrl: null,
+         hostedPageKeyId: hostedKey && hostedKey.id !== "legacy" ? hostedKey.id : null,
         expiresAt,
         allowedCountries: countriesFilter,
         notifyUrl: effectiveNotifyUrl,

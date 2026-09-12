@@ -375,6 +375,7 @@ export interface IStorage {
   updateHostedPageKeyUrls(userId: string, keyId: string, urls: Pick<HostedPageKey, "successUrl" | "cancelUrl" | "notifyUrl">): Promise<HostedPageKey | undefined>;
   deleteHostedPageKey(userId: string, keyId: string): Promise<boolean>;
   getUserByHpKey(hpLive: string): Promise<User | undefined>;
+  getHostedPageKeyByHpLive(hpLive: string): Promise<HostedPageKey | undefined>;
   createHostedPaymentSession(data: Omit<HostedPaymentSession, "createdAt">): Promise<HostedPaymentSession>;
   getHostedPaymentSession(id: string): Promise<HostedPaymentSession | undefined>;
   updateHostedPaymentSession(id: string, updates: Partial<HostedPaymentSession>): Promise<void>;
@@ -2928,7 +2929,7 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  private async getHostedPageKeyById(id: string, userId?: string): Promise<HostedPageKey | undefined> {
+  async getHostedPageKeyById(id: string, userId?: string): Promise<HostedPageKey | undefined> {
     const conditions = [eq(hostedPageKeys.id, id)];
     if (userId) conditions.push(eq(hostedPageKeys.userId, userId));
     const [key] = await db.select().from(hostedPageKeys).where(and(...conditions));
@@ -3129,6 +3130,55 @@ export class DatabaseStorage implements IStorage {
     const [legacy] = await db.select().from(hostedPageConfigs).where(eq(hostedPageConfigs.hpLive, hpLive));
     if (legacy) return this.getUser(legacy.userId);
     return undefined;
+  }
+
+  async getHostedPageKeyByHpLive(hpLive: string): Promise<HostedPageKey | undefined> {
+    const hash = hmacField(hpLive);
+    if (hash) {
+      const [key] = await db.select().from(hostedPageKeys).where(eq(hostedPageKeys.hpLiveHash, hash));
+      if (key) return this.decryptHostedPageKey(key);
+
+      const [config] = await db.select().from(hostedPageConfigs).where(eq(hostedPageConfigs.hpLiveHash, hash));
+      if (config) {
+        const legacy = this.decryptHostedPageConfig(config);
+        return {
+          id: "legacy",
+          userId: legacy.userId,
+          name: "default",
+          pkLive: legacy.pkLive || "",
+          skLive: legacy.skLive || "",
+          hpLive: legacy.hpLive || "",
+          hpLiveHash: hmacField(legacy.hpLive || ""),
+          successUrl: legacy.successUrl,
+          cancelUrl: legacy.cancelUrl,
+          notifyUrl: legacy.notifyUrl,
+          createdAt: legacy.createdAt,
+          updatedAt: legacy.updatedAt,
+          isLegacy: true,
+        } as HostedPageKey;
+      }
+    }
+
+    const [key] = await db.select().from(hostedPageKeys).where(eq(hostedPageKeys.hpLive, hpLive));
+    if (key) return this.decryptHostedPageKey(key);
+    const [config] = await db.select().from(hostedPageConfigs).where(eq(hostedPageConfigs.hpLive, hpLive));
+    if (!config) return undefined;
+    const legacy = this.decryptHostedPageConfig(config);
+    return {
+      id: "legacy",
+      userId: legacy.userId,
+      name: "default",
+      pkLive: legacy.pkLive || "",
+      skLive: legacy.skLive || "",
+      hpLive: legacy.hpLive || "",
+      hpLiveHash: hmacField(legacy.hpLive || ""),
+      successUrl: legacy.successUrl,
+      cancelUrl: legacy.cancelUrl,
+      notifyUrl: legacy.notifyUrl,
+      createdAt: legacy.createdAt,
+      updatedAt: legacy.updatedAt,
+      isLegacy: true,
+    } as HostedPageKey;
   }
 
   async createHostedPaymentSession(data: Omit<HostedPaymentSession, "createdAt">): Promise<HostedPaymentSession> {

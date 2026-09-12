@@ -73,7 +73,7 @@ export const transactions = mysqlTable("transactions", common([
 
 export const paymentLinks = mysqlTable("payment_links", common([
   "id","userId","title","description","amount","currency","slug","isActive","isFixedAmount","imagePath","pdfPath",
-  "hasPdfDelivery","redirectUrl","expiresAt","clickCount","allowedCountries","notifyUrl","createdAt",
+  "hasPdfDelivery","redirectUrl","hostedPageKeyId","expiresAt","clickCount","allowedCountries","notifyUrl","createdAt",
 ], { id: id(), amount: money("amount").notNull(), isActive: boolean("is_active").default(true),
   isFixedAmount: boolean("is_fixed_amount").default(true), hasPdfDelivery: boolean("has_pdf_delivery").default(false),
   clickCount: int("click_count").default(0).notNull(), allowedCountries: js("allowed_countries"), expiresAt: timestamp("expires_at"), createdAt: dt("created_at"),

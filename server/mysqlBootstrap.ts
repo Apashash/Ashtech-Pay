@@ -115,6 +115,7 @@ export async function ensureMysqlAuxiliarySchema(): Promise<void> {
     `ALTER TABLE hosted_page_keys ADD COLUMN IF NOT EXISTS success_url TEXT NULL`,
     `ALTER TABLE hosted_page_keys ADD COLUMN IF NOT EXISTS cancel_url TEXT NULL`,
     `ALTER TABLE hosted_page_keys ADD COLUMN IF NOT EXISTS notify_url TEXT NULL`,
+    `ALTER TABLE payment_links ADD COLUMN IF NOT EXISTS hosted_page_key_id VARCHAR(191) NULL`,
     `CREATE TABLE IF NOT EXISTS admin_pending_logins (
       token VARCHAR(191) NOT NULL PRIMARY KEY,
       user_id VARCHAR(191) NOT NULL,
