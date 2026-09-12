@@ -43,6 +43,7 @@ import heroPaymentImage from "@assets/file_00000000b290820e8318daa118934236_1788
 import marketPaymentImage from "@assets/images_(1)~2_1788747988443.jpeg";
 import commercePaymentImage from "@assets/barkapay-african-payment-hub-for-e-commerce_1788747792967.webp";
 import { useState, useEffect, useRef, type PointerEvent, type RefObject } from "react";
+import { PUBLIC_API_DOCS_URL, PUBLIC_CHECKOUT_DOCS_URL } from "@/lib/public-links";
 import { useTheme } from "@/components/theme-provider";
 import { useScrollAnimation } from "@/hooks/use-scroll-animation";
 import { useLanguage } from "@/lib/language";
@@ -148,8 +149,8 @@ function Navbar() {
         { label: t.nav.faq, href: "/faq", icon: MessageCircleQuestion },
         { label: t.nav.blog, href: "/blog", icon: BookOpen },
         { label: t.nav.contact, href: "/contact", icon: Mail },
-        { label: t.nav.apiDocs, href: "/docs/api", icon: Terminal },
-        { label: t.nav.hostedDocs, href: "/docs/hosted-page", icon: Code2 },
+        { label: t.nav.apiDocs, href: PUBLIC_API_DOCS_URL, icon: Terminal, external: true },
+        { label: t.nav.hostedDocs, href: PUBLIC_CHECKOUT_DOCS_URL, icon: Code2, external: true },
       ],
     },
     {
@@ -248,14 +249,19 @@ function Navbar() {
                 <div key={group.title}>
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-1">{group.title}</p>
                   <div className="space-y-0.5">
-                    {group.items.map((item) => (
-                      <Link key={item.href} href={item.href}>
+                    {group.items.map((item) => {
+                      const button = (
                         <button onClick={() => setMenuOpen(false)} className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-accent transition-colors text-left">
                           <item.icon className="w-4 h-4 text-primary flex-shrink-0" />
                           <span className="text-sm text-foreground">{item.label}</span>
                         </button>
-                      </Link>
-                    ))}
+                      );
+                      return ("external" in item && item.external) ? (
+                        <a key={item.href} href={item.href}>{button}</a>
+                      ) : (
+                        <Link key={item.href} href={item.href}>{button}</Link>
+                      );
+                    })}
                   </div>
                 </div>
               ))}
@@ -766,18 +772,18 @@ function ApiDeveloperSection() {
               ))}
             </ul>
             <div className="flex flex-col sm:flex-row gap-3">
-              <Link href="/docs/api">
+              <a href={PUBLIC_API_DOCS_URL}>
                 <Button size="lg" className="gap-2" data-testid="button-api-docs">
                   <BookOpen className="w-4 h-4" />
                   {t.landing.apiBtn1}
                 </Button>
-              </Link>
-              <Link href="/docs/hosted-page">
+              </a>
+              <a href={PUBLIC_CHECKOUT_DOCS_URL}>
                 <Button size="lg" variant="outline" className="gap-2" data-testid="button-api-hosted-docs">
                   <Globe className="w-4 h-4" />
                   {t.landing.apiBtn2}
                 </Button>
-              </Link>
+              </a>
             </div>
           </div>
 

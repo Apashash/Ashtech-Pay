@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="84" viewBox="0 0 360 84" role="img" aria-labelledby="title">
+  <title id="title">AshTech Pay</title>
+  <rect width="360" height="84" rx="16" fill="#ffffff"/>
+  <path d="M22 59 42 17h12l20 42H61l-4-9H39l-4 9H22Zm21-19h10l-5-12-5 12Z" fill="#10164A"/>
+  <path d="M82 59V17h12v16h16V17h12v42h-12V44H94v15H82Z" fill="#10164A"/>
+  <text x="137" y="55" fill="#10164A" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700" letter-spacing="-1.2">AshTech</text>
+  <text x="286" y="55" fill="#F0B90B" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700" letter-spacing="-1.2">Pay</text>
+</svg>

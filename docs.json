@@ -8,10 +8,10 @@
     "light": "#F0B90B",
     "dark": "#10164A"
   },
-  "favicon": "https://www.ashtechpay.com/favicon.png",
+  "favicon": "/favicon.svg",
   "logo": {
-    "light": "https://www.ashtechpay.com/logo-dark.png",
-    "dark": "https://www.ashtechpay.com/logo.png"
+    "light": "/logo-light.svg",
+    "dark": "/logo-dark.svg"
   },
   "navbar": {
     "links": [

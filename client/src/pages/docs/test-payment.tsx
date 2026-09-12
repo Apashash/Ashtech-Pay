@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "wouter";
+import { PUBLIC_API_DOCS_URL, PUBLIC_CHECKOUT_DOCS_URL } from "@/lib/public-links";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -608,16 +609,16 @@ export default function TestPaymentPage() {
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               <span className="text-[10px] text-emerald-600 font-medium hidden sm:inline">Live</span>
             </div>
-            <Link href="/docs/api">
+            <a href={PUBLIC_API_DOCS_URL}>
               <Button variant="ghost" size="sm" className="text-gray-500 hover:text-gray-900 text-xs gap-1.5 hidden sm:flex" data-testid="link-sdk-docs">
                 <BookOpen className="w-3.5 h-3.5" /> SDK Docs
               </Button>
-            </Link>
-            <Link href="/docs/hosted-page">
+            </a>
+            <a href={PUBLIC_CHECKOUT_DOCS_URL}>
               <Button variant="ghost" size="sm" className="text-gray-500 hover:text-gray-900 text-xs gap-1.5 hidden sm:flex" data-testid="link-hp-docs">
                 <Code2 className="w-3.5 h-3.5" /> Hosted Docs
               </Button>
-            </Link>
+            </a>
           </div>
         </div>
       </header>
@@ -680,16 +681,16 @@ export default function TestPaymentPage() {
 
         {/* Footer */}
         <div className="flex flex-wrap gap-4 pb-4">
-          <Link href="/docs/api">
+          <a href={PUBLIC_API_DOCS_URL}>
             <button className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors" data-testid="link-footer-sdk-docs">
               <BookOpen className="w-3.5 h-3.5" /> Documentation SDK <ChevronRight className="w-3 h-3" />
             </button>
-          </Link>
-          <Link href="/docs/hosted-page">
+          </a>
+          <a href={PUBLIC_CHECKOUT_DOCS_URL}>
             <button className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors" data-testid="link-footer-hp-docs">
               <Code2 className="w-3.5 h-3.5" /> Documentation Hosted Page <ChevronRight className="w-3 h-3" />
             </button>
-          </Link>
+          </a>
           <Link href="/dashboard/api-keys">
             <button className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors" data-testid="link-footer-api-keys">
               <Zap className="w-3.5 h-3.5" /> Mes clés API <ChevronRight className="w-3 h-3" />

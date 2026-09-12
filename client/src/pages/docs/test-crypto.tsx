@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
+import { PUBLIC_API_DOCS_URL } from "@/lib/public-links";
 import { QRCodeSVG } from "qrcode.react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -262,12 +263,12 @@ export default function TestCryptoPage() {
       <header className="sticky top-0 z-40 border-b border-gray-200 bg-white/95 backdrop-blur-md">
         <div className="max-w-5xl mx-auto w-full px-4 h-14 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <Link href="/docs/api">
+            <a href={PUBLIC_API_DOCS_URL}>
               <Button variant="ghost" size="sm" className="text-gray-500 hover:text-gray-900 -ml-2 gap-1.5">
                 <ArrowLeft className="w-4 h-4" />
                 <span className="hidden sm:inline text-xs">Documentation SDK</span>
               </Button>
-            </Link>
+            </a>
             <div className="h-4 w-px bg-gray-200 shrink-0" />
             <div className="flex items-center gap-2 min-w-0">
               <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center shrink-0">

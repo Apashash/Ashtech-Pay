@@ -8,6 +8,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import { LanguageProvider } from "@/lib/language";
+import { PUBLIC_API_DOCS_URL, PUBLIC_CHECKOUT_DOCS_URL } from "@/lib/public-links";
 const LandingPage = React.lazy(() => import("@/pages/landing"));
 const LoginPage = React.lazy(() => import("@/pages/login"));
 const RegisterPage = React.lazy(() => import("@/pages/register"));
@@ -153,8 +154,8 @@ function Router() {
     <Suspense fallback={<div className="min-h-screen bg-background" aria-label="Chargement" />}>
     <Switch>
       <Route path="/" component={LandingPage} />
-      <Route path="/docs/api" component={() => <DeveloperPage publicMode />} />
-      <Route path="/docs/hosted-page" component={() => <HostedPageDocs publicMode />} />
+      <Route path="/docs/api" component={() => <ExternalDocsRedirect href={PUBLIC_API_DOCS_URL} />} />
+      <Route path="/docs/hosted-page" component={() => <ExternalDocsRedirect href={PUBLIC_CHECKOUT_DOCS_URL} />} />
       <Route path="/docs/test-pay" component={TestPaymentPage} />
       <Route path="/docs/test-crypto" component={TestCryptoPage} />
       <Route path="/blocked" component={BlockedPage} />
@@ -486,6 +487,18 @@ function AuthenticatedWatchers() {
       <ImpersonationBanner />
       <PushNotificationPrompt />
     </>
+  );
+}
+
+function ExternalDocsRedirect({ href }: { href: string }) {
+  useEffect(() => {
+    window.location.replace(href);
+  }, [href]);
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background text-muted-foreground text-sm">
+      Redirection vers la documentation…
+    </div>
   );
 }
 

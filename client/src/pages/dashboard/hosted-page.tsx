@@ -13,6 +13,7 @@ import {
   Key, Shield, Globe, Zap, Copy, Eye, EyeOff, CheckCheck, RefreshCw, BookOpen, ChevronRight
 } from "lucide-react";
 import { useLanguage } from "@/lib/language";
+import { PUBLIC_CHECKOUT_DOCS_URL } from "@/lib/public-links";
 
 interface HostedPageConfig {
   pkLive: string | null;
@@ -264,13 +265,13 @@ export default function HostedPageDashboard() {
                   <p className="text-sm font-semibold">{hp.docTitle}</p>
                   <p className="text-xs text-muted-foreground">{hp.docDesc}</p>
                 </div>
-                <Link href="/docs/hosted-page">
+                <a href={PUBLIC_CHECKOUT_DOCS_URL}>
                   <Button data-testid="button-documentation" className="gap-2">
                     <BookOpen className="h-4 w-4" />
                     Documentation
                     <ChevronRight className="h-4 w-4" />
                   </Button>
-                </Link>
+                </a>
               </div>
             </CardContent>
           </Card>
