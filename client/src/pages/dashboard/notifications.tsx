@@ -4,7 +4,7 @@ import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { fr, enUS } from "date-fns/locale";
 import {
-  Bell, ChevronLeft, ChevronRight, CheckCheck, Trash2, ArrowDownCircle,
+  ChevronLeft, ChevronRight, CheckCheck, Trash2, ArrowDownCircle,
   ArrowUpCircle, Send, Megaphone, MessageSquare, ShieldCheck, X, Loader2, ExternalLink,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/dashboard-layout";
@@ -141,7 +141,7 @@ export default function NotificationsPage() {
       case "global_message":       return <Megaphone       className="w-5 h-5 text-purple-500" />;
       case "admin_message":        return <MessageSquare   className="w-5 h-5 text-purple-500" />;
       case "kyc_update_required":  return <ShieldCheck    className="w-5 h-5 text-amber-500" />;
-      default:                     return <Bell            className="w-5 h-5 text-muted-foreground" />;
+      default:                     return <img src="/notification-icon.png" alt="" aria-hidden="true" className="w-5 h-5 object-contain" />;
     }
   }
 
@@ -161,7 +161,7 @@ export default function NotificationsPage() {
                 <ChevronLeft className="w-5 h-5" />
               </button>
               <div className="flex items-center gap-2 min-w-0">
-                <Bell className="w-5 h-5 text-primary shrink-0" />
+                <img src="/notification-icon.png" alt="" aria-hidden="true" className="w-5 h-5 object-contain shrink-0" />
                 <h1 className="font-semibold text-foreground truncate">
                   {t.notifications.title}
                 </h1>
@@ -213,7 +213,7 @@ export default function NotificationsPage() {
         ) : notifications.length === 0 ? (
           <div className="flex flex-col items-center gap-4 py-20 px-8 text-center">
             <div className="w-16 h-16 rounded-full bg-muted/50 flex items-center justify-center">
-              <Bell className="w-7 h-7 text-muted-foreground/50" />
+              <img src="/notification-icon.png" alt="" aria-hidden="true" className="w-7 h-7 object-contain" />
             </div>
             <p className="text-muted-foreground text-sm">{t.notifications.noNotifications}</p>
           </div>

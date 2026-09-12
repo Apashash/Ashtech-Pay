@@ -24,7 +24,6 @@ import {
   ArrowDownCircle,
   ArrowUpCircle,
   Send,
-  Bell,
   Clock,
   UserCheck,
   ArrowLeftRight,
@@ -575,7 +574,12 @@ export function AdminLayout({ children }: AdminLayoutProps) {
             <Popover open={notificationsOpen} onOpenChange={setNotificationsOpen}>
               <PopoverTrigger asChild>
                 <Button variant="ghost" size="icon" className="relative" data-testid="button-notifications">
-                  <Bell className={`w-5 h-5 ${(notifications.length + (layoutStats?.ticketUnread || 0)) > 0 ? "animate-bell-ring text-red-500" : ""}`} />
+                  <img
+                    src="/notification-icon.png"
+                    alt=""
+                    aria-hidden="true"
+                    className={`w-5 h-5 object-contain ${(notifications.length + (layoutStats?.ticketUnread || 0)) > 0 ? "animate-bell-ring" : ""}`}
+                  />
                   {(notifications.length + (layoutStats?.ticketUnread || 0)) > 0 && (
                     <>
                       <span className="absolute inset-0 rounded-full animate-ping bg-red-500/30 pointer-events-none" />

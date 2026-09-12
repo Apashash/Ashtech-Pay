@@ -44,7 +44,6 @@ import {
   BadgeCheck,
   Clock3,
   Send,
-  Bell,
   X,
   Check,
   Coins,
@@ -489,7 +488,12 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 onClick={() => setLocation("/dashboard/notifications")}
                 data-testid="button-user-notifications"
               >
-                <Bell className={`w-5 h-5 ${(notificationData?.unreadCount || 0) > 0 ? "animate-bell-ring text-red-500" : ""}`} />
+                <img
+                  src="/notification-icon.png"
+                  alt=""
+                  aria-hidden="true"
+                  className={`w-5 h-5 object-contain ${(notificationData?.unreadCount || 0) > 0 ? "animate-bell-ring" : ""}`}
+                />
                 {(notificationData?.unreadCount || 0) > 0 && (
                   <>
                     <span className="absolute inset-0 rounded-full animate-ping bg-red-500/30 pointer-events-none" />

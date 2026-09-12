@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Bell, BellRing, Check, Loader2, Smartphone, X } from "lucide-react";
+import { Check, Loader2, Smartphone, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   getPushSupport,
@@ -107,7 +107,9 @@ export function PushNotificationPrompt() {
     >
       <div className="flex items-start gap-3">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-          {isIosInstallPrompt ? <Smartphone className="h-5 w-5" /> : isDenied ? <Bell className="h-5 w-5" /> : <BellRing className="h-5 w-5" />}
+          {isIosInstallPrompt
+            ? <Smartphone className="h-5 w-5" />
+            : <img src="/notification-icon.png" alt="" aria-hidden="true" className="h-5 w-5 object-contain" />}
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
@@ -148,7 +150,11 @@ export function PushNotificationPrompt() {
                 disabled={busy}
                 data-testid="button-enable-push"
               >
-                {busy ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : isIosInstallPrompt ? <Smartphone className="mr-1.5 h-4 w-4" /> : <Bell className="mr-1.5 h-4 w-4" />}
+                {busy
+                  ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                  : isIosInstallPrompt
+                    ? <Smartphone className="mr-1.5 h-4 w-4" />
+                    : <img src="/notification-icon.png" alt="" aria-hidden="true" className="mr-1.5 h-4 w-4 object-contain" />}
                 {isIosInstallPrompt ? "Voir le guide d'installation" : "Activer maintenant"}
               </Button>
               <button

@@ -15,7 +15,6 @@ import { apiRequest, getAuthHeaders, queryClient, setAuthToken } from "@/lib/que
 import { getProfileImageSrc } from "@/lib/profile-image";
 import type { User } from "@shared/schema";
 import {
-  Bell,
   Lock,
   Save,
   Globe,
@@ -691,7 +690,7 @@ export default function SettingsPage() {
           <Collapsible open={notifOpen} onOpenChange={setNotifOpen}>
             <CollapsibleTrigger asChild>
               <button className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-muted/50 transition-colors text-left" data-testid="row-notifications">
-                <Bell className="w-4 h-4 text-muted-foreground shrink-0" />
+                <img src="/notification-icon.png" alt="" aria-hidden="true" className="w-4 h-4 object-contain shrink-0" />
                 <span className="flex-1 text-sm font-medium text-foreground">{t.settings.notifPreferences}</span>
                 <ChevronDown className={`w-4 h-4 text-muted-foreground/50 transition-transform duration-200 ${notifOpen ? "rotate-180" : ""}`} />
               </button>
