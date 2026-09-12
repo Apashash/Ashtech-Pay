@@ -17,7 +17,7 @@ import { CURRENCY_SYMBOLS, SUPPORTED_CURRENCIES } from "@shared/schema";
 import { getImageSrc } from "@/lib/image";
 import { 
   Loader2, CheckCircle, XCircle, Shield, 
-  Smartphone, CreditCard, ExternalLink, FileText, AlertTriangle, Globe,
+  Smartphone, CreditCard, ExternalLink, FileText, AlertTriangle,
   User, Mail, Phone, Hash, Clock, Copy, Bitcoin, ChevronDown, Hourglass
 } from "lucide-react";
 import { getOperatorLogo } from "@/lib/operator-logos";
@@ -1411,7 +1411,7 @@ export default function PaymentPage() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" className="h-8 gap-2 border-border bg-muted/50 hover:bg-muted font-medium" data-testid="button-language-selector">
-              <Globe className="w-4 h-4 text-primary" />
+              <img src="/language-icon.png" alt="" aria-hidden="true" className="w-5 h-5 object-contain" />
               <span className="text-sm font-semibold">{language === "fr" ? "FR" : "EN"}</span>
               <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
             </Button>
@@ -1422,7 +1422,7 @@ export default function PaymentPage() {
               className={`flex items-center gap-2 cursor-pointer ${language === "fr" ? "font-semibold text-primary" : ""}`}
               data-testid="lang-option-fr"
             >
-              <span>🇫🇷</span>
+              <img src="/language-icon.png" alt="" aria-hidden="true" className="w-5 h-5 object-contain" />
               <span>Français</span>
               {language === "fr" && <span className="ml-auto text-primary text-xs">✓</span>}
             </DropdownMenuItem>
@@ -1431,7 +1431,7 @@ export default function PaymentPage() {
               className={`flex items-center gap-2 cursor-pointer ${language === "en" ? "font-semibold text-primary" : ""}`}
               data-testid="lang-option-en"
             >
-              <span>🇬🇧</span>
+              <img src="/language-icon.png" alt="" aria-hidden="true" className="w-5 h-5 object-contain" />
               <span>English</span>
               {language === "en" && <span className="ml-auto text-primary text-xs">✓</span>}
             </DropdownMenuItem>

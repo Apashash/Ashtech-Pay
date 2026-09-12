@@ -2,9 +2,9 @@ import { useLanguage, type Language } from "@/lib/language";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useState } from "react";
 
-const LANGUAGES: { code: Language; label: string; flag: string }[] = [
-  { code: "fr", label: "Français", flag: "🇫🇷" },
-  { code: "en", label: "English", flag: "🇬🇧" },
+const LANGUAGES: { code: Language; label: string }[] = [
+  { code: "fr", label: "Français" },
+  { code: "en", label: "English" },
 ];
 
 export function LanguageSwitcher({ variant = "default" }: { variant?: "default" | "compact" }) {
@@ -21,7 +21,7 @@ export function LanguageSwitcher({ variant = "default" }: { variant?: "default" 
           aria-label="Changer de langue"
           data-testid="button-language-switcher"
         >
-          <span className="text-base leading-none">{current.flag}</span>
+          <img src="/language-icon.png" alt="" aria-hidden="true" className="h-5 w-5 object-contain" />
           {variant === "default" && (
             <span className="hidden sm:inline text-xs text-muted-foreground uppercase tracking-wide">
               {current.code.toUpperCase()}
@@ -45,7 +45,7 @@ export function LanguageSwitcher({ variant = "default" }: { variant?: "default" 
                 : "hover:bg-accent text-foreground"
             }`}
           >
-            <span className="text-lg leading-none">{lang.flag}</span>
+            <img src="/language-icon.png" alt="" aria-hidden="true" className="h-5 w-5 object-contain" />
             <span>{lang.label}</span>
             {language === lang.code && (
               <span className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />
