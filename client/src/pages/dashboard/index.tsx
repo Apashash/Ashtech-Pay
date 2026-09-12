@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { BottomSheet, BottomSheetContent, BottomSheetDescription, BottomSheetHeader, BottomSheetTitle } from "@/components/ui/bottom-sheet";
 import { Input } from "@/components/ui/input";
@@ -36,6 +37,7 @@ import {
   Smartphone,
   ChevronRight,
   History,
+  Code2,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { z } from "zod";
@@ -98,6 +100,10 @@ function formatDashboardWalletBalance(amount: string | number, currency: string)
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   }).format(Number.isFinite(numericAmount) ? numericAmount : 0).replace(/\u202f/g, " ")} ${currency}`;
+}
+
+function DashboardHistoryIcon({ src, className = "h-7 w-7" }: { src: string; className?: string }) {
+  return <img src={src} alt="" aria-hidden="true" className={`${className} object-contain drop-shadow-[0_3px_3px_rgba(0,0,0,0.14)]`} />;
 }
 
 function StatCard({ title, value, icon: Icon, imageSrc, trend, color, href }: {
@@ -664,6 +670,29 @@ export default function DashboardHome() {
   }, [wallets, rates, localCurrency, user?.balance]);
 
   const recentTransactions = transactions.slice(0, 5);
+  const recentTransactionGroups = useMemo(() => {
+    const groups: Record<string, Transaction[]> = {};
+    for (const tx of recentTransactions) {
+      const dateKey = tx.createdAt ? format(new Date(tx.createdAt), "yyyy-MM-dd") : "inconnu";
+      if (!groups[dateKey]) groups[dateKey] = [];
+      groups[dateKey].push(tx);
+    }
+    return Object.entries(groups).sort(([a], [b]) => b.localeCompare(a));
+  }, [recentTransactions]);
+
+  const formatRecentDateLabel = (dateKey: string) => {
+    try {
+      const date = new Date(dateKey);
+      const today = new Date();
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      if (format(date, "yyyy-MM-dd") === format(today, "yyyy-MM-dd")) return t.transactions.today;
+      if (format(date, "yyyy-MM-dd") === format(yesterday, "yyyy-MM-dd")) return t.transactions.yesterday;
+      return format(date, "d MMMM yyyy", { locale: fr });
+    } catch {
+      return dateKey;
+    }
+  };
   const isVerified = user?.isVerified ?? false;
 
   const handleAction = (action: string) => {
@@ -945,7 +974,7 @@ export default function DashboardHome() {
 
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-3">{t.dashboard.recentActivity}</p>
-          <div className="rounded-xl border border-border bg-card overflow-hidden divide-y divide-border">
+          <div className="rounded-xl border border-border bg-card overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 bg-muted/30">
               <div className="flex items-center gap-2">
                 <History className="w-4 h-4 text-muted-foreground" />
@@ -961,57 +990,100 @@ export default function DashboardHome() {
             {recentTransactions.length === 0 ? (
               <p className="text-center py-8 text-sm text-muted-foreground">{t.dashboard.noTransactions}</p>
             ) : (
-              recentTransactions.map((tx) => {
-                const isIncoming = ["deposit", "transfer_in", "payment_link"].includes(tx.type);
-                const txTypeLabels: Record<string, string> = {
-                  deposit: t.dashboard.typeDeposit, withdrawal: t.dashboard.typeWithdrawal, transfer_in: t.dashboard.typeTransferIn, transfer_out: t.dashboard.typeTransferOut, payment_link: t.dashboard.typePaymentLink, conversion: t.dashboard.typeConversion
-                };
-                const operatorName = tx.operatorId ? operatorMap[tx.operatorId] : null;
-                const statusColors: Record<string, string> = { completed: "text-green-500", pending: "text-orange-500", failed: "text-red-500" };
-                return (
-                  <div key={tx.id} className="flex items-center gap-3 px-4 py-3.5">
-                    <div className={`w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center ${isIncoming ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
-                      {isIncoming ? <TrendingUp className="w-4 h-4 text-green-500" /> : <TrendingDown className="w-4 h-4 text-red-500" />}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-foreground truncate">{txTypeLabels[tx.type] || tx.type}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {operatorName && <span className="mr-1">{operatorName} ·</span>}
-                        {tx.createdAt ? format(new Date(tx.createdAt), "d MMM, HH:mm", { locale: fr }) : ""}
-                      </p>
-                    </div>
-                    <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
-                      {tx.paymentMethod === "crypto" && (tx as any).metadata ? (() => {
-                        const meta = (tx as any).metadata;
-                        const credited = Number(meta.creditedAmountUsdt ?? meta.grossAmountUsdt ?? tx.amount);
-                        const assetCode = meta.assetCode || "";
-                        const coin = assetCode ? assetCode.split(".")[0] : "USDT";
-                        const creditedCoin = meta.creditedAmountCoin != null ? Number(meta.creditedAmountCoin) : null;
+              <div className="space-y-5 p-3 sm:p-4">
+                {recentTransactionGroups.map(([dateKey, txs]) => (
+                  <div key={dateKey}>
+                    <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground mb-3">
+                      {formatRecentDateLabel(dateKey)}
+                    </p>
+                    <div className="space-y-3">
+                      {txs.map((tx) => {
+                        const apiBadge = tx.type === "payment_link"
+                          ? null
+                          : (tx as any).source === "hosted_page"
+                            ? <Badge className="text-[10px] px-1.5 py-0 gap-1 bg-amber-500/10 text-amber-600 border-amber-500/30"><Globe className="w-2.5 h-2.5" />Hosted</Badge>
+                            : (tx as any).source === "api"
+                              ? <Badge className="text-[10px] px-1.5 py-0 gap-1 bg-sky-500/10 text-sky-600 border-sky-500/30"><Code2 className="w-2.5 h-2.5" />API</Badge>
+                              : null;
+                        const operatorName = tx.operatorId ? operatorMap[tx.operatorId] : null;
+                        const typeLabels: Record<string, string> = {
+                          deposit: t.transactions.typeDeposit,
+                          withdrawal: t.transactions.typeWithdrawal,
+                          transfer_in: t.transactions.typeTransferIn,
+                          transfer_out: t.transactions.typeTransferOut,
+                          payment_link: t.transactions.typePaymentLink,
+                          conversion: t.transactions.typeConversion,
+                        };
+                        const isIncoming = ["deposit", "transfer_in", "payment_link"].includes(tx.type);
+                        const isSuccessful = ["completed", "success", "succeeded"].includes(tx.status);
+                        const isPending = ["pending", "pending_manual"].includes(tx.status);
+                        const rowClass = isSuccessful
+                          ? "border-l-4 border-green-500 bg-green-500/10 hover:bg-green-500/15"
+                          : isPending
+                            ? "border-l-4 border-amber-500 bg-amber-500/10 hover:bg-amber-500/15"
+                            : ["failed", "cancelled", "rejected"].includes(tx.status)
+                              ? "border-l-4 border-red-500 bg-red-500/10 hover:bg-red-500/15"
+                              : "hover:bg-muted/40";
+                        const iconBg = tx.type === "conversion"
+                          ? "bg-blue-500/10"
+                          : tx.type === "payment_link"
+                            ? "bg-primary/10"
+                            : isIncoming ? "bg-green-500/10" : "bg-red-500/10";
+                        const amountColor = tx.type === "conversion"
+                          ? "text-blue-500"
+                          : isSuccessful
+                            ? isIncoming ? "text-green-500" : "text-red-500"
+                            : isPending ? "text-amber-500" : "text-muted-foreground";
+                        const amountPrefix = tx.type === "conversion" ? "⇄ " : isIncoming ? "+" : "-";
+                        const statusBadge = isSuccessful
+                          ? <Badge className="text-[10px] px-1.5 py-0 bg-green-500/20 text-green-600 border-green-500/30 font-medium">{t.transactions.statusCompleted}</Badge>
+                          : isPending
+                            ? <Badge className="text-[10px] px-1.5 py-0 bg-amber-500/20 text-amber-600 border-amber-500/30 font-medium">{t.transactions.statusPending}</Badge>
+                            : tx.status === "failed"
+                              ? <Badge className="text-[10px] px-1.5 py-0 bg-red-500/20 text-red-600 border-red-500/30 font-medium">{t.transactions.statusFailed}</Badge>
+                              : <Badge className="text-[10px] px-1.5 py-0 bg-muted text-muted-foreground font-medium">{tx.status}</Badge>;
+
                         return (
-                          <>
-                            <span className={`text-sm font-semibold ${isIncoming ? 'text-green-500' : 'text-red-500'}`}>
-                              {isIncoming ? '+' : '-'}{credited.toFixed(4)} USDT
-                            </span>
-                            {creditedCoin !== null && coin !== "USDT" && (
-                              <span className="text-[9px] font-mono text-amber-500">≈ {creditedCoin.toFixed(4)} {coin}</span>
-                            )}
-                            {assetCode && (!creditedCoin || coin === "USDT") && (
-                              <span className="text-[9px] font-mono text-amber-500 uppercase">{assetCode}</span>
-                            )}
-                          </>
+                          <div
+                            key={tx.id}
+                            className={`flex items-center gap-3 rounded-2xl border border-border/70 px-4 py-4 shadow-sm cursor-pointer transition-colors ${rowClass}`}
+                            onClick={() => setLocation(`/dashboard/transactions/${tx.id}`)}
+                            data-testid={`recent-transaction-item-${tx.id}`}
+                          >
+                            <div className={`w-9 h-9 shrink-0 rounded-full flex items-center justify-center ${iconBg}`}>
+                              <DashboardHistoryIcon
+                                src={tx.type === "conversion"
+                                  ? "/sidebar-icons/transactions.png"
+                                  : tx.type === "payment_link"
+                                    ? "/sidebar-icons/links.png"
+                                    : isIncoming ? "/sidebar-icons/deposit.png" : "/sidebar-icons/withdraw.png"}
+                              />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <p className="text-sm font-normal text-foreground truncate max-w-[180px]">
+                                  {typeLabels[tx.type] || tx.type}
+                                </p>
+                                {apiBadge}
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {operatorName || (tx.description ? tx.description.slice(0, 28) : "—")}
+                                {tx.createdAt && <span className="ml-1">· {format(new Date(tx.createdAt), "HH:mm")}</span>}
+                              </p>
+                            </div>
+                            <div className="flex flex-col items-end gap-1 shrink-0">
+                              <span className={`text-sm font-medium whitespace-nowrap ${amountColor}`}>
+                                {amountPrefix}{formatWalletBalance(tx.amount, tx.currency || user?.preferredCurrency || "XAF")}
+                              </span>
+                              {statusBadge}
+                            </div>
+                          </div>
                         );
-                      })() : (
-                        <span className={`text-sm font-semibold ${isIncoming ? 'text-green-500' : 'text-red-500'}`}>
-                          {isIncoming ? '+' : '-'}{formatWalletBalance(tx.amount, tx.currency || user?.preferredCurrency || "XAF")}
-                        </span>
-                      )}
-                      <span className={`text-[10px] font-medium uppercase tracking-wide ${statusColors[tx.status] || 'text-muted-foreground'}`}>
-                        {tx.status === "completed" ? t.dashboard.statusCompleted : tx.status === "pending" ? t.dashboard.statusPending : t.dashboard.statusFailed}
-                      </span>
+                      })}
                     </div>
                   </div>
-                );
-              })
+                ))}
+              </div>
             )}
           </div>
         </div>
