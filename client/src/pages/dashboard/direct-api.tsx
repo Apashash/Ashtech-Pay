@@ -6,7 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/lib/language";
 import { PUBLIC_API_DOCS_URL } from "@/lib/public-links";
 import { DashboardLayout } from "@/components/dashboard-layout";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   ArrowLeft,
@@ -100,10 +100,10 @@ export default function DirectApiPage() {
             <img src="/api-integration-icon.png" alt="" className="h-full w-full object-contain" />
           </div>
           <div>
-            <h1 className="text-2xl font-semibold leading-8 tracking-tight text-foreground">
+            <h1 className="text-2xl font-semibold text-foreground">
               Direct API
             </h1>
-            <p className="mt-1 text-[15px] leading-6 text-muted-foreground">
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">
               {copy.subtitle}
             </p>
           </div>
@@ -115,7 +115,6 @@ export default function DirectApiPage() {
               <KeyRound className="h-4 w-4 text-primary" />
               {copy.sdkAuthTitle}
             </CardTitle>
-            <CardDescription>{copy.sdkAuthDesc}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {isLoading ? (
@@ -156,7 +155,7 @@ export default function DirectApiPage() {
                 </div>
 
                 <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-xs leading-5 text-muted-foreground">
+                  <p className="text-sm leading-6 text-muted-foreground">
                     {copy.sdkRegenerateWarning}
                   </p>
                   <Button
