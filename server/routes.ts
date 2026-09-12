@@ -17488,9 +17488,10 @@ export async function registerRoutes(
 
   // GET /api/hosted-page/config — get merchant config
   app.get("/api/hosted-page/config", async (req: Request, res: Response) => {
-    if (!req.session?.userId) return res.status(401).json({ error: "Unauthorized" });
+    const userId = req.userId || req.session?.userId;
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
     try {
-      const config = await storage.getHostedPageConfig(req.session.userId);
+      const config = await storage.getHostedPageConfig(userId);
       res.json(config || null);
     } catch (e: any) {
       res.status(500).json({ error: "server_error" });
@@ -17499,9 +17500,10 @@ export async function registerRoutes(
 
   // GET /api/hosted-page/keys — list the merchant's named Checkout keys
   app.get("/api/hosted-page/keys", async (req: Request, res: Response) => {
-    if (!req.session?.userId) return res.status(401).json({ error: "Unauthorized" });
+    const userId = req.userId || req.session?.userId;
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
     try {
-      const keys = await storage.getHostedPageKeys(req.session.userId);
+      const keys = await storage.getHostedPageKeys(userId);
       res.json(keys);
     } catch (e: any) {
       console.error("[hosted-page/keys:list]", e);
@@ -17511,7 +17513,8 @@ export async function registerRoutes(
 
   // POST /api/hosted-page/keys — create a named Checkout key
   app.post("/api/hosted-page/keys", async (req: Request, res: Response) => {
-    if (!req.session?.userId) return res.status(401).json({ error: "Unauthorized" });
+    const userId = req.userId || req.session?.userId;
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
     try {
       const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
       if (!name || name.length > 80) {
@@ -17521,7 +17524,7 @@ export async function registerRoutes(
         if (value === null || value === undefined) return null;
         return typeof value === "string" ? value.trim() || null : null;
       };
-      const key = await storage.createHostedPageKey(req.session.userId, name, {
+      const key = await storage.createHostedPageKey(userId, name, {
         successUrl: normalizeUrl(req.body?.successUrl),
         cancelUrl: normalizeUrl(req.body?.cancelUrl),
         notifyUrl: normalizeUrl(req.body?.notifyUrl),
@@ -17535,9 +17538,10 @@ export async function registerRoutes(
 
   // POST /api/hosted-page/keys/:id/regenerate — rotate one named key
   app.post("/api/hosted-page/keys/:id/regenerate", async (req: Request, res: Response) => {
-    if (!req.session?.userId) return res.status(401).json({ error: "Unauthorized" });
+    const userId = req.userId || req.session?.userId;
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
     try {
-      const key = await storage.regenerateHostedPageKey(req.session.userId, req.params.id);
+      const key = await storage.regenerateHostedPageKey(userId, req.params.id);
       if (!key) return res.status(404).json({ error: "not_found" });
       res.json(key);
     } catch (e: any) {
@@ -17548,13 +17552,14 @@ export async function registerRoutes(
 
   // PATCH /api/hosted-page/keys/:id/urls — update URLs linked to one Checkout key
   app.patch("/api/hosted-page/keys/:id/urls", async (req: Request, res: Response) => {
-    if (!req.session?.userId) return res.status(401).json({ error: "Unauthorized" });
+    const userId = req.userId || req.session?.userId;
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
     try {
       const normalizeUrl = (value: unknown): string | null => {
         if (value === null || value === undefined) return null;
         return typeof value === "string" ? value.trim() || null : null;
       };
-      const key = await storage.updateHostedPageKeyUrls(req.session.userId, req.params.id, {
+      const key = await storage.updateHostedPageKeyUrls(userId, req.params.id, {
         successUrl: normalizeUrl(req.body?.successUrl),
         cancelUrl: normalizeUrl(req.body?.cancelUrl),
         notifyUrl: normalizeUrl(req.body?.notifyUrl),
@@ -17569,12 +17574,13 @@ export async function registerRoutes(
 
   // DELETE /api/hosted-page/keys/:id — remove a named Checkout key
   app.delete("/api/hosted-page/keys/:id", async (req: Request, res: Response) => {
-    if (!req.session?.userId) return res.status(401).json({ error: "Unauthorized" });
+    const userId = req.userId || req.session?.userId;
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
     if (req.params.id === "legacy") {
       return res.status(400).json({ error: "cannot_delete_legacy" });
     }
     try {
-      const deleted = await storage.deleteHostedPageKey(req.session.userId, req.params.id);
+      const deleted = await storage.deleteHostedPageKey(userId, req.params.id);
       if (!deleted) return res.status(404).json({ error: "not_found" });
       res.status(204).send();
     } catch (e: any) {
@@ -17585,7 +17591,8 @@ export async function registerRoutes(
 
   // POST /api/hosted-page/config — save URLs and optionally rotate the legacy key
   app.post("/api/hosted-page/config", async (req: Request, res: Response) => {
-    if (!req.session?.userId) return res.status(401).json({ error: "Unauthorized" });
+    const userId = req.userId || req.session?.userId;
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
     try {
       const { successUrl, cancelUrl, notifyUrl, regenerate } = req.body;
       const data: any = {};
@@ -17597,7 +17604,7 @@ export async function registerRoutes(
         data.skLive = generateHpKey("sk_live_");
         data.hpLive = generateHpKey("hp_live_");
       }
-      const config = await storage.saveHostedPageConfig(req.session.userId, data);
+      const config = await storage.saveHostedPageConfig(userId, data);
       res.json(config);
     } catch (e: any) {
       console.error("[hosted-page/config]", e);
