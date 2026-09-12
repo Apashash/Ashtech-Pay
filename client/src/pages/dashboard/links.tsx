@@ -1295,7 +1295,7 @@ export default function PaymentLinksPage() {
                 return (
                   <div
                     key={link.id}
-                    className={`overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm cursor-pointer hover:bg-muted/40 transition-colors ${!link.isActive ? "opacity-60" : ""}`}
+                    className={`overflow-hidden rounded-2xl border border-[#1A237E] bg-[#1A237E] shadow-sm cursor-pointer hover:bg-[#151c6a] transition-colors ${!link.isActive ? "opacity-60" : ""}`}
                     data-testid={`recent-link-${link.id}`}
                     onClick={() => navigate(`/dashboard/links/${link.id}`)}
                   >
@@ -1303,30 +1303,30 @@ export default function PaymentLinksPage() {
                       {link.imagePath ? (
                         <img src={getImageSrc(link.imagePath)} alt={link.title} className="w-10 h-10 rounded-lg object-cover shrink-0" />
                       ) : (
-                        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                          <Link2 className="w-5 h-5 text-primary" />
+                        <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
+                          <Link2 className="w-5 h-5 text-white" />
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
-                           <p className="text-sm font-normal text-foreground truncate">{link.title}</p>
+                           <p className="text-sm font-normal text-white truncate">{link.title}</p>
                           {link.isActive
                             ? <CheckCircle className="w-3.5 h-3.5 text-green-500 shrink-0" />
                             : <XCircle className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
                         </div>
-                         <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
+                         <div className="flex items-center gap-3 text-xs text-white/70 mt-1">
                           <span className="flex items-center gap-1"><Eye className="w-3 h-3" />{link.clickCount || 0} {t.links.clicks}</span>
                           <span>{link.isFixedAmount ? formatCurrency(link.amount, (user?.preferredCurrency || "XAF") as SupportedCurrency) : t.links.freeAmount}</span>
                         </div>
                       </div>
                       <div className="text-right shrink-0">
-                       <p className="text-sm font-medium text-foreground">{formatCurrency(stats.totalCollected, (user?.preferredCurrency || "XAF") as SupportedCurrency)}</p>
-                       <p className="text-xs text-muted-foreground">{stats.transactionCount} pmt.</p>
+                        <p className="text-sm font-medium text-white">{formatCurrency(stats.totalCollected, (user?.preferredCurrency || "XAF") as SupportedCurrency)}</p>
+                        <p className="text-xs text-white/70">{stats.transactionCount} pmt.</p>
                       </div>
                     </div>
-                     <div className="flex items-center justify-between px-4 py-3 gap-2 border-t border-border/40">
-                       <p className="text-sm text-muted-foreground truncate">/pay/{link.slug}</p>
-                      <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                     <div className="flex items-center justify-between px-4 py-3 gap-2 border-t border-white/15">
+                       <p className="text-sm text-white/70 truncate">/pay/{link.slug}</p>
+                       <div className="flex items-center gap-0.5 shrink-0 text-white/75" onClick={(e) => e.stopPropagation()}>
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => copyLink(link.slug)} title="Copier" data-testid={`button-copy-${link.id}`}>
                           <Copy className="w-3.5 h-3.5" />
                         </Button>
@@ -1691,37 +1691,37 @@ export default function PaymentLinksPage() {
                     return (
                       <div
                         key={link.id}
-                        className={`overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm ${!link.isActive ? "opacity-60" : ""}`}
+                        className={`overflow-hidden rounded-2xl border border-[#1A237E] bg-[#1A237E] shadow-sm ${!link.isActive ? "opacity-60" : ""}`}
                         data-testid={`link-item-${link.id}`}
                       >
                         <div className="flex items-center gap-3 px-4 py-4">
                           {link.imagePath ? (
                             <img src={getImageSrc(link.imagePath)} alt={link.title} className="w-10 h-10 rounded-lg object-cover shrink-0" />
                           ) : (
-                            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                              <Link2 className="w-5 h-5 text-primary" />
+                               <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
+                                 <Link2 className="w-5 h-5 text-white" />
                             </div>
                           )}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5">
-                               <p className="text-sm font-normal text-foreground truncate">{link.title}</p>
+                                <p className="text-sm font-normal text-white truncate">{link.title}</p>
                               {link.isActive ? <CheckCircle className="w-3.5 h-3.5 text-green-500 shrink-0" /> : <XCircle className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
                             </div>
-                             <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
+                              <div className="flex items-center gap-3 text-xs text-white/70 mt-1">
                               <span className="flex items-center gap-1"><Eye className="w-3 h-3" />{link.clickCount || 0} {t.links.clicks}</span>
                               <span className="flex items-center gap-1"><ArrowDownUp className="w-3 h-3" />{stats.transactionCount} {t.links.pmtShort}</span>
                               <span>{link.isFixedAmount ? formatCurrency(link.amount, (user?.preferredCurrency || "XAF") as SupportedCurrency) : t.links.freeAmount}</span>
                             </div>
-                             {link.description && <p className="text-xs text-muted-foreground mt-1 truncate">{link.description}</p>}
+                              {link.description && <p className="text-xs text-white/70 mt-1 truncate">{link.description}</p>}
                           </div>
                           <div className="text-right shrink-0">
-                           <p className="text-sm font-medium text-foreground">{formatCurrency(stats.totalCollected, (user?.preferredCurrency || "XAF") as SupportedCurrency)}</p>
-                           <p className="text-xs text-muted-foreground">{link.createdAt ? format(new Date(link.createdAt), "d MMM yy", { locale: fr }) : "-"}</p>
+                            <p className="text-sm font-medium text-white">{formatCurrency(stats.totalCollected, (user?.preferredCurrency || "XAF") as SupportedCurrency)}</p>
+                            <p className="text-xs text-white/70">{link.createdAt ? format(new Date(link.createdAt), "d MMM yy", { locale: fr }) : "-"}</p>
                           </div>
                         </div>
-                         <div className="flex items-center justify-between px-4 py-3 gap-2 border-t border-border/40">
-                           <p className="text-xs text-muted-foreground truncate">/pay/{link.slug}</p>
-                          <div className="flex items-center gap-0.5 shrink-0">
+                          <div className="flex items-center justify-between px-4 py-3 gap-2 border-t border-white/15">
+                            <p className="text-xs text-white/70 truncate">/pay/{link.slug}</p>
+                           <div className="flex items-center gap-0.5 shrink-0 text-white/75">
                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => copyLink(link.slug)} title="Copier" data-testid={`button-copy-all-${link.id}`}><Copy className="w-3.5 h-3.5" /></Button>
                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setQrModalLink(link)} title="QR" data-testid={`button-qr-all-${link.id}`}><QrCode className="w-3.5 h-3.5" /></Button>
                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => generatePDF(link)} title="PDF" data-testid={`button-pdf-all-${link.id}`}><Download className="w-3.5 h-3.5" /></Button>
