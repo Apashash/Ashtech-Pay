@@ -15,7 +15,6 @@ import { apiRequest, getAuthHeaders, queryClient, setAuthToken } from "@/lib/que
 import { getProfileImageSrc } from "@/lib/profile-image";
 import type { User } from "@shared/schema";
 import {
-  Lock,
   Save,
   Globe,
   Smartphone,
@@ -23,7 +22,6 @@ import {
   Loader2,
   Sun,
   Moon,
-  Palette,
   AlertTriangle,
   Trash2,
   Phone,
@@ -35,14 +33,11 @@ import {
   Pencil,
   X,
   Check,
-  Monitor,
-  Tablet,
   LogOut,
   MapPin,
   Clock,
   KeyRound,
   Copy,
-  Fingerprint,
   Megaphone,
   Zap,
   Camera,
@@ -63,6 +58,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 function SettingsRow({
   icon: Icon,
+  imageSrc,
   label,
   value,
   onClick,
@@ -71,6 +67,7 @@ function SettingsRow({
   "data-testid": testId,
 }: {
   icon: React.ElementType;
+  imageSrc?: string;
   label: string;
   value?: string;
   onClick?: () => void;
@@ -86,7 +83,11 @@ function SettingsRow({
       disabled={!onClick}
       data-testid={testId}
     >
-      <Icon className={`w-4 h-4 shrink-0 ${iconColor || "text-muted-foreground"}`} />
+      {imageSrc ? (
+        <img src={imageSrc} alt="" aria-hidden="true" className="w-5 h-5 shrink-0 object-contain" />
+      ) : (
+        <Icon className={`w-4 h-4 shrink-0 ${iconColor || "text-muted-foreground"}`} />
+      )}
       <span className="flex-1 text-sm font-medium text-foreground">{label}</span>
       {value && <span className="text-sm text-muted-foreground mr-1 truncate max-w-[40%] text-right">{value}</span>}
       {right !== undefined ? right : onClick ? <ChevronRight className="w-4 h-4 text-muted-foreground/50 shrink-0" /> : null}
@@ -117,9 +118,7 @@ interface DeviceSession {
 }
 
 function DeviceIcon({ device }: { device: string }) {
-  if (device === "Mobile") return <Smartphone className="w-5 h-5 text-muted-foreground" />;
-  if (device === "Tablette") return <Tablet className="w-5 h-5 text-muted-foreground" />;
-  return <Monitor className="w-5 h-5 text-muted-foreground" />;
+  return <img src="/settings-devices-icon.png" alt="" aria-hidden="true" className="w-5 h-5 object-contain shrink-0" />;
 }
 
 function formatRelativeTime(dateStr: string | null): string {
@@ -598,7 +597,7 @@ export default function SettingsPage() {
           {/* ID utilisateur (format ASHTECH) avec bouton copier */}
           {user?.id && (
             <div className="w-full flex items-center gap-3 px-4 py-3.5 text-left">
-              <Fingerprint className="w-4 h-4 shrink-0 text-yellow-500" />
+              <img src="/settings-fingerprint-icon.jpg" alt="" aria-hidden="true" className="w-5 h-5 shrink-0 object-contain" />
               <span className="flex-1 text-sm font-medium text-foreground">ID</span>
               <span className="text-sm text-muted-foreground font-mono mr-1">{user.id}</span>
               <button
@@ -618,15 +617,16 @@ export default function SettingsPage() {
               </button>
             </div>
           )}
-          <SettingsRow icon={Mail} label={t.settings.emailLabel} value={user?.email} iconColor="text-blue-500" />
-          <SettingsRow icon={Phone} label={t.settings.phoneLabel} value={user?.phone || "—"} iconColor="text-green-500" />
-          <SettingsRow icon={Globe} label={t.settings.countryLabel} value={user?.country || "—"} iconColor="text-purple-500" />
+          <SettingsRow imageSrc="/settings-email-icon.jpg" icon={Mail} label={t.settings.emailLabel} value={user?.email} />
+          <SettingsRow imageSrc="/settings-phone-icon.jpeg" icon={Phone} label={t.settings.phoneLabel} value={user?.phone || "—"} />
+          <SettingsRow imageSrc="/settings-region-icon.jpg" icon={Globe} label={t.settings.countryLabel} value={user?.country || "—"} />
         </SettingsCard>
 
         {/* VÉRIFICATION KYC */}
         <SectionLabel>{t.settings.verificationSection}</SectionLabel>
         <SettingsCard>
           <SettingsRow
+            imageSrc="/settings-verification-icon.png"
             icon={Shield}
             label={t.settings.kycTitle}
             value={kycVerified ? t.settings.kycVerified : kycPending ? t.settings.kycPending : t.settings.kycComplete}
@@ -641,7 +641,7 @@ export default function SettingsPage() {
         <SectionLabel>{t.settings.appearanceSection}</SectionLabel>
         <SettingsCard>
           <div className="flex items-center gap-3 px-4 py-3.5">
-            <Palette className="w-4 h-4 text-muted-foreground shrink-0" />
+            <img src="/settings-appearance-icon.jpg" alt="" aria-hidden="true" className="w-5 h-5 object-contain shrink-0" />
             <span className="flex-1 text-sm font-medium text-foreground">{t.settings.themeLabel}</span>
             <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
               <button
@@ -666,6 +666,7 @@ export default function SettingsPage() {
         <SectionLabel>{t.settings.financesSection}</SectionLabel>
         <SettingsCard>
           <SettingsRow
+            imageSrc="/settings-withdrawal-icon.png"
             icon={Phone}
             label={t.settings.withdrawalNumbers}
             value={t.settings.manage}
@@ -675,6 +676,7 @@ export default function SettingsPage() {
           />
           <Divider />
           <SettingsRow
+            imageSrc="/settings-auto-conversion-icon.png"
             icon={Zap}
             label="Conversion automatique"
             value="Configurer"
@@ -742,7 +744,7 @@ export default function SettingsPage() {
           <Collapsible open={securityOpen} onOpenChange={setSecurityOpen}>
             <CollapsibleTrigger asChild>
               <button className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-muted/50 transition-colors text-left" data-testid="row-security">
-                <Lock className="w-4 h-4 text-muted-foreground shrink-0" />
+                <img src="/settings-security-icon.png" alt="" aria-hidden="true" className="w-5 h-5 object-contain shrink-0" />
                 <span className="flex-1 text-sm font-medium text-foreground">{t.settings.changePassword}</span>
                 <ChevronDown className={`w-4 h-4 text-muted-foreground/50 transition-transform duration-200 ${securityOpen ? "rotate-180" : ""}`} />
               </button>
@@ -770,13 +772,14 @@ export default function SettingsPage() {
                 >
                   {requestPasswordChangeMutation.isPending
                     ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                    : <Lock className="w-3.5 h-3.5 mr-1.5" />}
+                    : <img src="/settings-security-icon.png" alt="" aria-hidden="true" className="w-4 h-4 mr-1.5 object-contain" />}
                   {t.settings.changePasswordBtn}
                 </Button>
               </div>
             </CollapsibleContent>
           </Collapsible>
           <SettingsRow
+            imageSrc="/settings-api-icon.png"
             icon={Shield}
             label={t.settings.apiKeysLabel}
             iconColor="text-indigo-500"
