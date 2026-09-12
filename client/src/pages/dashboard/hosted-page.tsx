@@ -47,7 +47,6 @@ export default function HostedPageDashboard() {
         <Card className="min-w-0 overflow-hidden">
           <CardHeader className="pb-4">
             <CardTitle className="text-base">{hp.newKeyTitle}</CardTitle>
-            <CardDescription>{hp.newKeyDesc}</CardDescription>
           </CardHeader>
           <CardContent className="min-w-0 space-y-5">
             <div className="space-y-2">
