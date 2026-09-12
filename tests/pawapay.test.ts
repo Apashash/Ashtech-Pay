@@ -90,8 +90,8 @@ test("PawaPay production settings mask secrets and never place them in callback 
   assert.equal(maskPawaPaySecret(token), "••••3456");
   assert.equal(maskPawaPaySecret(""), null);
   assert.equal(CONFIGURED_PRODUCTION_URL, "https://api.pawapay.io/v2");
-  assert.equal(PAWAPAY_DEPOSIT_CALLBACK_URL, "https://ashtechpay.top/api/pawapay/deposit-callback");
-  assert.equal(PAWAPAY_PAYOUT_CALLBACK_URL, "https://ashtechpay.top/api/pawapay/payout-callback");
+  assert.equal(PAWAPAY_DEPOSIT_CALLBACK_URL, "https://www.ashtechpay.com/api/pawapay/deposit-callback");
+  assert.equal(PAWAPAY_PAYOUT_CALLBACK_URL, "https://www.ashtechpay.com/api/pawapay/payout-callback");
   assert.equal(PAWAPAY_DEPOSIT_CALLBACK_URL.includes(token), false);
   assert.equal(PAWAPAY_PAYOUT_CALLBACK_URL.includes(token), false);
 });

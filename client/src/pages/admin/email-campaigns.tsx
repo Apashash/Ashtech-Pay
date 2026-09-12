@@ -326,7 +326,7 @@ export default function AdminEmailCampaigns() {
                         <Input
                           value={buttonUrl}
                           onChange={e => setButtonUrl(e.target.value)}
-                          placeholder="https://ashtechpay.top/..."
+                          placeholder="https://www.ashtechpay.com/..."
                           data-testid="input-button-url"
                         />
                       </div>

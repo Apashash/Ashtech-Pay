@@ -44,4 +44,4 @@ Disallow: /
 User-agent: Bytespider
 Disallow: /
 
-Sitemap: https://ashtechpay.top/sitemap.xml
+Sitemap: https://www.ashtechpay.com/sitemap.xml

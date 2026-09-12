@@ -2168,7 +2168,7 @@ export async function registerRoutes(
   // Build all valid origins: custom domain + www variant + Replit domains (dev & prod)
   const rawOrigins: (string | null)[] = [
     appUrl,
-    // www variant of APP_URL (e.g. https://www.ashtechpay.top)
+    // www variant of APP_URL (e.g. https://www.ashtechpay.com)
     appUrl ? appUrl.replace(/^(https?:\/\/)/, "$1www.") : null,
     // Replit dev domain
     process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : null,
@@ -8347,7 +8347,7 @@ export async function registerRoutes(
         storage.getUser(userId),
         (data.allowedCountries && data.allowedCountries.length > 0) ? storage.getAllCountries() : Promise.resolve([] as any[]),
       ]).then(([linkUser, allCountries]) => {
-        const host = req.get("host") || "ashtechpay.top";
+        const host = req.get("host") || "www.ashtechpay.com";
         const proto = ((req.headers["x-forwarded-proto"] as string) || req.protocol || "https").split(",")[0].trim();
         const linkUrl = `${proto}://${host}/pay/${slug}`;
         // Resolve country UUIDs → ISO codes for display
@@ -17641,7 +17641,7 @@ export async function registerRoutes(
         notifyUrl: effectiveNotifyUrl,
       });
 
-      const host = req.headers.host || "ashtechpay.top";
+      const host = req.headers.host || "www.ashtechpay.com";
       const protocol = ((req.headers["x-forwarded-proto"] as string) || "https").split(",")[0].trim();
       const payUrl = `${protocol}://${host}/pay/${slug}`;
 

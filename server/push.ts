@@ -231,7 +231,7 @@ export function getVapidPublicKey(): string | null {
 function configureWebPush(): VapidConfig | null {
   const config = getVapidConfig();
   if (!config) return null;
-  webpush.setVapidDetails("mailto:support@ashtechpay.top", config.publicKey, config.privateKey);
+  webpush.setVapidDetails("mailto:support@ashtechpay.com", config.publicKey, config.privateKey);
   return config;
 }
 

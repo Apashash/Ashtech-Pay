@@ -272,7 +272,7 @@ export default function TermsPage() {
                  <h3 className="text-lg font-semibold text-foreground mb-2">{c.s1_9h}</h3>
                 <p className="text-muted-foreground leading-relaxed">
                    {c.s1_9p}{" "}
-                  <a href="mailto:support@ashtechpay.top" className="text-primary hover:underline">support@ashtechpay.top</a>.
+                  <a href="mailto:support@ashtechpay.com" className="text-primary hover:underline">support@ashtechpay.com</a>.
                 </p>
               </div>
             </div>
@@ -366,7 +366,7 @@ export default function TermsPage() {
                         <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">{c.s3_email}</p>
                         <div className="flex items-center gap-2">
                           <Mail className="w-4 h-4 text-primary" />
-                          <a href="mailto:support@ashtechpay.top" className="text-primary hover:underline">support@ashtechpay.top</a>
+                          <a href="mailto:support@ashtechpay.com" className="text-primary hover:underline">support@ashtechpay.com</a>
                         </div>
                       </div>
                       <div>
@@ -390,7 +390,7 @@ export default function TermsPage() {
               <div>
                 <h3 className="text-lg font-semibold text-foreground mb-3">{c.s3_hostingTitle}</h3>
                 <p className="text-muted-foreground leading-relaxed">
-                  {c.s3_hostingP} <strong className="text-foreground">ashtechpay.top</strong>.
+                  {c.s3_hostingP} <strong className="text-foreground">www.ashtechpay.com</strong>.
                 </p>
               </div>
               <div>
@@ -461,7 +461,7 @@ export default function TermsPage() {
               <div className="p-5 bg-amber-500/5 border border-amber-500/20 rounded-xl">
                 <p className="text-sm text-muted-foreground">
                   <strong className="text-foreground">{c.s4_contact}</strong>{" "}{c.s4_contactP}{" "}
-                  <a href="mailto:support@ashtechpay.top" className="text-primary hover:underline">support@ashtechpay.top</a>
+                  <a href="mailto:support@ashtechpay.com" className="text-primary hover:underline">support@ashtechpay.com</a>
                   {" "}{c.s4_contactOr}{" "}
                   <a href="tel:+237683677872" className="text-foreground hover:text-primary">+237 6 83 67 78 72</a>.
                 </p>

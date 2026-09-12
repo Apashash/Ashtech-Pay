@@ -24,6 +24,7 @@ const PAGE_H = 297;
 const ML = 18;   // margin left
 const MR = 18;   // margin right
 const CW = PAGE_W - ML - MR;   // content width
+const PUBLIC_BASE_URL = "https://www.ashtechpay.com";
 
 // ─── Helpers ───────────────────────────────────────────────
 
@@ -202,7 +203,7 @@ function codeBlock(doc: jsPDF, code: string, y: number, lang = ""): number {
   };
   const label = langLabel[lang] ?? lang;
 
-  const lines = code.split("\n");
+  const lines = code.replaceAll("https://ashtechpay.top", PUBLIC_BASE_URL).split("\n");
   const lineH = 4.8;
   const padV = 4;
   const padH = 5;
@@ -379,7 +380,7 @@ export function downloadHostedPagePDF() {
   const meta = [
     ["Endpoint principal", "POST /api/v1/hosted-payment/create"],
     ["Authentification",   "Bearer hp_live_xxxxxxxx"],
-    ["Base URL",           "https://ashtechpay.top"],
+    ["Base URL",           PUBLIC_BASE_URL],
     ["Version",            "v1 — Mai 2026"],
   ];
 
@@ -401,7 +402,7 @@ export function downloadHostedPagePDF() {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   rgb(doc, [71, 85, 105]);
-  doc.text("ashtechpay.top  •  support@ashtechpay.top", ML + 6, PAGE_H - 18);
+  doc.text("www.ashtechpay.com  •  support@ashtechpay.com", ML + 6, PAGE_H - 18);
 
   // ── Page 2+ — Content ──────────────────────────────────────────────────────
   doc.addPage();

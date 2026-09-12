@@ -319,7 +319,7 @@ app.use(compression());
 
 // ── Diagnostic: Public ping endpoint (no auth, no DB) ────────────────────────
 // Used to check if Node.js is running on the production server.
-// Visit https://ashtechpay.top/api/ping to verify server health.
+// Visit https://www.ashtechpay.com/api/ping to verify server health.
 app.get("/api/ping", (_req, res) => {
   res.json({
     ok: true,

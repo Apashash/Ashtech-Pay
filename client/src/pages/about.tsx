@@ -209,7 +209,7 @@ export default function AboutPage() {
                   <Mail className="w-5 h-5 text-primary flex-shrink-0" />
                   <div>
                     <p className="text-xs text-muted-foreground mb-1">Email</p>
-                    <a href="mailto:support@ashtechpay.top" className="text-primary text-sm hover:underline">support@ashtechpay.top</a>
+                    <a href="mailto:support@ashtechpay.com" className="text-primary text-sm hover:underline">support@ashtechpay.com</a>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">

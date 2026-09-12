@@ -8,7 +8,7 @@ import {
 export const PAWAPAY_API_TOKEN_KEY = "pawapay_api_token";
 export const PAWAPAY_WEBHOOK_SECRET_KEY = "pawapay_webhook_secret";
 export const PAWAPAY_PRODUCTION_BASE_URL = "https://api.pawapay.io/v2";
-export const PAWAPAY_PUBLIC_BASE_URL = "https://ashtechpay.top";
+export const PAWAPAY_PUBLIC_BASE_URL = "https://www.ashtechpay.com";
 export const PAWAPAY_DEPOSIT_CALLBACK_URL = `${PAWAPAY_PUBLIC_BASE_URL}/api/pawapay/deposit-callback`;
 export const PAWAPAY_PAYOUT_CALLBACK_URL = `${PAWAPAY_PUBLIC_BASE_URL}/api/pawapay/payout-callback`;
 

@@ -796,7 +796,7 @@ function ApiDeveloperSection() {
                 <span className="text-zinc-300"> response = </span>
                 <span className="text-amber-300">await</span>
                 <span className="text-zinc-300"> fetch({"\n"}  </span>
-                <span className="text-green-400">"https://api.ashtechpay.top/v1/collect"</span>
+                <span className="text-green-400">"https://www.ashtechpay.com/v1/collect"</span>
                 <span className="text-zinc-300">,{"\n"}  {"{"}{"\n"}    method: </span>
                 <span className="text-green-400">"POST"</span>
                 <span className="text-zinc-300">,{"\n"}    headers: {"{"}{"\n"}      </span>

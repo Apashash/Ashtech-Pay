@@ -6,11 +6,11 @@ if (!process.env.RESEND_API_KEY) {
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
-const FROM_EMAIL    = "Ashtech Pay <noreply@ashtechpay.top>";
-const APP_URL       = "https://ashtechpay.top";
-const LOGO_URL      = "https://ashtechpay.top/logo.png";
-const WA_LOGO_URL   = "https://ashtechpay.top/wa-logo.svg";
-const FB_LOGO_URL   = "https://ashtechpay.top/fb-logo.svg";
+const FROM_EMAIL    = "Ashtech Pay <noreply@ashtechpay.com>";
+const APP_URL       = "https://www.ashtechpay.com";
+const LOGO_URL      = "https://www.ashtechpay.com/logo.png";
+const WA_LOGO_URL   = "https://www.ashtechpay.com/wa-logo.svg";
+const FB_LOGO_URL   = "https://www.ashtechpay.com/fb-logo.svg";
 const FACEBOOK_URL  = "https://www.facebook.com/share/1Eczpeowdp/?mibextid=wwXIfr";
 const WHATSAPP_URL  = "https://whatsapp.com/channel/0029VbC5tPPCxoAveJ44Vs2w";
 const SUPPORT_PHONE = "+237 6 83 67 78 72";
@@ -78,7 +78,7 @@ function emailBase(title: string, bodyRows: string): string {
                     <table cellpadding="0" cellspacing="0" border="0">
                       <tr>
                         <td style="padding-right:10px;">
-                          <a href="${APP_URL}" style="font-size:11px;color:#93C5FD;text-decoration:none;">ashtechpay.top</a>
+                          <a href="${APP_URL}" style="font-size:11px;color:#93C5FD;text-decoration:none;">www.ashtechpay.com</a>
                         </td>
                         <td style="padding-right:10px;">
                           <a href="${WHATSAPP_URL}"
@@ -401,7 +401,7 @@ export async function sendAccountDeletedEmail(to: string, fullName: string): Pro
 
       <p style="margin:0 0 20px;font-size:15px;color:${TEXT};line-height:1.7;">
         Vous pouvez créer un nouveau compte à tout moment sur
-        <a href="${APP_URL}" style="color:${NAVY};text-decoration:none;">ashtechpay.top</a>.
+        <a href="${APP_URL}" style="color:${NAVY};text-decoration:none;">www.ashtechpay.com</a>.
       </p>
 
       <table width="100%" cellpadding="0" cellspacing="0" border="0"

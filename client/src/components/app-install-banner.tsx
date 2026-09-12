@@ -88,7 +88,7 @@ function IosStepIllustration({ step }: { step: 1 | 2 | 3 }) {
             <img src="/ashtechpay-icon-192.png" alt="" className="h-7 w-7 rounded-lg" />
             <div>
               <div className="text-[9px] font-bold text-slate-800 dark:text-slate-100">AshTech Pay</div>
-              <div className="text-[7px] text-slate-400">ashtechpay.top</div>
+              <div className="text-[7px] text-slate-400">www.ashtechpay.com</div>
             </div>
           </div>
           <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-700" />

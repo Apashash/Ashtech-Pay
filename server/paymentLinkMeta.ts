@@ -25,7 +25,7 @@ function getPublicBaseUrl(req: Request): string {
     .split(",")[0]
     .trim();
   const protocol = forwardedProto || req.protocol || "https";
-  return `${protocol}://${req.get("host") || "ashtechpay.top"}`;
+  return `${protocol}://${req.get("host") || "www.ashtechpay.com"}`;
 }
 
 function getPublicImageUrl(imagePath: string, baseUrl: string): string {
