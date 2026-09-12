@@ -10,13 +10,13 @@ Embedded checkout est le chemin le plus rapide pour accepter un paiement. Votre 
 Endpoint :
 
 ```http
-POST https://ashtechpay.top/api/v1/hosted-payment/create
+POST https://www.ashtechpay.com/api/v1/hosted-payment/create
 ```
 
 Authentifiez cette route avec votre clé `hp_live_...` :
 
 ```bash
-curl -X POST https://ashtechpay.top/api/v1/hosted-payment/create \
+curl -X POST https://www.ashtechpay.com/api/v1/hosted-payment/create \
   -H "Authorization: Bearer hp_live_YOUR_HOSTED_PAGE_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -34,7 +34,7 @@ curl -X POST https://ashtechpay.top/api/v1/hosted-payment/create \
 ```json
 {
   "status": "success",
-  "payment_link": "https://ashtechpay.top/pay/hp-abc123",
+  "payment_link": "https://www.ashtechpay.com/pay/hp-abc123",
   "payment_id": "transaction-or-link-id",
   "slug": "hp-abc123",
   "is_fixed_amount": true,
@@ -57,11 +57,11 @@ Redirigez ensuite le navigateur du client vers `payment_link`. Ne créez pas le 
 ## Vérifier le paiement
 
 ```http
-GET https://ashtechpay.top/api/v1/hosted-payment/{payment_id}
+GET https://www.ashtechpay.com/api/v1/hosted-payment/{payment_id}
 ```
 
 ```bash
-curl https://ashtechpay.top/api/v1/hosted-payment/PAYMENT_ID \
+curl https://www.ashtechpay.com/api/v1/hosted-payment/PAYMENT_ID \
   -H "Authorization: Bearer hp_live_YOUR_HOSTED_PAGE_KEY"
 ```
 

@@ -6,7 +6,7 @@ description: "Acceptez des paiements crypto avec une adresse et un réseau préc
 ## Lister les actifs
 
 ```bash
-curl https://ashtechpay.top/v1/crypto/assets \
+  curl https://www.ashtechpay.com/v1/crypto/assets \
   -H "Authorization: Bearer $ASHTECH_API_KEY"
 ```
 
@@ -15,11 +15,11 @@ Choisissez un `asset_code` retourné par l'API. Ne supposez pas que tous les ré
 ## Créer un paiement crypto
 
 ```http
-POST https://ashtechpay.top/v1/crypto/collect
+POST https://www.ashtechpay.com/v1/crypto/collect
 ```
 
 ```bash
-curl -X POST https://ashtechpay.top/v1/crypto/collect \
+curl -X POST https://www.ashtechpay.com/v1/crypto/collect \
   -H "Authorization: Bearer $ASHTECH_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{

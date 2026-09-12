@@ -421,7 +421,7 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
             <div className="rounded border border-gray-200 bg-gray-50 p-5 space-y-2 mb-2">
               <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">URL de base</p>
               <div className="flex items-center gap-3 flex-wrap">
-                <code className="text-base font-mono font-semibold text-blue-700 break-all">https://ashtechpay.top</code>
+                <code className="text-base font-mono font-semibold text-blue-700 break-all">https://www.ashtechpay.com</code>
                 <Badge variant="outline" className="border-green-500/30 text-green-700 text-[10px] shrink-0">v1</Badge>
               </div>
               <p className="text-xs text-gray-500">Toutes les requêtes doivent être envoyées en HTTPS. Réponses JSON uniquement.</p>
@@ -455,7 +455,7 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
             </div>
 
             <SubH>Exemple d'appel authentifié (Node.js)</SubH>
-            <CodeBlock language="javascript" code={`const response = await fetch("https://ashtechpay.top/v1/collect", {
+            <CodeBlock language="javascript" code={`const response = await fetch("https://www.ashtechpay.com/v1/collect", {
   method: "POST",
   headers: {
     "Authorization": "Bearer YOUR_API_KEY",
@@ -482,12 +482,12 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
             <div className="grid lg:grid-cols-2 gap-5 mb-5">
               <div className="space-y-2 min-w-0">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1">Requête</p>
-                <CodeBlock language="javascript" code={`fetch("https://ashtechpay.top/v1/countries", {
+                <CodeBlock language="javascript" code={`fetch("https://www.ashtechpay.com/v1/countries", {
   headers: {
     "Authorization": "Bearer YOUR_API_KEY"
   }
 })`} />
-                <CodeBlock language="bash" code={`curl https://ashtechpay.top/v1/countries \\
+                <CodeBlock language="bash" code={`curl https://www.ashtechpay.com/v1/countries \\
   -H "Authorization: Bearer YOUR_API_KEY"`} />
               </div>
               <div className="space-y-2 min-w-0">
@@ -577,7 +577,7 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
             <div className="grid lg:grid-cols-2 gap-5 mb-5">
               <div className="space-y-2 min-w-0">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1">Requête</p>
-                <CodeBlock language="bash" code={`curl https://ashtechpay.top/v1/crypto/assets \\
+                <CodeBlock language="bash" code={`curl https://www.ashtechpay.com/v1/crypto/assets \\
   -H "Authorization: Bearer YOUR_API_KEY"`} />
               </div>
               <div className="space-y-2 min-w-0">
@@ -644,7 +644,7 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
             <div className="grid lg:grid-cols-2 gap-5 mt-5">
               <div className="space-y-2 min-w-0">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1">Requête</p>
-                <CodeBlock language="javascript" code={`fetch("https://ashtechpay.top/v1/crypto/collect", {
+                <CodeBlock language="javascript" code={`fetch("https://www.ashtechpay.com/v1/crypto/collect", {
   method: "POST",
   headers: {
     "Authorization": "Bearer YOUR_API_KEY",
@@ -789,7 +789,7 @@ async function showCryptoPayment(data) {
             <div className="grid lg:grid-cols-2 gap-5 mt-5">
               <div className="space-y-2 min-w-0">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1">Requête</p>
-                <CodeBlock language="javascript" code={`fetch("https://ashtechpay.top/v1/collect", {
+                <CodeBlock language="javascript" code={`fetch("https://www.ashtechpay.com/v1/collect", {
   method: "POST",
   headers: {
     "Authorization": "Bearer YOUR_API_KEY",
@@ -805,7 +805,7 @@ async function showCryptoPayment(data) {
     notify_url: "https://monsite.com/webhook"
   })
 })`} />
-                <CodeBlock language="bash" code={`curl https://ashtechpay.top/v1/collect \\
+                <CodeBlock language="bash" code={`curl https://www.ashtechpay.com/v1/collect \\
   -X POST \\
   -H "Authorization: Bearer YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
@@ -964,7 +964,7 @@ async function showCryptoPayment(data) {
                 <div>
                   <p className="text-xs text-gray-500 font-semibold mb-1">Requête</p>
                   <CodeBlock language="javascript" code={`// Orange Money Cameroun — flux USSD push
-const res = await fetch("https://ashtechpay.top/v1/collect", {
+const res = await fetch("https://www.ashtechpay.com/v1/collect", {
   method: "POST",
   headers: {
     "Authorization": "Bearer YOUR_API_KEY",
@@ -1020,7 +1020,7 @@ const data = await res.json();
                 <div>
                   <p className="text-xs text-gray-500 font-semibold mb-1">Étape 1 — Requête initiale (sans OTP)</p>
                   <CodeBlock language="javascript" code={`// Orange Money CI — étape 1 : sans OTP
-const res = await fetch("https://ashtechpay.top/v1/collect", {
+const res = await fetch("https://www.ashtechpay.com/v1/collect", {
   method: "POST",
   headers: {
     "Authorization": "Bearer YOUR_API_KEY",
@@ -1080,7 +1080,7 @@ body: JSON.stringify({
                 <div>
                   <p className="text-xs text-gray-500 font-semibold mb-1">Étape 1 — Requête initiale (sans OTP)</p>
                   <CodeBlock language="javascript" code={`// Opérateur OTP SMS — étape 1
-const res = await fetch("https://ashtechpay.top/v1/collect", {
+const res = await fetch("https://www.ashtechpay.com/v1/collect", {
   method: "POST",
   headers: {
     "Authorization": "Bearer YOUR_API_KEY",
@@ -1140,7 +1140,7 @@ body: JSON.stringify({
                 <div>
                   <p className="text-xs text-gray-500 font-semibold mb-1">Requête</p>
                   <CodeBlock language="javascript" code={`// Wave Côte d'Ivoire
-const res = await fetch("https://ashtechpay.top/v1/collect", {
+const res = await fetch("https://www.ashtechpay.com/v1/collect", {
   method: "POST",
   headers: {
     "Authorization": "Bearer YOUR_API_KEY",
@@ -1185,7 +1185,7 @@ if (data.flow === "wave") {
 
             <SubH>Comment détecter le bon flux dans votre code</SubH>
             <CodeBlock language="javascript" code={`async function collectPayment(params) {
-  const res = await fetch("https://ashtechpay.top/v1/collect", {
+  const res = await fetch("https://www.ashtechpay.com/v1/collect", {
     method: "POST",
     headers: {
       "Authorization": "Bearer YOUR_API_KEY",
@@ -1237,14 +1237,14 @@ if (data.flow === "wave") {
               <div className="space-y-2 min-w-0">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1">Requête</p>
                 <CodeBlock language="javascript" code={`fetch(
-  "https://ashtechpay.top/v1/transaction/8f3e1c2d-...",
+  "https://www.ashtechpay.com/v1/transaction/8f3e1c2d-...",
   {
     headers: {
       "Authorization": "Bearer YOUR_API_KEY"
     }
   }
 )`} />
-                <CodeBlock language="bash" code={`curl https://ashtechpay.top/v1/transaction/8f3e1c2d-... \\
+                <CodeBlock language="bash" code={`curl https://www.ashtechpay.com/v1/transaction/8f3e1c2d-... \\
   -H "Authorization: Bearer YOUR_API_KEY"`} />
               </div>
               <div className="space-y-2 min-w-0">
@@ -1300,12 +1300,12 @@ if (data.flow === "wave") {
             <div className="grid lg:grid-cols-2 gap-5 mb-5">
               <div className="space-y-2 min-w-0">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1">Requête</p>
-                <CodeBlock language="javascript" code={`fetch("https://ashtechpay.top/v1/fees", {
+                <CodeBlock language="javascript" code={`fetch("https://www.ashtechpay.com/v1/fees", {
   headers: {
     "Authorization": "Bearer YOUR_API_KEY"
   }
 })`} />
-                <CodeBlock language="bash" code={`curl https://ashtechpay.top/v1/fees \\
+                <CodeBlock language="bash" code={`curl https://www.ashtechpay.com/v1/fees \\
   -H "Authorization: Bearer YOUR_API_KEY"`} />
               </div>
               <div className="space-y-2 min-w-0">
@@ -1351,7 +1351,7 @@ if (data.flow === "wave") {
 
             <SubH>Exemple — calculer le montant net avant d'appeler /v1/collect</SubH>
             <CodeBlock language="javascript" code={`// Récupérer les frais en cache (une fois au démarrage ou toutes les heures)
-const fees = await fetch("https://ashtechpay.top/v1/fees", {
+const fees = await fetch("https://www.ashtechpay.com/v1/fees", {
   headers: { "Authorization": "Bearer YOUR_API_KEY" }
 }).then(r => r.json());
 

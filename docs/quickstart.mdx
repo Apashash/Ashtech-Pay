@@ -20,14 +20,14 @@ export ASHTECH_API_KEY="YOUR_API_KEY"
 Commencez par charger le catalogue actif. Les opérateurs peuvent changer : ne codez pas la liste en dur dans votre application.
 
 ```bash
-curl https://ashtechpay.top/v1/countries \
+  curl https://www.ashtechpay.com/v1/countries \
   -H "Authorization: Bearer $ASHTECH_API_KEY"
 ```
 
 ## Vérifier les frais
 
 ```bash
-curl https://ashtechpay.top/v1/fees \
+  curl https://www.ashtechpay.com/v1/fees \
   -H "Authorization: Bearer $ASHTECH_API_KEY"
 ```
 
@@ -36,7 +36,7 @@ curl https://ashtechpay.top/v1/fees \
 L'exemple ci-dessous utilise le Cameroun. Utilisez toujours un `reference` unique généré par votre serveur.
 
 ```bash
-curl -X POST https://ashtechpay.top/v1/collect \
+  curl -X POST https://www.ashtechpay.com/v1/collect \
   -H "Authorization: Bearer $ASHTECH_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -59,6 +59,6 @@ curl -X POST https://ashtechpay.top/v1/collect \
 Utilisez l'identifiant de transaction renvoyé par la création de collecte :
 
 ```bash
-curl https://ashtechpay.top/v1/transaction/TRANSACTION_ID \
+  curl https://www.ashtechpay.com/v1/transaction/TRANSACTION_ID \
   -H "Authorization: Bearer $ASHTECH_API_KEY"
 ```

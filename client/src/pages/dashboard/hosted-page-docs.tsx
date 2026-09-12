@@ -382,7 +382,7 @@ Content-Type: application/json`} />
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Réponse 200</p>
               <CodeBlock language="json" code={`{
   "status": "success",
-  "payment_link": "https://ashtechpay.top/pay/hp-ab12cd34",
+  "payment_link": "https://www.ashtechpay.com/pay/hp-ab12cd34",
   "payment_id": "uuid-du-lien",
   "slug": "hp-ab12cd34",
   "is_fixed_amount": true,
@@ -399,7 +399,7 @@ Content-Type: application/json`} />
                 Le montant est défini à la création. Le client voit le montant sur la page et ne peut pas le modifier.
                 Idéal pour les produits, abonnements, factures.
               </p>
-              <CodeBlock language="javascript" code={`fetch("https://ashtechpay.top/api/v1/hosted-payment/create", {
+              <CodeBlock language="javascript" code={`fetch("https://www.ashtechpay.com/api/v1/hosted-payment/create", {
   method: "POST",
   headers: {
     "Authorization": \`Bearer \${process.env.HP_LIVE_KEY}\`,
@@ -421,7 +421,7 @@ Content-Type: application/json`} />
                 La page de paiement affiche un champ de saisie pour le montant. Le client entre ce qu'il veut payer.
                 Idéal pour les dons, pourboires, paiements à montant variable.
               </p>
-              <CodeBlock language="javascript" code={`fetch("https://ashtechpay.top/api/v1/hosted-payment/create", {
+              <CodeBlock language="javascript" code={`fetch("https://www.ashtechpay.com/api/v1/hosted-payment/create", {
   method: "POST",
   headers: {
     "Authorization": \`Bearer \${process.env.HP_LIVE_KEY}\`,
@@ -653,7 +653,7 @@ Content-Type: application/json`} />
 
 // Créer un lien de paiement
 async function createLink({ amount, currency, description, countries }) {
-  const res = await fetch("https://ashtechpay.top/api/v1/hosted-payment/create", {
+  const res = await fetch("https://www.ashtechpay.com/api/v1/hosted-payment/create", {
     method: "POST",
     headers: {
       "Authorization": \`Bearer \${HP_KEY}\`,
@@ -675,7 +675,7 @@ async function createLink({ amount, currency, description, countries }) {
 // Vérifier le statut
 async function checkStatus(paymentId) {
   const res = await fetch(
-    \`https://ashtechpay.top/api/v1/hosted-payment/\${paymentId}\`,
+    \`https://www.ashtechpay.com/api/v1/hosted-payment/\${paymentId}\`,
     { headers: { "Authorization": \`Bearer \${HP_KEY}\` } }
   );
   const data = await res.json();
@@ -687,7 +687,7 @@ async function checkStatus(paymentId) {
 
 // Exemple d'utilisation
 const link = await createLink({ amount: 5000, currency: "XAF", description: "Commande #123" });
-console.log(link.payment_link); // → https://ashtechpay.top/pay/hp-ab12cd34
+console.log(link.payment_link); // → https://www.ashtechpay.com/pay/hp-ab12cd34
 
 // Polling toutes les 5 secondes
 const interval = setInterval(async () => {
@@ -715,7 +715,7 @@ function createPaymentLink($currency, $amount, $description, $countries = null) 
     "allowed_countries" => $countries,
   ]);
 
-  $ch = curl_init("https://ashtechpay.top/api/v1/hosted-payment/create");
+  $ch = curl_init("https://www.ashtechpay.com/api/v1/hosted-payment/create");
   curl_setopt_array($ch, [
     CURLOPT_POST            => true,
     CURLOPT_RETURNTRANSFER  => true,
@@ -735,19 +735,19 @@ header("Location: " . $link["payment_link"]);`} />
 
               <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">cURL</p>
               <CodeBlock language="bash" code={`# Prix fixe — Cameroun uniquement
-curl -X POST https://ashtechpay.top/api/v1/hosted-payment/create \
+curl -X POST https://www.ashtechpay.com/api/v1/hosted-payment/create \
   -H "Authorization: Bearer hp_live_xxxxxxxxxxxxxxxxxxxxxxxx" \
   -H "Content-Type: application/json" \
   -d '{"currency":"XAF","amount":5000,"description":"Commande","allowed_countries":["CM"]}'
 
 # Prix libre — tous les pays
-curl -X POST https://ashtechpay.top/api/v1/hosted-payment/create \
+curl -X POST https://www.ashtechpay.com/api/v1/hosted-payment/create \
   -H "Authorization: Bearer hp_live_xxxxxxxxxxxxxxxxxxxxxxxx" \
   -H "Content-Type: application/json" \
   -d '{"currency":"XOF","description":"Don","is_fixed_amount":false}'
 
 # Vérifier le statut
-curl https://ashtechpay.top/api/v1/hosted-payment/UUID_DU_LIEN \
+curl https://www.ashtechpay.com/api/v1/hosted-payment/UUID_DU_LIEN \
   -H "Authorization: Bearer hp_live_xxxxxxxxxxxxxxxxxxxxxxxx"`} />
             </Section>
 

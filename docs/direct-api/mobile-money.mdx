@@ -6,11 +6,11 @@ description: "Créez et suivez une collecte Mobile Money."
 ## Créer une collecte
 
 ```http
-POST https://ashtechpay.top/v1/collect
+POST https://www.ashtechpay.com/v1/collect
 ```
 
 ```javascript
-const response = await fetch("https://ashtechpay.top/v1/collect", {
+const response = await fetch("https://www.ashtechpay.com/v1/collect", {
   method: "POST",
   headers: {
     Authorization: `Bearer ${process.env.ASHTECH_API_KEY}`,
@@ -51,6 +51,6 @@ const payment = await response.json();
 Le traitement peut être asynchrone. Utilisez `GET /v1/transaction/:id` pour vérifier une transaction, mais utilisez le webhook pour déclencher votre fulfillment.
 
 ```bash
-curl https://ashtechpay.top/v1/transaction/TRANSACTION_ID \
+  curl https://www.ashtechpay.com/v1/transaction/TRANSACTION_ID \
   -H "Authorization: Bearer $ASHTECH_API_KEY"
 ```

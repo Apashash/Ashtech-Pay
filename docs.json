@@ -8,10 +8,10 @@
     "light": "#F0B90B",
     "dark": "#10164A"
   },
-  "favicon": "https://ashtechpay.top/favicon.png",
+  "favicon": "https://www.ashtechpay.com/favicon.png",
   "logo": {
-    "light": "https://ashtechpay.top/logo-dark.png",
-    "dark": "https://ashtechpay.top/logo.png"
+    "light": "https://www.ashtechpay.com/logo-dark.png",
+    "dark": "https://www.ashtechpay.com/logo.png"
   },
   "navbar": {
     "links": [
@@ -23,7 +23,7 @@
     "primary": {
       "type": "button",
       "label": "Ouvrir le dashboard",
-      "href": "https://ashtechpay.com/dashboard"
+      "href": "https://www.ashtechpay.com/dashboard"
     }
   },
   "footer": {
