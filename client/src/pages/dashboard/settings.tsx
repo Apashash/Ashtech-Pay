@@ -196,9 +196,6 @@ function ConnectedDevicesSection() {
     <>
       <SectionLabel>Appareils connectés</SectionLabel>
       <SettingsCard>
-        <div className="px-4 py-2.5 border-b border-border text-xs text-muted-foreground">
-          Maximum 4 appareils connectés. Lorsqu’un nouvel appareil se connecte, le plus ancien est automatiquement déconnecté.
-        </div>
         {isLoading ? (
           <div className="flex items-center justify-center py-6">
             <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
