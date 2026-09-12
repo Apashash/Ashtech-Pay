@@ -1006,7 +1006,6 @@ const translations = {
       toastApiKeyCopiedDesc: "La clé API a été copiée dans le presse-papiers.",
     },
     apiHub: {
-      eyebrow: "Développeurs",
       title: "Connectez Ashtech Pay à votre activité",
       embeddedTitle: "Embedded checkout",
       embeddedDescription: "Ajoutez un parcours de paiement hébergé par Ashtech Pay, sans construire toute l'interface de paiement.",
@@ -2344,7 +2343,6 @@ const translations = {
       toastApiKeyCopiedDesc: "The API key has been copied to the clipboard.",
     },
     apiHub: {
-      eyebrow: "Developers",
       title: "Connect Ashtech Pay to your business",
       embeddedTitle: "Embedded checkout",
       embeddedDescription: "Add an Ashtech Pay-hosted payment flow without building the entire payment interface yourself.",

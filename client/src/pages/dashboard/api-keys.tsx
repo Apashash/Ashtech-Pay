@@ -8,7 +8,6 @@ import {
   ArrowRight,
   CheckCircle2,
   Globe2,
-  Sparkles,
 } from "lucide-react";
 
 function OptionCard({
@@ -66,12 +65,6 @@ export default function ApiKeysPage() {
     <DashboardLayout>
       <div className="w-full max-w-5xl space-y-7">
         <div className="max-w-2xl">
-          <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-purple-500/10 text-purple-500">
-            <Sparkles className="h-5 w-5" />
-          </div>
-          <p className="mb-2 text-sm font-semibold leading-6 text-foreground">
-            {copy.eyebrow}
-          </p>
           <h1 className="text-2xl font-semibold leading-8 tracking-tight text-foreground sm:text-3xl">
             {copy.title}
           </h1>
