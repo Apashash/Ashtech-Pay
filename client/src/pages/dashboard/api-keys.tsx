@@ -2,7 +2,6 @@ import { DashboardLayout } from "@/components/dashboard-layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/lib/language";
-import { PUBLIC_API_DOCS_URL } from "@/lib/public-links";
 import { useLocation } from "wouter";
 import {
   ArrowRight,
@@ -90,7 +89,7 @@ export default function ApiKeysPage() {
             description={copy.directDescription}
             points={[copy.directPoint1, copy.directPoint2, copy.directPoint3]}
             buttonLabel={copy.directButton}
-            onClick={() => window.location.assign(PUBLIC_API_DOCS_URL)}
+            onClick={() => setLocation("/dashboard/direct-api")}
             testId="button-api-direct"
           />
         </div>

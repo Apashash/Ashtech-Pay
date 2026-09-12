@@ -36,6 +36,7 @@ const KYCPage = React.lazy(() => import("@/pages/dashboard/kyc"));
 const KYCVerifiedPage = React.lazy(() => import("@/pages/dashboard/kyc-verified"));
 const SupportPage = React.lazy(() => import("@/pages/dashboard/support"));
 const ApiKeysPage = React.lazy(() => import("@/pages/dashboard/api-keys"));
+const DirectApiPage = React.lazy(() => import("@/pages/dashboard/direct-api"));
 const DeveloperPage = React.lazy(() => import("@/pages/dashboard/developer"));
 const HostedPageDashboard = React.lazy(() => import("@/pages/dashboard/hosted-page"));
 const HostedPageDocs = React.lazy(() => import("@/pages/dashboard/hosted-page-docs"));
@@ -189,6 +190,7 @@ function Router() {
       <Route path="/dashboard/kyc-verified" component={KYCVerifiedPage} />
       <Route path="/dashboard/support" component={SupportPage} />
       <Route path="/dashboard/api-keys" component={ApiKeysPage} />
+      <Route path="/dashboard/direct-api" component={DirectApiPage} />
       <Route path="/dashboard/hosted-page" component={HostedPageDashboard} />
       <Route path="/hpay/:id" component={HPayPage} />
       <Route path="/dashboard/settings" component={SettingsPage} />
