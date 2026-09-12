@@ -214,7 +214,7 @@ export function EditHostedPageUrlsDialog({
                 <Link2 className="h-5 w-5" />
               </div>
               <DialogHeader className="space-y-1 text-left">
-                <DialogTitle className="text-lg font-semibold text-white sm:text-xl">{hp.editUrlsTitle}</DialogTitle>
+                <DialogTitle className="text-lg font-semibold text-white sm:text-xl">{hp.editUrls}</DialogTitle>
               </DialogHeader>
             </div>
             {keyToEdit && (
