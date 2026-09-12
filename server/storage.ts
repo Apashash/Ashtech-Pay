@@ -372,6 +372,7 @@ export interface IStorage {
   getHostedPageKeys(userId: string): Promise<HostedPageKey[]>;
   createHostedPageKey(userId: string, name: string): Promise<HostedPageKey>;
   regenerateHostedPageKey(userId: string, keyId: string): Promise<HostedPageKey | undefined>;
+  deleteHostedPageKey(userId: string, keyId: string): Promise<boolean>;
   getUserByHpKey(hpLive: string): Promise<User | undefined>;
   createHostedPaymentSession(data: Omit<HostedPaymentSession, "createdAt">): Promise<HostedPaymentSession>;
   getHostedPaymentSession(id: string): Promise<HostedPaymentSession | undefined>;
@@ -3043,6 +3044,16 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(hostedPageKeys.id, keyId), eq(hostedPageKeys.userId, userId)))
       .returning();
     return updated ? this.decryptHostedPageKey(updated) : undefined;
+  }
+
+  async deleteHostedPageKey(userId: string, keyId: string): Promise<boolean> {
+    if (keyId === "legacy") return false;
+    const existing = await this.getHostedPageKeyById(keyId, userId);
+    if (!existing) return false;
+    await db
+      .delete(hostedPageKeys)
+      .where(and(eq(hostedPageKeys.id, keyId), eq(hostedPageKeys.userId, userId)));
+    return true;
   }
 
   async getUserByHpKey(hpLive: string): Promise<User | undefined> {

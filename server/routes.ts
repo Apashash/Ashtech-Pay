@@ -17538,6 +17538,22 @@ export async function registerRoutes(
     }
   });
 
+  // DELETE /api/hosted-page/keys/:id — remove a named Checkout key
+  app.delete("/api/hosted-page/keys/:id", async (req: Request, res: Response) => {
+    if (!req.session?.userId) return res.status(401).json({ error: "Unauthorized" });
+    if (req.params.id === "legacy") {
+      return res.status(400).json({ error: "cannot_delete_legacy" });
+    }
+    try {
+      const deleted = await storage.deleteHostedPageKey(req.session.userId, req.params.id);
+      if (!deleted) return res.status(404).json({ error: "not_found" });
+      res.status(204).send();
+    } catch (e: any) {
+      console.error("[hosted-page/keys:delete]", e);
+      res.status(500).json({ error: "server_error" });
+    }
+  });
+
   // POST /api/hosted-page/config — save URLs and optionally rotate the legacy key
   app.post("/api/hosted-page/config", async (req: Request, res: Response) => {
     if (!req.session?.userId) return res.status(401).json({ error: "Unauthorized" });

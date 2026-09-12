@@ -39,6 +39,7 @@ const ApiKeysPage = React.lazy(() => import("@/pages/dashboard/api-keys"));
 const DirectApiPage = React.lazy(() => import("@/pages/dashboard/direct-api"));
 const DeveloperPage = React.lazy(() => import("@/pages/dashboard/developer"));
 const HostedPageDashboard = React.lazy(() => import("@/pages/dashboard/hosted-page"));
+const HostedPageKeys = React.lazy(() => import("@/pages/dashboard/hosted-page-keys"));
 const HostedPageGenerate = React.lazy(() => import("@/pages/dashboard/hosted-page-generate"));
 const HostedPageDocs = React.lazy(() => import("@/pages/dashboard/hosted-page-docs"));
 const TestPaymentPage = React.lazy(() => import("@/pages/docs/test-payment"));
@@ -193,6 +194,7 @@ function Router() {
       <Route path="/dashboard/api-keys" component={ApiKeysPage} />
       <Route path="/dashboard/direct-api" component={DirectApiPage} />
       <Route path="/dashboard/hosted-page" component={HostedPageDashboard} />
+      <Route path="/dashboard/hosted-page/keys" component={HostedPageKeys} />
       <Route path="/dashboard/hosted-page/generate" component={HostedPageGenerate} />
       <Route path="/hpay/:id" component={HPayPage} />
       <Route path="/dashboard/settings" component={SettingsPage} />
