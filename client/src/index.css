@@ -2,6 +2,19 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Custom red X used for close, cancel, remove, and delete actions. */
+svg.lucide-x {
+  color: transparent !important;
+  background-image: url("/delete-close-icon.png");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+svg.lucide-x > * {
+  display: none;
+}
+
 /* LIGHT MODE */
 :root {
   --button-outline: rgba(0,0,0, .10);
