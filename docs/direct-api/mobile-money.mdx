@@ -50,6 +50,8 @@ const payment = await response.json();
 
 Le traitement peut être asynchrone. Utilisez `GET /v1/transaction/:id` pour vérifier une transaction, mais utilisez le webhook pour déclencher votre fulfillment.
 
+Pour les parcours USSD Push, Wave, OTP SMS et OTP USSD, consultez [les flux de paiement détaillés](/docs/direct-api/payment-flows).
+
 ```bash
   curl https://www.ashtechpay.com/v1/transaction/TRANSACTION_ID \
   -H "Authorization: Bearer $ASHTECH_API_KEY"

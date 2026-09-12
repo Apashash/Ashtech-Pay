@@ -1,0 +1,154 @@
+---
+title: "Flux de paiement Mobile Money"
+description: "Gérez les flux USSD Push, Wave, OTP SMS et OTP USSD."
+---
+
+Une collecte Mobile Money n'a pas toujours le même parcours. Le flux dépend du pays, de l'opérateur et du fournisseur actif pour cet opérateur.
+
+Ne codez pas le flux à partir du nom de la marque. Chargez [`GET /v1/countries`](/docs/reference/countries), utilisez l'opérateur retourné par le catalogue, puis inspectez la réponse de `POST /v1/collect`.
+
+## Résumé des flux
+
+| Flux | Réponse initiale | Action côté client |
+| --- | --- | --- |
+| USSD Push | `202` avec `status: "pending"` | Le client valide la demande sur son téléphone |
+| Wave / redirection | `202` avec `flow: "wave"` et `wave_url` | Ouvrir `wave_url`, puis attendre le webhook |
+| OTP SMS | `400` avec `error: "otp_required"` et `reference` | Lire le code reçu par SMS et relancer la requête avec `otp` et `reference` |
+| OTP USSD | `400` avec `error: "otp_required"` et `ussd_code` | Composer `ussd_code`, saisir le code obtenu, puis relancer avec `otp` |
+
+Dans tous les cas, la transaction reste `pending` jusqu'à la confirmation du fournisseur. Ne livrez jamais une commande uniquement parce que la requête initiale a répondu `202`.
+
+## 1. USSD Push
+
+Le flux USSD Push est utilisé par la plupart des opérateurs qui ne demandent pas une saisie OTP dans votre application.
+
+1. Vous appelez `POST /v1/collect`.
+2. AshTech Pay renvoie `202` et `status: "pending"`.
+3. Le client reçoit une demande sur son téléphone et la valide avec son code secret opérateur.
+4. Votre serveur reçoit le webhook final, ou vérifie périodiquement `GET /v1/transaction/:id`.
+
+Exemple de réponse :
+
+```json
+{
+  "transaction_id": "uuid-de-transaction",
+  "reference": "ASHPAY-DEP-XXXXXXXXXX",
+  "status": "pending",
+  "amount": 5000,
+  "credited_amount": 4750,
+  "currency": "XAF",
+  "operator": "MTN",
+  "country_code": "CM"
+}
+```
+
+L'application cliente doit afficher un état d'attente et permettre au client de terminer l'autorisation sur son téléphone.
+
+## 2. Wave et autres redirections
+
+Pour Wave, le fournisseur renvoie une URL de validation. La réponse contient :
+
+```json
+{
+  "status": "pending",
+  "flow": "wave",
+  "wave_url": "https://...",
+  "transaction_id": "uuid-de-transaction",
+  "reference": "ASHPAY-DEP-XXXXXXXXXX"
+}
+```
+
+Ouvrez `wave_url` dans le navigateur ou dans l'application Wave si votre intégration mobile le permet. Ne remplacez pas cette URL par une URL construite manuellement.
+
+Après la décision du client, utilisez le webhook `payment.completed` ou `payment.failed`, puis vérifiez le statut côté serveur avant de livrer.
+
+Le flux Wave est actuellement détecté notamment pour Wave en Côte d'Ivoire et au Sénégal lorsque l'opérateur est actif dans le catalogue.
+
+## 3. OTP envoyé par SMS
+
+Certains opérateurs ou fournisseurs déclenchent l'envoi d'un OTP par SMS. La première requête ne finalise pas le paiement :
+
+```json
+{
+  "error": "otp_required",
+  "message": "OTP requis. Un code a été envoyé par SMS. Relancez la requête avec les champs 'otp' et 'reference'.",
+  "reference": "ASHPAY-DEP-XXXXXXXXXX"
+}
+```
+
+Conservez la valeur `reference` retournée. Après réception du SMS, relancez la même collecte avec le code OTP et cette référence :
+
+```bash
+curl -X POST https://www.ashtechpay.com/v1/collect \
+  -H "Authorization: Bearer $ASHTECH_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "amount": 5000,
+    "currency": "XOF",
+    "phone": "2250XXXXXXXX",
+    "operator": "Orange",
+    "country_code": "CI",
+    "reference": "ASHPAY-DEP-XXXXXXXXXX",
+    "otp": "123456",
+    "notify_url": "https://example.com/webhooks/ashtechpay"
+  }'
+```
+
+Le champ `reference` de cette confirmation doit être celui reçu dans la réponse `400 otp_required`. Ne générez pas une nouvelle référence pour la confirmation.
+
+## 4. OTP obtenu par USSD
+
+Pour certains opérateurs Orange, le client doit composer un code USSD pour obtenir son OTP. L'API renvoie le code à utiliser :
+
+```json
+{
+  "error": "otp_required",
+  "message": "OTP requis. Composez le code indiqué pour obtenir votre code OTP, puis relancez la requête avec le champ 'otp'.",
+  "ussd_code": "#144*82#"
+}
+```
+
+Affichez `ussd_code` directement au client. Certains codes contiennent le montant exact, par exemple pour le Burkina Faso. N'utilisez donc pas une table codée en dur dans votre application.
+
+Exemples de familles de flux actuellement configurées :
+
+| Pays | Opérateur / cas | Parcours |
+| --- | --- | --- |
+| Côte d'Ivoire | Orange | OTP obtenu par USSD |
+| Sénégal | Orange | OTP obtenu par USSD |
+| Mali | Orange | OTP obtenu par USSD |
+| Burkina Faso | Orange | OTP USSD, avec montant dans certains codes |
+| Autres opérateurs actifs | Selon le catalogue et le fournisseur | USSD Push, OTP ou redirection |
+
+Après avoir affiché le code, demandez au client de saisir le code OTP reçu, puis relancez la collecte avec le même `amount`, `currency`, `phone`, `operator`, `country_code` et le champ `otp`.
+
+## Gestion des réponses et des erreurs
+
+### `202 pending`
+
+Le paiement est accepté par AshTech Pay et attend la confirmation opérateur. Enregistrez `transaction_id` et `reference`, puis attendez le webhook ou interrogez le statut.
+
+### `400 otp_required`
+
+Le paiement attend une action du client. Vérifiez si la réponse contient :
+
+- `reference` : OTP envoyé par SMS ou session OTP nécessitant une référence ;
+- `ussd_code` : code à composer pour obtenir l'OTP ;
+- les deux champs selon le fournisseur.
+
+### `400 otp_expired`
+
+La session OTP a expiré. Recommencez une nouvelle collecte sans réutiliser l'ancien code ou l'ancienne référence.
+
+### `payment.completed` et `payment.failed`
+
+Traitez ces événements de manière idempotente. Répondez rapidement `2xx`, vérifiez la transaction côté serveur et ne créditez ou ne livrez qu'une seule fois.
+
+## Bonnes pratiques
+
+- Utilisez le catalogue `/v1/countries` pour les pays et opérateurs actifs.
+- N'associez pas vous-même un pays à un flux fixe.
+- N'affichez pas `success` après la réponse initiale `202`.
+- N'exposez jamais votre clé API dans le navigateur.
+- Ne stockez pas les codes OTP plus longtemps que nécessaire.
+- Utilisez le webhook et `GET /v1/transaction/:id` pour confirmer le résultat final.

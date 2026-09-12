@@ -52,6 +52,7 @@
         "pages": [
           "docs/direct-api/overview",
           "docs/direct-api/mobile-money",
+          "docs/direct-api/payment-flows",
           "docs/direct-api/crypto",
           "docs/direct-api/webhooks"
         ]
