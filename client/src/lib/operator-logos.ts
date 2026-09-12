@@ -28,6 +28,6 @@ export function getOperatorLogo(name: string): string | null {
   if (n.includes("palmpay") || n.includes("palm")) return "/op-palmpay.jpeg";
   if (n.includes("afrimoney") || n.includes("afri")) return "/op-afrimoney.png";
   if (n.includes("opay")) return "/op-opay.png";
-  if (n.includes("orange")) return "/op-orange.png";
+  if (n.includes("orange")) return "/op-orange-money.png";
   return null;
 }
