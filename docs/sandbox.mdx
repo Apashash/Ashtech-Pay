@@ -1,0 +1,23 @@
+---
+title: "Sandbox et tests"
+description: "Validez votre intégration avant de passer en production."
+---
+
+## Stratégie de test
+
+Testez au minimum :
+
+- une réponse `200` sur `/v1/countries` et `/v1/fees` ;
+- un paiement Mobile Money `pending`, `completed` et `failed` ;
+- la réception d'un webhook ;
+- la déduplication d'un même webhook ;
+- un timeout après lequel vous vérifiez le statut au lieu de créer un second paiement ;
+- les erreurs `400`, `401`, `403` et `429`.
+
+## Environnement de démonstration
+
+Le dashboard AshTech Pay contient des outils de test pour les parcours de paiement. N'utilisez jamais de vraies clés dans des captures d'écran, des logs ou un dépôt Git.
+
+<Note>
+  Les détails d'un compte de test, les montants simulés et les opérateurs disponibles peuvent dépendre de l'environnement activé pour votre marchand. Contactez AshTech Pay avant une recette publique.
+</Note>

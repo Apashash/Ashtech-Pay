@@ -1,0 +1,17 @@
+---
+title: "Sécurité"
+description: "Bonnes pratiques pour protéger vos paiements et vos clés."
+---
+
+- Gardez toutes les clés API côté serveur.
+- Utilisez HTTPS pour les webhooks et les redirections.
+- Vérifiez les statuts côté serveur avant de livrer une commande.
+- Rendez vos webhooks idempotents.
+- Ne journalisez pas les clés, tokens ou données sensibles.
+- Validez les montants, devises et références côté serveur.
+- Utilisez une liste d'opérateurs issue du catalogue AshTech Pay.
+- Faites tourner immédiatement une clé compromise.
+
+<Warning>
+  AshTech Pay ne vous demandera jamais de publier une clé secrète dans un ticket, un message ou un dépôt public.
+</Warning>

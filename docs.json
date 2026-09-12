@@ -1,0 +1,81 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "name": "AshTech Pay Developers",
+  "description": "Documentation officielle de l'API AshTech Pay pour les paiements Mobile Money et crypto en Afrique.",
+  "theme": "mint",
+  "colors": {
+    "primary": "#1A237E",
+    "light": "#F0B90B",
+    "dark": "#10164A"
+  },
+  "favicon": "https://ashtechpay.top/favicon.png",
+  "logo": {
+    "light": "https://ashtechpay.top/logo-dark.png",
+    "dark": "https://ashtechpay.top/logo.png"
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "Dashboard",
+        "url": "https://ashtechpay.com/dashboard"
+      },
+      {
+        "label": "Support",
+        "url": "https://ashtechpay.com/dashboard/support"
+      }
+    ],
+    "primary": {
+      "type": "button",
+      "label": "Ouvrir le dashboard",
+      "url": "https://ashtechpay.com/dashboard"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/Apashash/Ashtech-Pay"
+    }
+  },
+  "navigation": {
+    "groups": [
+      {
+        "group": "Démarrer",
+        "pages": [
+          "introduction",
+          "quickstart",
+          "authentication"
+        ]
+      },
+      {
+        "group": "Checkout",
+        "pages": [
+          "embedded-checkout"
+        ]
+      },
+      {
+        "group": "Direct API",
+        "pages": [
+          "direct-api/overview",
+          "direct-api/mobile-money",
+          "direct-api/crypto",
+          "direct-api/webhooks"
+        ]
+      },
+      {
+        "group": "Référence",
+        "pages": [
+          "reference/countries",
+          "reference/transaction",
+          "reference/fees",
+          "errors"
+        ]
+      },
+      {
+        "group": "Ressources",
+        "pages": [
+          "sandbox",
+          "security"
+        ]
+      }
+    ]
+  }
+}

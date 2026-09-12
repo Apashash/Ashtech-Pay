@@ -1,0 +1,34 @@
+---
+title: "Direct API"
+description: "Construisez votre propre expérience de paiement avec l'API AshTech Pay."
+---
+
+Direct API permet de garder votre interface, vos formulaires et votre logique métier tout en utilisant les rails de paiement AshTech Pay.
+
+## Endpoints disponibles
+
+<CardGroup cols={2}>
+  <Card title="Mobile Money" icon="smartphone" href="/direct-api/mobile-money">
+    Déclenchez une collecte et suivez son statut.
+  </Card>
+  <Card title="Crypto" icon="bitcoin" href="/direct-api/crypto">
+    Créez une adresse de paiement et recevez du USDT sur le réseau choisi.
+  </Card>
+</CardGroup>
+
+| Méthode | Endpoint | Utilisation |
+| --- | --- | --- |
+| `GET` | `/v1/countries` | Pays et opérateurs actifs |
+| `GET` | `/v1/fees` | Frais applicables |
+| `POST` | `/v1/collect` | Collecte Mobile Money |
+| `GET` | `/v1/transaction/:id` | Statut d'une transaction |
+| `GET` | `/v1/crypto/assets` | Réseaux crypto actifs |
+| `POST` | `/v1/crypto/collect` | Création d'un paiement crypto |
+
+## Principes d'intégration
+
+1. Chargez le catalogue pays/opérateurs au démarrage ou périodiquement.
+2. Créez une référence unique pour chaque commande.
+3. Enregistrez l'identifiant de transaction renvoyé par AshTech Pay.
+4. Attendez le webhook ou vérifiez le statut côté serveur.
+5. Ne créditez jamais une commande uniquement à partir d'une réponse reçue dans le navigateur.

@@ -1,0 +1,68 @@
+---
+title: "Embedded checkout"
+description: "Lancez un paiement hébergé sans construire tout le formulaire vous-même."
+---
+
+Embedded checkout est le chemin le plus rapide pour accepter un paiement. Votre serveur crée un lien, puis redirige le client vers la page AshTech Pay.
+
+## Créer un lien de paiement
+
+Endpoint :
+
+```http
+POST https://ashtechpay.top/api/v1/hosted-payment/create
+```
+
+Authentifiez cette route avec votre clé `hp_live_...` :
+
+```bash
+curl -X POST https://ashtechpay.top/api/v1/hosted-payment/create \
+  -H "Authorization: Bearer hp_live_YOUR_HOSTED_PAGE_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "amount": 10000,
+    "currency": "XAF",
+    "description": "Commande #12345",
+    "is_fixed_amount": true,
+    "allowed_countries": ["CM"],
+    "notify_url": "https://example.com/webhooks/ashtechpay"
+  }'
+```
+
+## Réponse
+
+```json
+{
+  "status": "success",
+  "payment_link": "https://ashtechpay.top/pay/hp-abc123",
+  "payment_id": "transaction-or-link-id",
+  "slug": "hp-abc123",
+  "is_fixed_amount": true,
+  "amount": 10000,
+  "currency": "XAF",
+  "allowed_countries": ["CM"],
+  "expires_at": "2026-09-12T10:30:00.000Z"
+}
+```
+
+Redirigez ensuite le navigateur du client vers `payment_link`. Ne créez pas le lien depuis le navigateur : la clé `hp_live_...` doit rester sur votre serveur.
+
+## Prix fixe ou libre
+
+- `is_fixed_amount: true` : `amount` est obligatoire et le client paie ce montant.
+- `is_fixed_amount: false` : le client peut saisir le montant sur le checkout.
+- `currency` accepte actuellement `XAF`, `XOF` ou `CDF`.
+- `allowed_countries` est optionnel et contient des codes pays actifs comme `CM`.
+
+## Vérifier le paiement
+
+```http
+GET https://ashtechpay.top/api/v1/hosted-payment/{payment_id}
+```
+
+```bash
+curl https://ashtechpay.top/api/v1/hosted-payment/PAYMENT_ID \
+  -H "Authorization: Bearer hp_live_YOUR_HOSTED_PAGE_KEY"
+```
+
+Utilisez aussi le webhook pour synchroniser votre commande côté serveur. Le webhook reste la source de vérité pour votre logique métier.

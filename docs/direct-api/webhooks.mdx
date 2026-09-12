@@ -1,0 +1,40 @@
+---
+title: "Webhooks"
+description: "Synchronisez vos commandes avec les événements AshTech Pay."
+---
+
+Configurez un `notify_url` HTTPS lors de la création de votre paiement ou dans la configuration Hosted Page.
+
+## Bon traitement d'un webhook
+
+1. Répondez rapidement avec un statut HTTP `2xx`.
+2. Vérifiez la signature si elle est fournie pour votre compte.
+3. Rendez le traitement idempotent avec l'identifiant de transaction et votre référence.
+4. Rechargez le statut côté serveur avant de créditer ou livrer.
+5. Traitez les événements en double sans créer deux commandes.
+
+Exemple Express :
+
+```javascript
+app.post("/webhooks/ashtechpay", express.json(), async (req, res) => {
+  const event = req.body;
+
+  // Accuser réception rapidement.
+  res.sendStatus(200);
+
+  if (event.status !== "completed") {
+    return;
+  }
+
+  // Vérifier l'événement puis traiter votre commande une seule fois.
+  await fulfillOrderOnce(event.reference, event.transaction_id);
+});
+```
+
+## Ne faites pas confiance au navigateur
+
+Une page de succès peut être fermée, rejouée ou modifiée. Utilisez le webhook ou une vérification serveur de `GET /v1/transaction/:id` pour confirmer le paiement.
+
+<Note>
+  Conservez les payloads reçus et les réponses de votre traitement pendant la durée nécessaire à votre support et à vos rapprochements comptables.
+</Note>

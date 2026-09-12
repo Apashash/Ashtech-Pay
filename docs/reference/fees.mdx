@@ -1,0 +1,15 @@
+---
+title: "GET /v1/fees"
+description: "Consultez les frais applicables."
+---
+
+```http
+GET https://ashtechpay.top/v1/fees
+```
+
+```bash
+curl https://ashtechpay.top/v1/fees \
+  -H "Authorization: Bearer $ASHTECH_API_KEY"
+```
+
+Les frais peuvent dépendre de la devise, du pays, de l'opérateur et du type d'opération. Affichez toujours le montant réellement retourné par l'API plutôt qu'une valeur codée en dur.

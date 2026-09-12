@@ -1,0 +1,64 @@
+---
+title: "Démarrage rapide"
+description: "Votre premier appel authentifié à l'API AshTech Pay."
+---
+
+## Prérequis
+
+Vous avez besoin de :
+
+1. Un compte marchand AshTech Pay vérifié.
+2. Un accès API activé par AshTech Pay.
+3. Une clé API conservée dans les variables d'environnement de votre serveur.
+
+```bash
+export ASHTECH_API_KEY="YOUR_API_KEY"
+```
+
+## Vérifier les pays disponibles
+
+Commencez par charger le catalogue actif. Les opérateurs peuvent changer : ne codez pas la liste en dur dans votre application.
+
+```bash
+curl https://ashtechpay.top/v1/countries \
+  -H "Authorization: Bearer $ASHTECH_API_KEY"
+```
+
+## Vérifier les frais
+
+```bash
+curl https://ashtechpay.top/v1/fees \
+  -H "Authorization: Bearer $ASHTECH_API_KEY"
+```
+
+## Créer une collecte Mobile Money
+
+L'exemple ci-dessous utilise le Cameroun. Utilisez toujours un `reference` unique généré par votre serveur.
+
+```bash
+curl -X POST https://ashtechpay.top/v1/collect \
+  -H "Authorization: Bearer $ASHTECH_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "amount": 1000,
+    "currency": "XAF",
+    "country": "CM",
+    "operator": "MTN",
+    "phone": "2376XXXXXXXX",
+    "reference": "order_12345",
+    "notify_url": "https://example.com/webhooks/ashtechpay"
+  }'
+```
+
+<Warning>
+  Les noms d'opérateurs et leurs codes sont gérés par le catalogue AshTech Pay. Chargez `/v1/countries` avant d'afficher votre formulaire.
+</Warning>
+
+## Vérifier le statut
+
+Utilisez l'identifiant de transaction renvoyé par la création de collecte :
+
+```bash
+curl https://ashtechpay.top/v1/transaction/TRANSACTION_ID \
+  -H "Authorization: Bearer $ASHTECH_API_KEY"
+```

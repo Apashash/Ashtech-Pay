@@ -1,0 +1,45 @@
+---
+title: "Paiements crypto"
+description: "Acceptez des paiements crypto avec une adresse et un réseau précis."
+---
+
+## Lister les actifs
+
+```bash
+curl https://ashtechpay.top/v1/crypto/assets \
+  -H "Authorization: Bearer $ASHTECH_API_KEY"
+```
+
+Choisissez un `asset_code` retourné par l'API. Ne supposez pas que tous les réseaux sont actifs.
+
+## Créer un paiement crypto
+
+```http
+POST https://ashtechpay.top/v1/crypto/collect
+```
+
+```bash
+curl -X POST https://ashtechpay.top/v1/crypto/collect \
+  -H "Authorization: Bearer $ASHTECH_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "amount": "25",
+    "currency": "USDT",
+    "asset_code": "USDT.TRC20",
+    "country": "CM",
+    "reference": "crypto_order_12345",
+    "notify_url": "https://example.com/webhooks/ashtechpay"
+  }'
+```
+
+## Adresse et QR code
+
+La réponse fournit une adresse de paiement et, selon le réseau, un `memo` ou un `tag`. Conservez ces valeurs séparées et affichez le QR code côté application avec le format correspondant au réseau.
+
+<Warning>
+  Un paiement crypto doit utiliser exactement le réseau retourné par l'API. Une adresse ou un réseau incorrect peut rendre les fonds irrécupérables.
+</Warning>
+
+## Crédit et confirmation
+
+Le paiement n'est considéré comme terminé qu'après confirmation par AshTech Pay. Attendez le webhook `completed` avant de livrer une commande.

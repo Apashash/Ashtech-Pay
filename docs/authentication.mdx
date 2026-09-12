@@ -1,0 +1,47 @@
+---
+title: "Authentification"
+description: "Sécurisez vos appels à l'API AshTech Pay."
+---
+
+## Bearer token
+
+Toutes les routes Direct API protégées utilisent votre clé API dans l'en-tête `Authorization` :
+
+```http
+Authorization: Bearer YOUR_API_KEY
+```
+
+Exemple Node.js :
+
+```javascript
+const response = await fetch("https://ashtechpay.top/v1/countries", {
+  headers: {
+    Authorization: `Bearer ${process.env.ASHTECH_API_KEY}`,
+  },
+});
+
+const countries = await response.json();
+```
+
+## Règles de sécurité
+
+- Conservez la clé dans un secret ou une variable d'environnement.
+- Effectuez les appels depuis votre backend.
+- Ne mettez jamais la clé dans une page web, une application mobile ou un dépôt Git.
+- Utilisez une clé distincte pour chaque environnement lorsque cela est possible.
+- Faites tourner immédiatement une clé exposée depuis le dashboard.
+
+<Note>
+  Les clés `hp_live_...` sont destinées au flux Embedded checkout. Les clés Direct API sont utilisées pour les endpoints `/v1/*` comme `/v1/collect`.
+</Note>
+
+## Réponse non authentifiée
+
+Une clé absente, invalide ou non autorisée renvoie une erreur HTTP `401`. Un compte vérifié mais non activé peut recevoir `403`.
+
+```json
+{
+  "error": "unauthorized",
+  "message": "Invalid API key."
+}
+```

@@ -1,0 +1,51 @@
+---
+title: "Bienvenue sur AshTech Pay"
+description: "Intégrez des paiements Mobile Money et crypto dans votre application."
+---
+
+AshTech Pay fournit une API de paiement conçue pour les marchands et les équipes produit qui veulent accepter des paiements en Afrique avec une seule intégration.
+
+<CardGroup cols={2}>
+  <Card title="Embedded checkout" icon="credit-card" href="/embedded-checkout">
+    Créez un lien de paiement hébergé par AshTech Pay et redirigez votre client vers un checkout optimisé pour mobile.
+  </Card>
+  <Card title="Direct API" icon="code" href="/direct-api/overview">
+    Gardez le contrôle de votre interface et déclenchez les collectes Mobile Money ou crypto depuis votre serveur.
+  </Card>
+</CardGroup>
+
+## Ce que vous pouvez faire
+
+- Consulter les pays et opérateurs disponibles en temps réel.
+- Créer une collecte Mobile Money avec une référence marchand.
+- Recevoir les mises à jour de transaction par webhook.
+- Accepter des paiements crypto avec une adresse et un réseau dédiés.
+- Vérifier une transaction et consulter les frais applicables.
+
+## Base URL
+
+Toutes les requêtes API utilisent la base URL suivante :
+
+```text
+https://ashtechpay.top
+```
+
+Les clés API doivent rester côté serveur. Ne les exposez jamais dans du JavaScript exécuté dans le navigateur ou dans une application mobile.
+
+<Note>
+  Votre environnement de documentation est `doc.ashtechpay.com`. Il documente l'API hébergée sur `ashtechpay.top`.
+</Note>
+
+## Parcours recommandé
+
+<Steps>
+  <Step title="Activez votre accès API">
+    Connectez-vous au dashboard AshTech Pay, terminez le KYC et demandez l'activation API si nécessaire.
+  </Step>
+  <Step title="Choisissez votre intégration">
+    Utilisez Embedded checkout pour lancer rapidement un paiement ou Direct API pour une expérience entièrement personnalisée.
+  </Step>
+  <Step title="Testez avant la production">
+    Commencez par les endpoints de pays et de frais, puis testez une collecte et votre webhook avec des références uniques.
+  </Step>
+</Steps>

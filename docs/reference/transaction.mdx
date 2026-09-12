@@ -1,0 +1,23 @@
+---
+title: "GET /v1/transaction/:id"
+description: "Consultez le statut d'une transaction."
+---
+
+```http
+GET https://ashtechpay.top/v1/transaction/{transaction_id}
+```
+
+```bash
+curl https://ashtechpay.top/v1/transaction/TRANSACTION_ID \
+  -H "Authorization: Bearer $ASHTECH_API_KEY"
+```
+
+Utilisez l'identifiant renvoyé par la création de paiement. Les statuts peuvent inclure :
+
+- `pending` : le paiement est encore en traitement ;
+- `completed` : le paiement est confirmé ;
+- `failed` : le paiement a échoué.
+
+<Warning>
+  Une requête réussie signifie que la transaction a été trouvée, pas nécessairement qu'elle est payée. Vérifiez toujours le champ `status`.
+</Warning>

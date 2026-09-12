@@ -1,0 +1,28 @@
+---
+title: "GET /v1/countries"
+description: "Obtenez les pays et opérateurs Mobile Money actifs."
+---
+
+```http
+GET https://ashtechpay.top/v1/countries
+```
+
+```bash
+curl https://ashtechpay.top/v1/countries \
+  -H "Authorization: Bearer $ASHTECH_API_KEY"
+```
+
+La réponse contient les pays actifs, leur devise et les opérateurs disponibles. Utilisez cette réponse pour alimenter votre formulaire de paiement.
+
+```json
+[
+  {
+    "code": "CM",
+    "name": "Cameroun",
+    "currency": "XAF",
+    "operators": ["MTN Money", "Orange Money"]
+  }
+]
+```
+
+Le catalogue peut évoluer. Rafraîchissez-le régulièrement et refusez côté serveur les opérateurs qui ne sont plus actifs.
