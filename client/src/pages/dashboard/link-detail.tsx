@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getAuthHeaders } from "@/lib/queryClient";
 import { useParams, useLocation } from "wouter";
@@ -10,11 +10,11 @@ import type { Transaction, User, SupportedCurrency } from "@shared/schema";
 import type { PaymentLink } from "@shared/schema";
 import {
   ArrowLeft, MousePointer, ArrowDownUp, Clock, TrendingUp,
-  CheckCircle, XCircle, Loader2, BarChart3, ChevronLeft, ChevronRight
+  Loader2, BarChart3, ChevronLeft, ChevronRight
 } from "lucide-react";
 import { format } from "date-fns";
 import { fr, enUS } from "date-fns/locale";
-import { formatCurrency } from "@/lib/currency";
+import { formatCurrency, formatWalletBalance } from "@/lib/currency";
 import { getImageSrc } from "@/lib/image";
 import { useLanguage } from "@/lib/language";
 
@@ -62,13 +62,61 @@ export default function LinkDetailPage() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "completed":
-        return <Badge className="bg-green-500/20 text-green-500 border-green-500/30 gap-1"><CheckCircle className="w-3 h-3" />{ld.statusCompleted}</Badge>;
+      case "success":
+      case "succeeded":
+        return <Badge className="text-[10px] px-1.5 py-0 bg-green-500/20 text-green-600 border-green-500/30 font-medium">{t.transactions.statusCompleted}</Badge>;
       case "pending":
-        return <Badge className="bg-amber-500/20 text-amber-500 border-amber-500/30 gap-1"><Clock className="w-3 h-3" />{ld.statusPending}</Badge>;
+      case "pending_manual":
+        return <Badge className="text-[10px] px-1.5 py-0 bg-amber-500/20 text-amber-600 border-amber-500/30 font-medium">{t.transactions.statusPending}</Badge>;
       case "failed":
-        return <Badge className="bg-red-500/20 text-red-500 border-red-500/30 gap-1"><XCircle className="w-3 h-3" />{ld.statusFailed}</Badge>;
+        return <Badge className="text-[10px] px-1.5 py-0 bg-red-500/20 text-red-600 border-red-500/30 font-medium">{t.transactions.statusFailed}</Badge>;
+      case "cancelled":
+        return <Badge className="text-[10px] px-1.5 py-0 bg-muted text-muted-foreground font-medium">{t.transactions.statusCancelled}</Badge>;
       default:
-        return <Badge variant="secondary">{status}</Badge>;
+        return <Badge className="text-[10px] px-1.5 py-0 bg-muted text-muted-foreground">{status}</Badge>;
+    }
+  };
+
+  const getTransactionRowClass = (status: string) => {
+    if (["completed", "success", "succeeded"].includes(status)) {
+      return "border-l-4 border-green-500 bg-green-500/10 hover:bg-green-500/15";
+    }
+    if (["pending", "pending_manual"].includes(status)) {
+      return "border-l-4 border-amber-500 bg-amber-500/10 hover:bg-amber-500/15";
+    }
+    if (["failed", "cancelled", "rejected"].includes(status)) {
+      return "border-l-4 border-red-500 bg-red-500/10 hover:bg-red-500/15";
+    }
+    return "hover:bg-muted/40";
+  };
+
+  const getAmountColor = (tx: Transaction) => {
+    if (["completed", "success", "succeeded"].includes(tx.status)) return "text-green-500";
+    if (tx.status === "pending" || tx.status === "pending_manual") return "text-amber-500";
+    return "text-muted-foreground";
+  };
+
+  const groupedByDate = useMemo(() => {
+    const groups: Record<string, Transaction[]> = {};
+    for (const tx of paginatedTransactions) {
+      const dateKey = tx.createdAt ? format(new Date(tx.createdAt), "yyyy-MM-dd") : "inconnu";
+      if (!groups[dateKey]) groups[dateKey] = [];
+      groups[dateKey].push(tx);
+    }
+    return Object.entries(groups).sort(([a], [b]) => b.localeCompare(a));
+  }, [paginatedTransactions]);
+
+  const formatDateLabel = (dateKey: string) => {
+    try {
+      const date = new Date(dateKey);
+      const today = new Date();
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      if (format(date, "yyyy-MM-dd") === format(today, "yyyy-MM-dd")) return t.transactions.today;
+      if (format(date, "yyyy-MM-dd") === format(yesterday, "yyyy-MM-dd")) return t.transactions.yesterday;
+      return format(date, "d MMMM yyyy", { locale: language === "fr" ? fr : enUS });
+    } catch {
+      return dateKey;
     }
   };
 
@@ -179,30 +227,50 @@ export default function LinkDetailPage() {
                   </div>
                 ) : (
                   <>
-                    <div className="space-y-3">
-                      {paginatedTransactions.map((tx) => (
-                        <div
-                          key={tx.id}
-                          className="flex items-center justify-between p-4 rounded-lg border bg-muted/30"
-                          data-testid={`link-tx-${tx.id}`}
-                        >
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <p className="font-medium">{tx.payerName || "Client"}</p>
-                              {getStatusBadge(tx.status)}
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              {tx.payerEmail}
-                              {tx.createdAt && ` • ${format(new Date(tx.createdAt), "dd/MM/yyyy HH:mm", { locale: language === "fr" ? fr : enUS })}`}
-                            </p>
-                          </div>
-                          <p className={`font-bold text-lg whitespace-nowrap ml-4 ${
-                            tx.status === "completed" ? "text-green-500"
-                            : tx.status === "pending" ? "text-amber-500"
-                            : "text-red-500"
-                          }`}>
-                            {formatCurrency(parseFloat(tx.amount), tx.currency as SupportedCurrency)}
+                    <div className="space-y-5">
+                      {groupedByDate.map(([dateKey, txs]) => (
+                        <div key={dateKey}>
+                          <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground mb-3">
+                            {formatDateLabel(dateKey)}
                           </p>
+                          <div className="space-y-3">
+                            {txs.map((tx) => (
+                              <div
+                                key={tx.id}
+                                className={`flex items-center gap-3 rounded-2xl border border-border/70 px-4 py-4 shadow-sm cursor-pointer transition-colors ${getTransactionRowClass(tx.status)}`}
+                                onClick={() => navigate(`/dashboard/transactions/${tx.id}`)}
+                                data-testid={`link-tx-${tx.id}`}
+                              >
+                                <div className="w-9 h-9 shrink-0 rounded-full flex items-center justify-center bg-primary/10">
+                                  <img
+                                    src="/sidebar-icons/links.png"
+                                    alt=""
+                                    aria-hidden="true"
+                                    className="h-7 w-7 object-contain drop-shadow-[0_3px_3px_rgba(0,0,0,0.14)]"
+                                  />
+                                </div>
+
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <p className="text-sm font-normal text-foreground truncate max-w-[180px]">
+                                      {t.transactions.typePaymentLink}
+                                    </p>
+                                  </div>
+                                  <p className="text-xs text-muted-foreground mt-0.5">
+                                    {(tx.description || tx.payerName || tx.payerEmail || "—").slice(0, 28)}
+                                    {tx.createdAt && <span className="ml-1">· {format(new Date(tx.createdAt), "HH:mm")}</span>}
+                                  </p>
+                                </div>
+
+                                <div className="flex flex-col items-end gap-1 shrink-0">
+                                  <span className={`text-sm font-medium whitespace-nowrap ${getAmountColor(tx)}`}>
+                                    +{formatWalletBalance(tx.amount, tx.currency || userCurrency)}
+                                  </span>
+                                  {getStatusBadge(tx.status)}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       ))}
                     </div>
