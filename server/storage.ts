@@ -1574,10 +1574,32 @@ export class DatabaseStorage implements IStorage {
   async upsertSetting(key: string, value: string, description?: string): Promise<PlatformSetting> {
     const existing = await this.getSetting(key);
     if (existing) {
-      const [updated] = await db.update(platformSettings).set({ value, description, updatedAt: new Date() }).where(eq(platformSettings.key, key)).returning();
+      if (isMysqlDialect) {
+        await db.update(platformSettings)
+          .set({ value, description, updatedAt: new Date() })
+          .where(eq(platformSettings.key, key));
+        const updated = await this.getSetting(key);
+        if (!updated) throw new Error("PLATFORM_SETTING_UPDATE_READBACK_FAILED");
+        return updated;
+      }
+      const [updated] = await db
+        .update(platformSettings)
+        .set({ value, description, updatedAt: new Date() })
+        .where(eq(platformSettings.key, key))
+        .returning();
       return updated;
     }
-    const [inserted] = await db.insert(platformSettings).values({ key, value, description }).returning();
+    if (isMysqlDialect) {
+      const id = randomUUID();
+      await db.insert(platformSettings).values({ id, key, value, description });
+      const inserted = await this.getSetting(key);
+      if (!inserted) throw new Error("PLATFORM_SETTING_INSERT_READBACK_FAILED");
+      return inserted;
+    }
+    const [inserted] = await db
+      .insert(platformSettings)
+      .values({ key, value, description })
+      .returning();
     return inserted;
   }
   

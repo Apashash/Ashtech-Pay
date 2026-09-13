@@ -46,7 +46,7 @@ export default function AdminSettingsLimits() {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/settings"] });
       toast({ title: "Limite enregistrée" });
     },
-    onError: () => toast({ title: "Erreur", variant: "destructive" }),
+    onError: (error: Error) => toast({ title: "Erreur", description: error.message, variant: "destructive" }),
   });
 
   const handleSave = (key: string) => {

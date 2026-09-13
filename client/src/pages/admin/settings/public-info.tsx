@@ -46,7 +46,7 @@ export default function AdminSettingsPublicInfo() {
       queryClient.invalidateQueries({ queryKey: ["/api/contact-info"] });
       toast({ title: "Information publique enregistrée" });
     },
-    onError: () => toast({ title: "Erreur", variant: "destructive" }),
+    onError: (error: Error) => toast({ title: "Erreur", description: error.message, variant: "destructive" }),
   });
 
   const handleSave = (key: string) => {

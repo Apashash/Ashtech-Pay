@@ -7823,7 +7823,7 @@ export async function registerRoutes(
       const { key, value, description } = req.body;
       // Validate key format: lowercase alphanumeric + underscore + colon + hyphen + dot
       // Prevents injection of arbitrary internal keys (session secrets, botban:* patterns, etc.)
-      if (!key || typeof key !== "string" || !/^[a-z0-9_:.\-]{1,100}$/.test(key)) {
+      if (!key || typeof key !== "string" || !/^[A-Za-z0-9_:.\-]{1,100}$/.test(key)) {
         return res.status(400).json({ message: "Clé invalide — format non autorisé" });
       }
       if (key.startsWith("pawapay_")) {
@@ -7844,7 +7844,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: "settings[] requis" });
       }
       // Validate all keys before writing any
-      const badKey = settings.find(s => !s.key || typeof s.key !== "string" || !/^[a-z0-9_:.\-]{1,100}$/.test(s.key));
+       const badKey = settings.find(s => !s.key || typeof s.key !== "string" || !/^[A-Za-z0-9_:.\-]{1,100}$/.test(s.key));
       if (badKey) {
         return res.status(400).json({ message: `Clé invalide: ${badKey.key}` });
       }

@@ -49,7 +49,7 @@ export default function AdminSettingsPlatform() {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/settings"] });
       toast({ title: "Paramètre enregistré" });
     },
-    onError: () => toast({ title: "Erreur", variant: "destructive" }),
+    onError: (error: Error) => toast({ title: "Erreur", description: error.message, variant: "destructive" }),
   });
 
   const handleSave = (key: string) => {
