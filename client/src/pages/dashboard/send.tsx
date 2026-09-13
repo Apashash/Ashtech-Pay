@@ -20,7 +20,6 @@ import { formatCurrency, formatWalletBalance } from "@/lib/currency";
 import { useMemo, useEffect, useState, useCallback } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useLocation } from "wouter";
-import { useExchangeRates } from "@/hooks/use-exchange-rates";
 import { validateMobileMoneyPhone } from "@shared/mobile-money-phone";
 
 const INTERNAL_KEY = "__ashtech_interne__";
@@ -60,6 +59,8 @@ interface CountryConfig {
   name: string;
   code: string;
   currency: string;
+  minWithdrawal: number;
+  maxWithdrawal: number;
   operators: OperatorConfig[];
 }
 
@@ -178,13 +179,7 @@ export default function SendMoneyPage() {
     staleTime: 30_000,
   });
   const isOtpRequired = otpStatus?.enabled !== false; // default to true (safe)
-  const { rates: fxRates } = useExchangeRates();
   const senderCurrency = (selectedWallet || primaryCurrency || "XAF") as string;
-  // fxRates are XAF-direct: fxRates[currency] = how many XAF = 1 unit of that currency
-  const senderRate = fxRates[senderCurrency] || 1; // XAF per 1 unit of senderCurrency
-  const minTransfer = Math.ceil((limits?.minTransfer ?? 150) / senderRate);
-  const maxTransfer = Math.floor((limits?.maxTransfer ?? 5000000) / senderRate);
-
   const form = useForm<ExternalFormData>({
     resolver: zodResolver(externalFormSchema),
     defaultValues: { recipientName: "", recipientPhone: "", countryId: "", operatorId: "", amount: "" },
@@ -203,6 +198,8 @@ export default function SendMoneyPage() {
 
   const selectedCountry = useMemo(() => countries?.find(c => c.id === watchedCountryId), [countries, watchedCountryId]);
   const selectedOperator = useMemo(() => selectedCountry?.operators.find(o => o.id === watchedOperatorId), [selectedCountry, watchedOperatorId]);
+  const minTransfer = Number(selectedCountry?.minWithdrawal ?? limits?.minTransfer ?? 150);
+  const maxTransfer = Number(selectedCountry?.maxWithdrawal ?? limits?.maxTransfer ?? 5000000);
   const amountValue = parseFloat(watchedAmount) || 0;
   const internalAmountValue = parseFloat(internalAmount) || 0;
 

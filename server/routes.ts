@@ -5177,6 +5177,10 @@ export async function registerRoutes(
           // `currency` is the accounting wallet key. PawaPay receives the
           // ISO code through toPawaPayCurrency(), never this country key.
           currency: CURRENCY_ZONE[country.code.toUpperCase()] || country.currency,
+          minDeposit: parseFloat(String(country.minDeposit ?? 100)),
+          maxDeposit: parseFloat(String(country.maxDeposit ?? 5000000)),
+          minWithdrawal: parseFloat(String(country.minWithdrawal ?? 300)),
+          maxWithdrawal: parseFloat(String(country.maxWithdrawal ?? 500000)),
           operators: countryOperators,
         };
       }).filter(country => country.operators.length > 0);
@@ -5408,12 +5412,13 @@ export async function registerRoutes(
       // No cross-family tolerance: a user sending to Bénin (XOFB) must have XOFB funds.
       const walletCurrency = CURRENCY_ZONE[country.code] || txCurrency;
 
-      const fxRates = await loadFxRates();
-      const minTransferSetting = await storage.getSetting("min_transfer");
-      const minTransferXAF = minTransferSetting ? parseFloat(minTransferSetting.value) : 150;
-      const minTransfer = Math.ceil(convertFromXAF(minTransferXAF, txCurrency, fxRates));
+      const minTransfer = parseFloat(String(country.minWithdrawal ?? 300));
+      const maxTransfer = parseFloat(String(country.maxWithdrawal ?? 500000));
       if (parsedAmount < minTransfer) {
-        return res.status(400).json({ message: `Le montant minimum de transfert est de ${minTransfer.toLocaleString()} ${txCurrency}` });
+        return res.status(400).json({ message: `Le montant minimum d'envoi est de ${minTransfer.toLocaleString()} ${txCurrency}` });
+      }
+      if (parsedAmount > maxTransfer) {
+        return res.status(400).json({ message: `Le montant maximum d'envoi est de ${maxTransfer.toLocaleString()} ${txCurrency}` });
       }
 
       const transferProvider = (operator as any).paymentProvider;
@@ -5981,6 +5986,18 @@ export async function registerRoutes(
         if (!operatorRecord || operatorRecord.countryId !== depositCountry.id ||
             !operatorRecord.isActive || operatorRecord.isInMaintenance) {
           return res.status(400).json({ message: "Opérateur invalide pour le pays sélectionné." });
+        }
+        const minDeposit = parseFloat(String(depositCountry.minDeposit ?? 100));
+        const maxDeposit = parseFloat(String(depositCountry.maxDeposit ?? 5000000));
+        if (amount < minDeposit) {
+          return res.status(400).json({
+            message: `Le montant minimum de dépôt est de ${minDeposit.toLocaleString()} ${countryCurrency}`,
+          });
+        }
+        if (amount > maxDeposit) {
+          return res.status(400).json({
+            message: `Le montant maximum de dépôt est de ${maxDeposit.toLocaleString()} ${countryCurrency}`,
+          });
         }
       }
 
@@ -6635,23 +6652,6 @@ export async function registerRoutes(
         });
       }
 
-      const userCurrency = user.preferredCurrency || "XAF";
-      const fxRates = await loadFxRates();
-
-      const minWithdrawalSetting = await storage.getSetting("min_withdrawal");
-      const minWithdrawalXAF = minWithdrawalSetting ? parseFloat(minWithdrawalSetting.value) : 300;
-      const minWithdrawal = Math.ceil(convertFromXAF(minWithdrawalXAF, userCurrency, fxRates));
-      const maxWithdrawalSetting = await storage.getSetting("max_withdrawal");
-      const maxWithdrawalXAF = maxWithdrawalSetting ? parseFloat(maxWithdrawalSetting.value) : 500000;
-      const maxWithdrawal = Math.floor(convertFromXAF(maxWithdrawalXAF, userCurrency, fxRates));
-
-      if (amount < minWithdrawal) {
-        return res.status(400).json({ message: `Le montant minimum de retrait est de ${minWithdrawal.toLocaleString()} ${userCurrency}` });
-      }
-      if (amount > maxWithdrawal) {
-        return res.status(400).json({ message: `Le montant maximum de retrait est de ${maxWithdrawal.toLocaleString()} ${userCurrency}` });
-      }
-
       // Resolve country info for currency and country code
       const withdrawalCountry = await storage.getCountry(data.countryId);
       if (!withdrawalCountry || withdrawalCountry.isActiveForWithdrawal === false) {
@@ -6661,7 +6661,16 @@ export async function registerRoutes(
       // Use CURRENCY_ZONE for the internal wallet code (XOFN for NE, XOFM for ML, XOFT for TG, etc.)
       // CURRENCY_ZONE holds Ashtech's per-country wallet codes; COUNTRY_CURRENCY holds external country codes.
       // For wallet debit we must use the internal code so we find the right secondary wallet.
+      const userCurrency = user.preferredCurrency || "XAF";
       const withdrawalCurrency = CURRENCY_ZONE[withdrawalCountryCode] || withdrawalCountry?.currency || userCurrency;
+      const minWithdrawal = parseFloat(String(withdrawalCountry.minWithdrawal ?? 300));
+      const maxWithdrawal = parseFloat(String(withdrawalCountry.maxWithdrawal ?? 500000));
+      if (amount < minWithdrawal) {
+        return res.status(400).json({ message: `Le montant minimum de retrait est de ${minWithdrawal.toLocaleString()} ${withdrawalCurrency}` });
+      }
+      if (amount > maxWithdrawal) {
+        return res.status(400).json({ message: `Le montant maximum de retrait est de ${maxWithdrawal.toLocaleString()} ${withdrawalCurrency}` });
+      }
 
       // Fetch operator early to determine provider before fee calculation
       const withdrawalOperator = await storage.getOperator(data.operatorId);
@@ -8844,6 +8853,9 @@ export async function registerRoutes(
   // Public deposit config for payment links (uses deposit fees)
   app.get("/api/public/deposit-config", publicInfoLimiter, async (_req, res) => {
     try {
+      // Country limits are editable operational settings. Do not let a proxy
+      // serve an older configuration after an administrator saves new values.
+      res.setHeader("Cache-Control", "no-store");
       const countries = (await storage.getActiveCountries()).filter(c => c.isActiveForDeposit !== false);
       const allOperators = await storage.getAllOperators();
       const allFees = await storage.getAllFees();
@@ -8908,6 +8920,10 @@ export async function registerRoutes(
           flag: country.flag,
           currency: countryWalletCurrency(country),
           exchangeRate: parseFloat(country.exchangeRate as string) || 1,
+          minDeposit: parseFloat(String(country.minDeposit ?? 100)),
+          maxDeposit: parseFloat(String(country.maxDeposit ?? 5000000)),
+          minWithdrawal: parseFloat(String(country.minWithdrawal ?? 300)),
+          maxWithdrawal: parseFloat(String(country.maxWithdrawal ?? 500000)),
           operators: countryOperators,
         };
       }).filter(country => country.operators.length > 0);
@@ -9532,7 +9548,10 @@ export async function registerRoutes(
        }
        const countryId = countryData.id;
        const paymentCountryCode = countryData.code;
-      const paymentCurrency = countryData?.currency || providedCurrency || paymentLink.currency || "XAF";
+       // The browser sends the amount in the selected country wallet currency.
+       // Prefer that explicit currency over the database's external ISO field,
+       // which can be shared by several country-specific wallet codes.
+       const paymentCurrency = providedCurrency || countryData?.currency || paymentLink.currency || "XAF";
 
       // The amount provided by the frontend is in providedCurrency (or paymentCurrency)
       const numAmount = parseFloat(providedAmount || "0");
@@ -9542,6 +9561,25 @@ export async function registerRoutes(
 
       // We need to calculate what the merchant gets in THEIR link currency
       const fxRates = await loadFxRates();
+      const countryWalletCurrencyCode = countryWalletCurrency(countryData);
+      const amountInCountryCurrency = convertCurrency(
+        numAmount,
+        paymentCurrency,
+        countryWalletCurrencyCode,
+        fxRates,
+      );
+      const minDeposit = parseFloat(String(countryData.minDeposit ?? 100));
+      const maxDeposit = parseFloat(String(countryData.maxDeposit ?? 5000000));
+      if (amountInCountryCurrency < minDeposit) {
+        return res.status(400).json({
+          message: `Le montant minimum de dépôt pour ${countryData.name} est de ${minDeposit.toLocaleString()} ${countryWalletCurrencyCode}`,
+        });
+      }
+      if (amountInCountryCurrency > maxDeposit) {
+        return res.status(400).json({
+          message: `Le montant maximum de dépôt pour ${countryData.name} est de ${maxDeposit.toLocaleString()} ${countryWalletCurrencyCode}`,
+        });
+      }
       const amountInLinkCurrency = convertCurrency(numAmount, paymentCurrency, paymentLink.currency, fxRates);
 
       // Fetch operator early to determine payment provider before fee calculation

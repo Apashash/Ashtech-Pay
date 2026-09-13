@@ -52,6 +52,8 @@ interface CountryConfig {
   flag: string;
   currency: string;
   exchangeRate: number;
+  minDeposit: number;
+  maxDeposit: number;
   operators: { id: string; name: string; gateway: string; paymentProvider: string; feePercentage: number; feeFixed: number; afribapayFee?: number; pixpayFee?: number; pawapayFee?: number; ashtechMargin?: number; pixpayOperatorType?: string; otpUssdCode?: string | null; }[];
 }
 
@@ -191,6 +193,8 @@ export default function PaymentPage() {
   const linkCurrency = useMemo(() => (paymentLink?.currency as SupportedCurrency) || "XAF", [paymentLink]);
 
   const selectedCountryData = useMemo(() => depositConfig.find(c => c.id === country), [depositConfig, country]);
+  const minDeposit = Number(selectedCountryData?.minDeposit ?? 100);
+  const maxDeposit = Number(selectedCountryData?.maxDeposit ?? 5000000);
 
   // Auto-switch display currency to the selected country's currency
   useEffect(() => {
@@ -220,6 +224,12 @@ export default function PaymentPage() {
       return displayAmount * inputRate;
     }
   }, [paymentLink, displayAmount, linkCurrency, selectedDisplayCurrency, adminExchangeRates]);
+
+  const amountInCountryCurrency = useMemo(() => {
+    if (!selectedCountryData || amountInXAF <= 0) return 0;
+    const countryRate = adminExchangeRates[selectedCountryData.currency] || 1;
+    return amountInXAF / countryRate;
+  }, [selectedCountryData, amountInXAF, adminExchangeRates]);
 
   // Fixed payment links are converted to gross USDT by the server using the
   // admin USDT/XAF rate. Mirror that calculation here to warn before submit.
@@ -341,6 +351,12 @@ export default function PaymentPage() {
     if (!paymentLink?.isFixedAmount && (!customAmount || parseFloat(customAmount) <= 0)) newErrors.amount = p.errAmount;
     if (!paymentMethod) newErrors.paymentMethod = p.errPaymentMethod;
     if (!country) newErrors.country = p.errCountry;
+    if (selectedCountryData && paymentMethod !== "crypto" &&
+        (amountInCountryCurrency < minDeposit || amountInCountryCurrency > maxDeposit)) {
+      newErrors.amount = amountInCountryCurrency < minDeposit
+        ? `Le dépôt minimum est de ${formatAmount(minDeposit, selectedCountryData.currency)}.`
+        : `Le dépôt maximum est de ${formatAmount(maxDeposit, selectedCountryData.currency)}.`;
+    }
     if (paymentMethod !== "crypto") {
       if (paymentMethod === "mobile_money" && !operator) newErrors.operator = p.errOperator;
       if (!phone.trim()) newErrors.phone = p.errPhone;
@@ -371,6 +387,12 @@ export default function PaymentPage() {
       if (!paymentLink?.isFixedAmount && (!customAmount || parseFloat(customAmount) <= 0)) newErrors.amount = p.errAmount;
       if (!paymentMethod) newErrors.paymentMethod = p.errPaymentMethod;
       if (!country) newErrors.country = p.errCountry;
+      if (selectedCountryData && paymentMethod !== "crypto" &&
+          (amountInCountryCurrency < minDeposit || amountInCountryCurrency > maxDeposit)) {
+        newErrors.amount = amountInCountryCurrency < minDeposit
+          ? `Le dépôt minimum est de ${formatAmount(minDeposit, selectedCountryData.currency)}.`
+          : `Le dépôt maximum est de ${formatAmount(maxDeposit, selectedCountryData.currency)}.`;
+      }
       if (paymentMethod !== "crypto") {
         if (paymentMethod === "mobile_money" && !operator) newErrors.operator = p.errOperator;
         if (!phone.trim()) newErrors.phone = p.errPhone;
@@ -1802,7 +1824,17 @@ export default function PaymentPage() {
                       {selectedDisplayCurrency !== linkCurrency && (adminExchangeRates[selectedDisplayCurrency] || 0) > 0 && (
                         <p className="text-sm text-muted-foreground mt-1">= {formatAmount(displayAmount, linkCurrency)}</p>
                       )}
+                      {selectedCountryData && (
+                        <p className={`text-xs mt-2 ${
+                          amountInCountryCurrency < minDeposit || amountInCountryCurrency > maxDeposit
+                            ? "text-red-500"
+                            : "text-muted-foreground"
+                        }`}>
+                          Limites : {formatAmount(minDeposit, selectedCountryData.currency)} à {formatAmount(maxDeposit, selectedCountryData.currency)}
+                        </p>
+                      )}
                     </div>
+                    {errors.amount && <p className="text-xs text-red-500 text-center">{errors.amount}</p>}
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -1818,6 +1850,11 @@ export default function PaymentPage() {
                       data-testid="input-payment-amount"
                     />
                     {errors.amount && <p className="text-xs text-red-500">{errors.amount}</p>}
+                    {selectedCountryData && (
+                      <p className="text-xs text-muted-foreground text-center">
+                        Limites : {formatAmount(minDeposit, selectedCountryData.currency)} à {formatAmount(maxDeposit, selectedCountryData.currency)}
+                      </p>
+                    )}
                     {selectedDisplayCurrency !== linkCurrency && customAmount && (adminExchangeRates[selectedDisplayCurrency] || 0) > 0 && (
                       <p className="text-xs text-muted-foreground text-center">≈ {formatAmount(amountInLinkCurrency, linkCurrency)}</p>
                     )}

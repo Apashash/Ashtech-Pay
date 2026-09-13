@@ -48,6 +48,8 @@ interface CountryConfig {
   name: string;
   code: string;
   currency: string;
+  minDeposit: number;
+  maxDeposit: number;
   operators: OperatorConfig[];
 }
 
@@ -165,6 +167,8 @@ export default function DepositPage() {
   const selectedOperator = useMemo(() => {
     return selectedCountry?.operators.find(op => op.id === watchedOperatorId);
   }, [selectedCountry, watchedOperatorId]);
+  const minDeposit = Number(selectedCountry?.minDeposit ?? 100);
+  const maxDeposit = Number(selectedCountry?.maxDeposit ?? 5000000);
 
   useEffect(() => {
     if (!watchedCountryId && countries && countries.length > 0) {
@@ -450,8 +454,10 @@ export default function DepositPage() {
   };
 
   const canSubmit = useMemo(() => {
-    return (parseFloat(watchedAmount) || 0) > 0 && !!watchedCountryId && !!watchedOperatorId && watchedPhoneNumber.length >= 8;
-  }, [watchedAmount, watchedCountryId, watchedOperatorId, watchedPhoneNumber]);
+    const amount = parseFloat(watchedAmount) || 0;
+    return amount >= minDeposit && amount <= maxDeposit &&
+      !!watchedCountryId && !!watchedOperatorId && watchedPhoneNumber.length >= 8;
+  }, [watchedAmount, minDeposit, maxDeposit, watchedCountryId, watchedOperatorId, watchedPhoneNumber]);
 
   const resetWizard = () => {
     setShowValidationMessage(false);
@@ -1349,9 +1355,24 @@ export default function DepositPage() {
                                   data-testid="input-deposit-amount"
                                 />
                               </div>
+                              {selectedCountry && (
+                                <p className="text-xs text-muted-foreground mt-2">
+                                  Limites : {minDeposit.toLocaleString()} à {maxDeposit.toLocaleString()} {selectedCountry.currency}
+                                </p>
+                              )}
                             </div>
                           </FormControl>
                           <FormMessage className="text-center" />
+                          {amountNum > 0 && amountNum < minDeposit && (
+                            <p className="text-xs text-red-500 text-center">
+                              Le dépôt minimum est de {minDeposit.toLocaleString()} {selectedCountry?.currency || "XAF"}.
+                            </p>
+                          )}
+                          {amountNum > maxDeposit && (
+                            <p className="text-xs text-red-500 text-center">
+                              Le dépôt maximum est de {maxDeposit.toLocaleString()} {selectedCountry?.currency || "XAF"}.
+                            </p>
+                          )}
                         </FormItem>
                       )}
                     />

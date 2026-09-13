@@ -19,7 +19,6 @@ import { z } from "zod";
 import { useState, useEffect } from "react";
 import { formatCurrency } from "@/lib/currency";
 import { Link, useLocation } from "wouter";
-import { useExchangeRates } from "@/hooks/use-exchange-rates";
 
 interface OperatorConfig {
   id: string;
@@ -40,6 +39,8 @@ interface CountryConfig {
   name: string;
   code: string;
   currency: string;
+  minWithdrawal: number;
+  maxWithdrawal: number;
   operators: OperatorConfig[];
 }
 
@@ -97,13 +98,9 @@ export default function WithdrawPage() {
   });
   const isOtpRequired = otpStatus?.enabled !== false; // default to true (safe)
 
-  const { data: limits } = useQuery<{ minWithdrawal: number; maxWithdrawal: number; minTransfer: number; maxTransfer: number }>({
-    queryKey: ["/api/public/limits"],
-  });
   const { data: wallets = [] } = useQuery<WalletBalance[]>({
     queryKey: ["/api/wallets"],
   });
-  const { rates: fxRates } = useExchangeRates();
   const userCurrency = user?.preferredCurrency || "XAF";
 
   const { t } = useLanguage();
@@ -135,11 +132,11 @@ export default function WithdrawPage() {
     ? Math.floor(rawBalance * 100) / 100
     : Math.round(rawBalance);
   // fxRates are XAF-direct: fxRates[currency] = how many XAF = 1 unit.
-  const withdrawalRate = fxRates[withdrawalCurrency] || 1;
-  const convertFromXAF = (xaf: number) => Math.ceil(xaf / withdrawalRate);
-  const limitsLoaded = limits !== undefined && fxRates && Object.keys(fxRates).length > 0;
-  const minWithdrawal = convertFromXAF(limits?.minWithdrawal ?? 300);
-  const maxWithdrawal = Math.floor((limits?.maxWithdrawal ?? 500000) / withdrawalRate);
+  // Country limits are stored and displayed in the destination wallet currency.
+  // Do not fall back to the old global limits once a country is selected.
+  const limitsLoaded = !!selectedCountryData;
+  const minWithdrawal = Number(selectedCountryData?.minWithdrawal ?? 300);
+  const maxWithdrawal = Number(selectedCountryData?.maxWithdrawal ?? 500000);
 
   useEffect(() => {
     if (countriesConfig.length > 0 && !selectedCountry) {
