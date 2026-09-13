@@ -63,8 +63,6 @@ const depositFormSchema = z.object({
 
 type DepositFormData = z.infer<typeof depositFormSchema>;
 
-const QUICK_AMOUNTS = [5000, 10000, 25000, 50000, 100000];
-
 // ── Dynamic IziChange crypto-asset list ────────────────────────────────────────
 import { useIziAssets, coinLogoUrl, networkLogoUrl } from "@/lib/use-crypto-assets";
 import { useCoinPrice } from "@/lib/use-coin-price";
@@ -1355,11 +1353,6 @@ export default function DepositPage() {
                                   data-testid="input-deposit-amount"
                                 />
                               </div>
-                              {selectedCountry && (
-                                <p className="text-xs text-muted-foreground mt-2">
-                                  Limites : {minDeposit.toLocaleString()} à {maxDeposit.toLocaleString()} {selectedCountry.currency}
-                                </p>
-                              )}
                             </div>
                           </FormControl>
                           <FormMessage className="text-center" />
@@ -1376,24 +1369,6 @@ export default function DepositPage() {
                         </FormItem>
                       )}
                     />
-
-                    {/* Quick amount chips */}
-                    <div className="flex flex-wrap justify-center gap-2">
-                      {QUICK_AMOUNTS.map((amt) => (
-                        <button
-                          key={amt}
-                          type="button"
-                          onClick={() => form.setValue("amount", amt.toString())}
-                          className={`px-3 py-1.5 rounded-full text-sm font-semibold border transition-all ${
-                            amountNum === amt
-                              ? "border-primary bg-primary text-black"
-                              : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
-                          }`}
-                        >
-                          {amt >= 1000 ? `${amt / 1000}K` : amt}
-                        </button>
-                      ))}
-                    </div>
 
                     {/* Country */}
                     <FormField
