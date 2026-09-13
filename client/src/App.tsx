@@ -69,7 +69,6 @@ const AdminSettingsPlatform = React.lazy(() => import("@/pages/admin/settings/pl
 const AdminSettingsPublicInfo = React.lazy(() => import("@/pages/admin/settings/public-info"));
 const AdminSettingsMaintenance = React.lazy(() => import("@/pages/admin/settings/maintenance"));
 const AdminSettingsOtp = React.lazy(() => import("@/pages/admin/settings/otp"));
-const AdminSettingsLimits = React.lazy(() => import("@/pages/admin/settings/limits"));
 const AdminSettingsTurnstile = React.lazy(() => import("@/pages/admin/settings/turnstile"));
 const AdminSettingsPawaPay = React.lazy(() => import("@/pages/admin/settings/pawapay"));
 const AdminWithdrawalNumbers = React.lazy(() => import("@/pages/admin/withdrawal-numbers"));
@@ -201,7 +200,6 @@ function Router() {
       <Route path={`${A}/settings/public-info`} component={AdminSettingsPublicInfo} />
       <Route path={`${A}/settings/maintenance`} component={AdminSettingsMaintenance} />
       <Route path={`${A}/settings/otp`} component={AdminSettingsOtp} />
-      <Route path={`${A}/settings/limits`} component={AdminSettingsLimits} />
       <Route path={`${A}/settings/turnstile`} component={AdminSettingsTurnstile} />
       <Route path={`${A}/settings/pawapay`} component={AdminSettingsPawaPay} />
       <Route path={`${A}/withdrawal-numbers`} component={AdminWithdrawalNumbers} />

@@ -7,7 +7,6 @@ import {
   Settings,
   Globe,
   AlertTriangle,
-  Lock,
   ShieldCheck,
   ShieldBan,
   Mail,
@@ -42,14 +41,6 @@ export default function AdminSettings() {
       icon: AlertTriangle,
       color: "bg-orange-500/10 text-orange-600",
       borderColor: "border-orange-500/30"
-    },
-    {
-      id: "limits",
-      title: "Limit globale",
-      description: "Limites min/max des transferts et retraits",
-      icon: Lock,
-      color: "bg-red-500/10 text-red-600",
-      borderColor: "border-red-500/30"
     },
     {
       id: "otp",
