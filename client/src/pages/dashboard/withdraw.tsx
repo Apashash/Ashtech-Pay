@@ -505,13 +505,6 @@ export default function WithdrawPage() {
                   </FormItem>
                 )}
               />
-              <div className="h-px bg-border" />
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Solde disponible</span>
-                <span className="text-sm font-semibold text-foreground">
-                  {formatCurrency(balance, withdrawalCurrency as SupportedCurrency)}
-                </span>
-              </div>
               {amountValue > 0 && amountValue < minWithdrawal && (
                 <div className="flex items-center gap-1.5 text-destructive text-xs">
                   <AlertCircle className="w-3.5 h-3.5" />
