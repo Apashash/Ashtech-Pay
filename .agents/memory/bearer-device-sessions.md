@@ -9,6 +9,12 @@ Device-session management must persist a valid current Bearer-authenticated requ
 
 **How to apply:** Keep the valid-token check before persistence so revoked tokens cannot recreate sessions. Await the session-store write before reading or deleting rows, and filter bulk deletion by the current SID.
 
+Bearer logout must delete the canonical session row(s) by authenticated user ID plus token timestamp, not only by the request's temporary SID.
+
+**Why:** Cookie-less mobile requests can create an ephemeral Express SID while token deduplication stores the durable device row under another SID; deleting only the ephemeral row makes every relogin look like a new device.
+
+**How to apply:** Capture the Bearer token timestamp before revoking the token, then remove all matching session rows during logout; retain SID-only deletion for cookie sessions.
+
 Admin TOTP grants must also recover the durable session associated with the verified Bearer token when a mobile browser presents a fresh Express session on the next request.
 
 **Why:** Mobile Safari may not return the session cookie consistently, so the TOTP request and the first admin API request can have different session IDs even though they use the same signed token.

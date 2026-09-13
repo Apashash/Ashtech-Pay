@@ -4009,9 +4009,12 @@ export async function registerRoutes(
   app.post("/api/auth/logout", async (req, res) => {
     // Remove the Bearer token if present
     const authHeader = req.headers.authorization;
+    const bearerToken = authHeader?.startsWith("Bearer ")
+      ? authHeader.substring(7)
+      : null;
+    const bearerTokenTimestamp = bearerToken ? extractTokenTimestamp(bearerToken) : null;
     if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.substring(7);
-      removeAuthToken(token);
+      removeAuthToken(bearerToken!);
     }
 
     const logoutUserId = req.userId ?? null;
@@ -4025,10 +4028,29 @@ export async function registerRoutes(
         req.session.destroy((err) => err ? reject(err) : resolve());
       });
 
-      // Explicit delete is a safety net for MySQL/MariaDB stores. It prevents
-      // a stale row from appearing after the same browser logs in again.
+      // A Bearer-only mobile browser can use a temporary Express SID while the
+      // canonical row is stored under another SID by the token-deduplicating
+      // session store. Delete by user + token timestamp as well as by SID, or
+      // the next login on the same phone will show the old login as another
+      // connected device.
       if (isMysqlDialect) {
-        await pool.query(`DELETE FROM session WHERE sid = ?`, [sid]);
+        if (logoutUserId && bearerTokenTimestamp !== null) {
+          const matchingRows = (await readMysqlSessionRecords()).filter((row) =>
+            row.userId === logoutUserId &&
+            Number(row.sess?.tokenIssuedAt) === bearerTokenTimestamp
+          );
+          for (const row of matchingRows) {
+            await pool.query(`DELETE FROM session WHERE sid = ?`, [row.sid]);
+          }
+        } else {
+          await pool.query(`DELETE FROM session WHERE sid = ?`, [sid]);
+        }
+      } else if (logoutUserId && bearerTokenTimestamp !== null) {
+        await db.execute(sql`
+          DELETE FROM session
+          WHERE sess->>'userId' = ${logoutUserId}
+            AND sess->>'tokenIssuedAt' = ${String(bearerTokenTimestamp)}
+        `);
       } else {
         await db.execute(sql`DELETE FROM session WHERE sid = ${sid}`);
       }
