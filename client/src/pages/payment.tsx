@@ -1824,15 +1824,6 @@ export default function PaymentPage() {
                       {selectedDisplayCurrency !== linkCurrency && (adminExchangeRates[selectedDisplayCurrency] || 0) > 0 && (
                         <p className="text-sm text-muted-foreground mt-1">= {formatAmount(displayAmount, linkCurrency)}</p>
                       )}
-                      {selectedCountryData && (
-                        <p className={`text-xs mt-2 ${
-                          amountInCountryCurrency < minDeposit || amountInCountryCurrency > maxDeposit
-                            ? "text-red-500"
-                            : "text-muted-foreground"
-                        }`}>
-                          Limites : {formatAmount(minDeposit, selectedCountryData.currency)} à {formatAmount(maxDeposit, selectedCountryData.currency)}
-                        </p>
-                      )}
                     </div>
                     {errors.amount && <p className="text-xs text-red-500 text-center">{errors.amount}</p>}
                   </div>
@@ -1850,11 +1841,6 @@ export default function PaymentPage() {
                       data-testid="input-payment-amount"
                     />
                     {errors.amount && <p className="text-xs text-red-500">{errors.amount}</p>}
-                    {selectedCountryData && (
-                      <p className="text-xs text-muted-foreground text-center">
-                        Limites : {formatAmount(minDeposit, selectedCountryData.currency)} à {formatAmount(maxDeposit, selectedCountryData.currency)}
-                      </p>
-                    )}
                     {selectedDisplayCurrency !== linkCurrency && customAmount && (adminExchangeRates[selectedDisplayCurrency] || 0) > 0 && (
                       <p className="text-xs text-muted-foreground text-center">≈ {formatAmount(amountInLinkCurrency, linkCurrency)}</p>
                     )}
