@@ -8,7 +8,6 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import { LanguageProvider } from "@/lib/language";
-const LandingPage = React.lazy(() => import("@/pages/landing"));
 const LoginPage = React.lazy(() => import("@/pages/login"));
 const RegisterPage = React.lazy(() => import("@/pages/register"));
 const ForgotPasswordPage = React.lazy(() => import("@/pages/forgot-password"));
@@ -104,6 +103,7 @@ import { getBlockedUntil } from "@/lib/appUtils";
 import AppInstallBanner from "@/components/app-install-banner";
 import { PushNotificationPrompt } from "@/components/push-notification-prompt";
 import { LoadingScreen } from "@/components/loading-indicator";
+import LandingPage from "@/pages/landing";
 
 // Redirige immédiatement vers /blocked si l'IP est bloquée (vérif. localStorage)
 // useLayoutEffect + return null = aucun flash de la page login/register
