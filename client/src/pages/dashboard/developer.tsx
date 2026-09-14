@@ -691,8 +691,42 @@ curl_close($ch);`,
             <div className="grid lg:grid-cols-2 gap-5 mb-5">
               <div className="space-y-2 min-w-0">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1">Requête</p>
-                <CodeBlock language="bash" code={`curl https://www.ashtechpay.com/v1/crypto/assets \\
-  -H "Authorization: Bearer YOUR_API_KEY"`} />
+                <CodeTabs examples={[
+                  {
+                    language: "javascript",
+                    code: `const response = await fetch("https://www.ashtechpay.com/v1/crypto/assets", {
+  headers: {
+    "Authorization": "Bearer YOUR_API_KEY"
+  }
+});
+const data = await response.json();`,
+                  },
+                  {
+                    language: "python",
+                    code: `import requests
+
+response = requests.get(
+    "https://www.ashtechpay.com/v1/crypto/assets",
+    headers={"Authorization": "Bearer YOUR_API_KEY"},
+)
+print(response.json())`,
+                  },
+                  {
+                    language: "bash",
+                    code: `curl https://www.ashtechpay.com/v1/crypto/assets \\
+  -H "Authorization: Bearer YOUR_API_KEY"`,
+                  },
+                  {
+                    language: "php",
+                    code: `$ch = curl_init("https://www.ashtechpay.com/v1/crypto/assets");
+curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_HTTPHEADER => ["Authorization: Bearer YOUR_API_KEY"],
+]);
+$assets = json_decode(curl_exec($ch), true);
+curl_close($ch);`,
+                  },
+                ]} />
               </div>
               <div className="space-y-2 min-w-0">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1">Réponse</p>
@@ -758,7 +792,10 @@ curl_close($ch);`,
             <div className="grid lg:grid-cols-2 gap-5 mt-5">
               <div className="space-y-2 min-w-0">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1">Requête</p>
-                <CodeBlock language="javascript" code={`fetch("https://www.ashtechpay.com/v1/crypto/collect", {
+                  <CodeTabs examples={[
+                    {
+                      language: "javascript",
+                      code: `fetch("https://www.ashtechpay.com/v1/crypto/collect", {
   method: "POST",
   headers: {
     "Authorization": "Bearer YOUR_API_KEY",
@@ -776,7 +813,80 @@ curl_close($ch);`,
       email: "ada@example.com"
     }
   })
-})`} />
+})`,
+                    },
+                    {
+                      language: "python",
+                      code: `import requests
+
+response = requests.post(
+    "https://www.ashtechpay.com/v1/crypto/collect",
+    headers={
+        "Authorization": "Bearer YOUR_API_KEY",
+        "Content-Type": "application/json",
+    },
+    json={
+        "amount": 25,
+        "currency": "USDT",
+        "asset_code": "USDT.TRC20",
+        "reference": "ORDER-CRYPTO-001",
+        "notify_url": "https://monsite.com/webhook",
+        "customer": {
+            "firstName": "Ada",
+            "lastName": "Lovelace",
+            "email": "ada@example.com",
+        },
+    },
+)
+print(response.json())`,
+                    },
+                    {
+                      language: "bash",
+                      code: `curl https://www.ashtechpay.com/v1/crypto/collect \\
+  -X POST \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "amount": 25,
+    "currency": "USDT",
+    "asset_code": "USDT.TRC20",
+    "reference": "ORDER-CRYPTO-001",
+    "notify_url": "https://monsite.com/webhook",
+    "customer": {
+      "firstName": "Ada",
+      "lastName": "Lovelace",
+      "email": "ada@example.com"
+    }
+  }'`,
+                    },
+                    {
+                      language: "php",
+                      code: `$payload = [
+    "amount" => 25,
+    "currency" => "USDT",
+    "asset_code" => "USDT.TRC20",
+    "reference" => "ORDER-CRYPTO-001",
+    "notify_url" => "https://monsite.com/webhook",
+    "customer" => [
+        "firstName" => "Ada",
+        "lastName" => "Lovelace",
+        "email" => "ada@example.com",
+    ],
+];
+$ch = curl_init("https://www.ashtechpay.com/v1/crypto/collect");
+curl_setopt_array($ch, [
+    CURLOPT_POST => true,
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_HTTPHEADER => [
+        "Authorization: Bearer YOUR_API_KEY",
+        "Content-Type: application/json",
+    ],
+    CURLOPT_POSTFIELDS => json_encode($payload),
+]);
+$response = json_decode(curl_exec($ch), true);
+curl_close($ch);`,
+                    },
+                  ]} />
               </div>
               <div className="space-y-2 min-w-0">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1">Réponse 202</p>
@@ -903,7 +1013,10 @@ async function showCryptoPayment(data) {
             <div className="grid lg:grid-cols-2 gap-5 mt-5">
               <div className="space-y-2 min-w-0">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1">Requête</p>
-                <CodeBlock language="javascript" code={`fetch("https://www.ashtechpay.com/v1/collect", {
+                <CodeTabs examples={[
+                  {
+                    language: "javascript",
+                    code: `fetch("https://www.ashtechpay.com/v1/collect", {
   method: "POST",
   headers: {
     "Authorization": "Bearer YOUR_API_KEY",
@@ -918,8 +1031,33 @@ async function showCryptoPayment(data) {
     reference: "ORDER-001",
     notify_url: "https://monsite.com/webhook"
   })
-})`} />
-                <CodeBlock language="bash" code={`curl https://www.ashtechpay.com/v1/collect \\
+})`,
+                  },
+                  {
+                    language: "python",
+                    code: `import requests
+
+response = requests.post(
+    "https://www.ashtechpay.com/v1/collect",
+    headers={
+        "Authorization": "Bearer YOUR_API_KEY",
+        "Content-Type": "application/json",
+    },
+    json={
+        "amount": 5000,
+        "currency": "XAF",
+        "phone": "670000000",
+        "operator": "MTN Money",
+        "country_code": "CM",
+        "reference": "ORDER-001",
+        "notify_url": "https://monsite.com/webhook",
+    },
+)
+print(response.json())`,
+                  },
+                  {
+                    language: "bash",
+                    code: `curl https://www.ashtechpay.com/v1/collect \\
   -X POST \\
   -H "Authorization: Bearer YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
@@ -931,7 +1069,33 @@ async function showCryptoPayment(data) {
     "country_code": "CM",
     "reference": "ORDER-001",
     "notify_url": "https://monsite.com/webhook"
-  }'`} />
+  }'`,
+                  },
+                  {
+                    language: "php",
+                    code: `$payload = [
+    "amount" => 5000,
+    "currency" => "XAF",
+    "phone" => "670000000",
+    "operator" => "MTN Money",
+    "country_code" => "CM",
+    "reference" => "ORDER-001",
+    "notify_url" => "https://monsite.com/webhook",
+];
+$ch = curl_init("https://www.ashtechpay.com/v1/collect");
+curl_setopt_array($ch, [
+    CURLOPT_POST => true,
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_HTTPHEADER => [
+        "Authorization: Bearer YOUR_API_KEY",
+        "Content-Type: application/json",
+    ],
+    CURLOPT_POSTFIELDS => json_encode($payload),
+]);
+$response = json_decode(curl_exec($ch), true);
+curl_close($ch);`,
+                  },
+                ]} />
               </div>
               <div className="space-y-2 min-w-0">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1">Réponse (202)</p>
@@ -1350,16 +1514,44 @@ if (data.flow === "wave") {
             <div className="grid lg:grid-cols-2 gap-5 mb-5">
               <div className="space-y-2 min-w-0">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1">Requête</p>
-                <CodeBlock language="javascript" code={`fetch(
+                <CodeTabs examples={[
+                  {
+                    language: "javascript",
+                    code: `fetch(
   "https://www.ashtechpay.com/v1/transaction/8f3e1c2d-...",
   {
     headers: {
       "Authorization": "Bearer YOUR_API_KEY"
     }
   }
-)`} />
-                <CodeBlock language="bash" code={`curl https://www.ashtechpay.com/v1/transaction/8f3e1c2d-... \\
-  -H "Authorization: Bearer YOUR_API_KEY"`} />
+)`,
+                  },
+                  {
+                    language: "python",
+                    code: `import requests
+
+response = requests.get(
+    "https://www.ashtechpay.com/v1/transaction/8f3e1c2d-...",
+    headers={"Authorization": "Bearer YOUR_API_KEY"},
+)
+print(response.json())`,
+                  },
+                  {
+                    language: "bash",
+                    code: `curl https://www.ashtechpay.com/v1/transaction/8f3e1c2d-... \\
+  -H "Authorization: Bearer YOUR_API_KEY"`,
+                  },
+                  {
+                    language: "php",
+                    code: `$ch = curl_init("https://www.ashtechpay.com/v1/transaction/8f3e1c2d-...");
+curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_HTTPHEADER => ["Authorization: Bearer YOUR_API_KEY"],
+]);
+$transaction = json_decode(curl_exec($ch), true);
+curl_close($ch);`,
+                  },
+                ]} />
               </div>
               <div className="space-y-2 min-w-0">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1">Réponse</p>
@@ -1414,13 +1606,41 @@ if (data.flow === "wave") {
             <div className="grid lg:grid-cols-2 gap-5 mb-5">
               <div className="space-y-2 min-w-0">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1">Requête</p>
-                <CodeBlock language="javascript" code={`fetch("https://www.ashtechpay.com/v1/fees", {
+                <CodeTabs examples={[
+                  {
+                    language: "javascript",
+                    code: `fetch("https://www.ashtechpay.com/v1/fees", {
   headers: {
     "Authorization": "Bearer YOUR_API_KEY"
   }
-})`} />
-                <CodeBlock language="bash" code={`curl https://www.ashtechpay.com/v1/fees \\
-  -H "Authorization: Bearer YOUR_API_KEY"`} />
+})`,
+                  },
+                  {
+                    language: "python",
+                    code: `import requests
+
+response = requests.get(
+    "https://www.ashtechpay.com/v1/fees",
+    headers={"Authorization": "Bearer YOUR_API_KEY"},
+)
+print(response.json())`,
+                  },
+                  {
+                    language: "bash",
+                    code: `curl https://www.ashtechpay.com/v1/fees \\
+  -H "Authorization: Bearer YOUR_API_KEY"`,
+                  },
+                  {
+                    language: "php",
+                    code: `$ch = curl_init("https://www.ashtechpay.com/v1/fees");
+curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_HTTPHEADER => ["Authorization: Bearer YOUR_API_KEY"],
+]);
+$fees = json_decode(curl_exec($ch), true);
+curl_close($ch);`,
+                  },
+                ]} />
               </div>
               <div className="space-y-2 min-w-0">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1">Réponse</p>

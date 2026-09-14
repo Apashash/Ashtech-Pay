@@ -7,9 +7,60 @@ description: "Consultez les frais applicables."
 GET https://www.ashtechpay.com/v1/fees
 ```
 
+<Tabs>
+  <Tab title="Node.js">
+
+```javascript
+const response = await fetch("https://www.ashtechpay.com/v1/fees", {
+  headers: {
+    Authorization: `Bearer ${process.env.ASHTECH_API_KEY}`,
+  },
+});
+
+const fees = await response.json();
+```
+
+  </Tab>
+  <Tab title="Python">
+
+```python
+import os
+import requests
+
+response = requests.get(
+    "https://www.ashtechpay.com/v1/fees",
+    headers={"Authorization": f"Bearer {os.environ['ASHTECH_API_KEY']}"},
+)
+fees = response.json()
+```
+
+  </Tab>
+  <Tab title="cURL">
+
 ```bash
 curl https://www.ashtechpay.com/v1/fees \
   -H "Authorization: Bearer $ASHTECH_API_KEY"
 ```
+
+  </Tab>
+  <Tab title="PHP / Laravel">
+
+```php
+<?php
+
+$ch = curl_init("https://www.ashtechpay.com/v1/fees");
+curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_HTTPHEADER => [
+        "Authorization: Bearer " . getenv("ASHTECH_API_KEY"),
+    ],
+]);
+
+$fees = json_decode(curl_exec($ch), true);
+curl_close($ch);
+```
+
+  </Tab>
+</Tabs>
 
 Les frais peuvent dépendre de la devise, du pays, de l'opérateur et du type d'opération. Affichez toujours le montant réellement retourné par l'API plutôt qu'une valeur codée en dur.

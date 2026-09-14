@@ -115,6 +115,50 @@ function CodeBlock({ code, language = "json" }: { code: string; language?: strin
   );
 }
 
+type CodeExample = {
+  language: "javascript" | "python" | "bash" | "php";
+  code: string;
+};
+
+function CodeTabs({ examples }: { examples: CodeExample[] }) {
+  const [activeLanguage, setActiveLanguage] = useState<CodeExample["language"]>(examples[0]?.language ?? "javascript");
+  const activeExample = examples.find(example => example.language === activeLanguage) ?? examples[0];
+  const labels: Record<CodeExample["language"], string> = {
+    javascript: "Node.js",
+    python: "Python",
+    bash: "cURL",
+    php: "PHP / Laravel",
+  };
+
+  return (
+    <div className="w-full min-w-0">
+      <div className="flex items-center gap-1 overflow-x-auto border-b border-[#2d333b] bg-[#1c2128] px-2 pt-2">
+        {examples.map(example => {
+          const isActive = example.language === activeExample?.language;
+          return (
+            <button
+              key={example.language}
+              type="button"
+              onClick={() => setActiveLanguage(example.language)}
+              className={`shrink-0 rounded-t-md px-3 py-2 text-xs font-medium transition-colors ${
+                isActive
+                  ? "bg-[#161b22] text-white"
+                  : "text-[#768390] hover:bg-[#2d333b] hover:text-[#cdd9e5]"
+              }`}
+              aria-selected={isActive}
+              role="tab"
+              data-testid={`hosted-code-tab-${example.language}`}
+            >
+              {labels[example.language]}
+            </button>
+          );
+        })}
+      </div>
+      {activeExample && <CodeBlock key={activeExample.language} language={activeExample.language} code={activeExample.code} />}
+    </div>
+  );
+}
+
 function Section({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
   return (
     <section id={id} className="space-y-4 scroll-mt-8">
@@ -648,8 +692,10 @@ Content-Type: application/json`} />
 
             {/* ── 9. Exemples ── */}
             <Section id="examples" title="Exemples de code">
-              <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Node.js</p>
-              <CodeBlock language="javascript" code={`const HP_KEY = process.env.HP_LIVE_KEY;
+              <CodeTabs examples={[
+                {
+                  language: "javascript",
+                  code: `const HP_KEY = process.env.HP_LIVE_KEY;
 
 // Créer un lien de paiement
 async function createLink({ amount, currency, description, countries }) {
@@ -699,56 +745,81 @@ const interval = setInterval(async () => {
     clearInterval(interval);
     console.log("Paiement non abouti :", status);
   }
-}, 5000);`} />
+}, 5000);`,
+                },
+                {
+                  language: "python",
+                  code: `import os
+import requests
 
-              <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">PHP</p>
-              <CodeBlock language="php" code={`<?php
-$hpKey = getenv("HP_LIVE_KEY");
+HP_KEY = os.environ["HP_LIVE_KEY"]
 
-function createPaymentLink($currency, $amount, $description, $countries = null) {
-  global $hpKey;
-  $payload = array_filter([
-    "currency"          => $currency,
-    "amount"            => $amount,
-    "description"       => $description,
-    "is_fixed_amount"   => !empty($amount),
-    "allowed_countries" => $countries,
-  ]);
-
-  $ch = curl_init("https://www.ashtechpay.com/api/v1/hosted-payment/create");
-  curl_setopt_array($ch, [
-    CURLOPT_POST            => true,
-    CURLOPT_RETURNTRANSFER  => true,
-    CURLOPT_HTTPHEADER      => [
-      "Authorization: Bearer $hpKey",
-      "Content-Type: application/json",
-    ],
-    CURLOPT_POSTFIELDS => json_encode($payload),
-  ]);
-  $result = json_decode(curl_exec($ch), true);
-  curl_close($ch);
-  return $result;
+payload = {
+    "currency": "XAF",
+    "amount": 5000,
+    "description": "Commande",
+    "is_fixed_amount": True,
+    "allowed_countries": ["CM"],
 }
 
-$link = createPaymentLink("XAF", 10000, "Facture #456", ["CM"]);
-header("Location: " . $link["payment_link"]);`} />
-
-              <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">cURL</p>
-              <CodeBlock language="bash" code={`# Prix fixe — Cameroun uniquement
-curl -X POST https://www.ashtechpay.com/api/v1/hosted-payment/create \
-  -H "Authorization: Bearer hp_live_xxxxxxxxxxxxxxxxxxxxxxxx" \
-  -H "Content-Type: application/json" \
+response = requests.post(
+    "https://www.ashtechpay.com/api/v1/hosted-payment/create",
+    headers={
+        "Authorization": f"Bearer {HP_KEY}",
+        "Content-Type": "application/json",
+    },
+    json=payload,
+)
+link = response.json()
+print(link["payment_link"])`,
+                },
+                {
+                  language: "bash",
+                  code: `# Prix fixe : Cameroun uniquement
+curl -X POST https://www.ashtechpay.com/api/v1/hosted-payment/create \\
+  -H "Authorization: Bearer hp_live_xxxxxxxxxxxxxxxxxxxxxxxx" \\
+  -H "Content-Type: application/json" \\
   -d '{"currency":"XAF","amount":5000,"description":"Commande","allowed_countries":["CM"]}'
 
-# Prix libre — tous les pays
-curl -X POST https://www.ashtechpay.com/api/v1/hosted-payment/create \
-  -H "Authorization: Bearer hp_live_xxxxxxxxxxxxxxxxxxxxxxxx" \
-  -H "Content-Type: application/json" \
+# Prix libre : tous les pays
+curl -X POST https://www.ashtechpay.com/api/v1/hosted-payment/create \\
+  -H "Authorization: Bearer hp_live_xxxxxxxxxxxxxxxxxxxxxxxx" \\
+  -H "Content-Type: application/json" \\
   -d '{"currency":"XOF","description":"Don","is_fixed_amount":false}'
 
 # Vérifier le statut
-curl https://www.ashtechpay.com/api/v1/hosted-payment/UUID_DU_LIEN \
-  -H "Authorization: Bearer hp_live_xxxxxxxxxxxxxxxxxxxxxxxx"`} />
+curl https://www.ashtechpay.com/api/v1/hosted-payment/UUID_DU_LIEN \\
+  -H "Authorization: Bearer hp_live_xxxxxxxxxxxxxxxxxxxxxxxx"`,
+                },
+                {
+                  language: "php",
+                  code: `<?php
+$hpKey = getenv("HP_LIVE_KEY");
+
+$payload = [
+    "currency" => "XAF",
+    "amount" => 5000,
+    "description" => "Commande",
+    "is_fixed_amount" => true,
+    "allowed_countries" => ["CM"],
+];
+
+$ch = curl_init("https://www.ashtechpay.com/api/v1/hosted-payment/create");
+curl_setopt_array($ch, [
+    CURLOPT_POST => true,
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_HTTPHEADER => [
+        "Authorization: Bearer " . $hpKey,
+        "Content-Type: application/json",
+    ],
+    CURLOPT_POSTFIELDS => json_encode($payload),
+]);
+$link = json_decode(curl_exec($ch), true);
+curl_close($ch);
+
+header("Location: " . $link["payment_link"]);`,
+                },
+              ]} />
             </Section>
 
             {/* Back */}

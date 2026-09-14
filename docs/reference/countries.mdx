@@ -7,10 +7,61 @@ description: "Obtenez les pays et opérateurs Mobile Money actifs."
 GET https://www.ashtechpay.com/v1/countries
 ```
 
+<Tabs>
+  <Tab title="Node.js">
+
+```javascript
+const response = await fetch("https://www.ashtechpay.com/v1/countries", {
+  headers: {
+    Authorization: `Bearer ${process.env.ASHTECH_API_KEY}`,
+  },
+});
+
+const countries = await response.json();
+```
+
+  </Tab>
+  <Tab title="Python">
+
+```python
+import os
+import requests
+
+response = requests.get(
+    "https://www.ashtechpay.com/v1/countries",
+    headers={"Authorization": f"Bearer {os.environ['ASHTECH_API_KEY']}"},
+)
+countries = response.json()
+```
+
+  </Tab>
+  <Tab title="cURL">
+
 ```bash
 curl https://www.ashtechpay.com/v1/countries \
   -H "Authorization: Bearer $ASHTECH_API_KEY"
 ```
+
+  </Tab>
+  <Tab title="PHP / Laravel">
+
+```php
+<?php
+
+$ch = curl_init("https://www.ashtechpay.com/v1/countries");
+curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_HTTPHEADER => [
+        "Authorization: Bearer " . getenv("ASHTECH_API_KEY"),
+    ],
+]);
+
+$countries = json_decode(curl_exec($ch), true);
+curl_close($ch);
+```
+
+  </Tab>
+</Tabs>
 
 La réponse contient les pays actifs, leur devise et les opérateurs disponibles. Utilisez cette réponse pour alimenter votre formulaire de paiement.
 

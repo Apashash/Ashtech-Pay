@@ -11,7 +11,10 @@ Toutes les routes Direct API protégées utilisent votre clé API dans l'en-têt
 Authorization: Bearer YOUR_API_KEY
 ```
 
-Exemple Node.js :
+Exemple pour charger les pays avec votre clé API :
+
+<Tabs>
+  <Tab title="Node.js">
 
 ```javascript
 const response = await fetch("https://www.ashtechpay.com/v1/countries", {
@@ -22,6 +25,49 @@ const response = await fetch("https://www.ashtechpay.com/v1/countries", {
 
 const countries = await response.json();
 ```
+
+  </Tab>
+  <Tab title="Python">
+
+```python
+import os
+import requests
+
+response = requests.get(
+    "https://www.ashtechpay.com/v1/countries",
+    headers={"Authorization": f"Bearer {os.environ['ASHTECH_API_KEY']}"},
+)
+countries = response.json()
+```
+
+  </Tab>
+  <Tab title="cURL">
+
+```bash
+curl https://www.ashtechpay.com/v1/countries \
+  -H "Authorization: Bearer $ASHTECH_API_KEY"
+```
+
+  </Tab>
+  <Tab title="PHP / Laravel">
+
+```php
+<?php
+
+$ch = curl_init("https://www.ashtechpay.com/v1/countries");
+curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_HTTPHEADER => [
+        "Authorization: Bearer " . getenv("ASHTECH_API_KEY"),
+    ],
+]);
+
+$countries = json_decode(curl_exec($ch), true);
+curl_close($ch);
+```
+
+  </Tab>
+</Tabs>
 
 ## Règles de sécurité
 
