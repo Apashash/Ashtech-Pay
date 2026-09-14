@@ -165,6 +165,50 @@ function CodeBlock({ code, language = "json" }: { code: string; language?: strin
   );
 }
 
+type CodeExample = {
+  language: "javascript" | "python" | "bash" | "php";
+  code: string;
+};
+
+function CodeTabs({ examples }: { examples: CodeExample[] }) {
+  const [activeLanguage, setActiveLanguage] = useState<CodeExample["language"]>(examples[0]?.language ?? "javascript");
+  const activeExample = examples.find(example => example.language === activeLanguage) ?? examples[0];
+  const labels: Record<CodeExample["language"], string> = {
+    javascript: "Node.js",
+    python: "Python",
+    bash: "cURL",
+    php: "PHP / Laravel",
+  };
+
+  return (
+    <div className="w-full min-w-0">
+      <div className="flex items-center gap-1 overflow-x-auto border-b border-[#3a3a3a] bg-[#2b2b2b] px-2 pt-2">
+        {examples.map(example => {
+          const isActive = example.language === activeExample?.language;
+          return (
+            <button
+              key={example.language}
+              type="button"
+              onClick={() => setActiveLanguage(example.language)}
+              className={`shrink-0 rounded-t-md px-3 py-2 text-xs font-medium transition-colors ${
+                isActive
+                  ? "bg-[#1a1a1a] text-white"
+                  : "text-[#a0a0a0] hover:bg-[#3d3d3d] hover:text-white"
+              }`}
+              aria-selected={isActive}
+              role="tab"
+              data-testid={`code-tab-${example.language}`}
+            >
+              {labels[example.language]}
+            </button>
+          );
+        })}
+      </div>
+      {activeExample && <CodeBlock key={activeExample.language} language={activeExample.language} code={activeExample.code} />}
+    </div>
+  );
+}
+
 /* ── Table components ── */
 function DocTable({ children }: { children: React.ReactNode }) {
   return (
@@ -454,15 +498,57 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
               </p>
             </div>
 
-            <SubH>Exemple d'appel authentifié (Node.js)</SubH>
-            <CodeBlock language="javascript" code={`const response = await fetch("https://www.ashtechpay.com/v1/collect", {
+            <SubH>Exemple d'appel authentifié</SubH>
+            <CodeTabs examples={[
+              {
+                language: "javascript",
+                code: `const response = await fetch("https://www.ashtechpay.com/v1/collect", {
   method: "POST",
   headers: {
     "Authorization": "Bearer YOUR_API_KEY",
     "Content-Type": "application/json"
   },
   body: JSON.stringify({ /* ... */ })
-});`} />
+});`,
+              },
+              {
+                language: "python",
+                code: `import requests
+
+response = requests.post(
+    "https://www.ashtechpay.com/v1/collect",
+    headers={
+        "Authorization": "Bearer YOUR_API_KEY",
+        "Content-Type": "application/json",
+    },
+    json={},
+)
+print(response.json())`,
+              },
+              {
+                language: "bash",
+                code: `curl https://www.ashtechpay.com/v1/collect \\
+  -X POST \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{}'`,
+              },
+              {
+                language: "php",
+                code: `$ch = curl_init("https://www.ashtechpay.com/v1/collect");
+curl_setopt_array($ch, [
+    CURLOPT_POST => true,
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_HTTPHEADER => [
+        "Authorization: Bearer YOUR_API_KEY",
+        "Content-Type: application/json",
+    ],
+    CURLOPT_POSTFIELDS => json_encode([]),
+]);
+$response = json_decode(curl_exec($ch), true);
+curl_close($ch);`,
+              },
+            ]} />
 
             <AuthSection />
           </section>
@@ -482,13 +568,41 @@ export default function DeveloperPage({ publicMode = false }: { publicMode?: boo
             <div className="grid lg:grid-cols-2 gap-5 mb-5">
               <div className="space-y-2 min-w-0">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1">Requête</p>
-                <CodeBlock language="javascript" code={`fetch("https://www.ashtechpay.com/v1/countries", {
+                <CodeTabs examples={[
+                  {
+                    language: "javascript",
+                    code: `fetch("https://www.ashtechpay.com/v1/countries", {
   headers: {
     "Authorization": "Bearer YOUR_API_KEY"
   }
-})`} />
-                <CodeBlock language="bash" code={`curl https://www.ashtechpay.com/v1/countries \\
-  -H "Authorization: Bearer YOUR_API_KEY"`} />
+})`,
+                  },
+                  {
+                    language: "python",
+                    code: `import requests
+
+response = requests.get(
+    "https://www.ashtechpay.com/v1/countries",
+    headers={"Authorization": "Bearer YOUR_API_KEY"},
+)
+print(response.json())`,
+                  },
+                  {
+                    language: "bash",
+                    code: `curl https://www.ashtechpay.com/v1/countries \\
+  -H "Authorization: Bearer YOUR_API_KEY"`,
+                  },
+                  {
+                    language: "php",
+                    code: `$ch = curl_init("https://www.ashtechpay.com/v1/countries");
+curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_HTTPHEADER => ["Authorization: Bearer YOUR_API_KEY"],
+]);
+$countries = json_decode(curl_exec($ch), true);
+curl_close($ch);`,
+                  },
+                ]} />
               </div>
               <div className="space-y-2 min-w-0">
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1">Réponse</p>
