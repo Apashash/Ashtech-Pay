@@ -9,6 +9,9 @@ description: "Créez et suivez une collecte Mobile Money."
 POST https://www.ashtechpay.com/v1/collect
 ```
 
+<Tabs>
+  <Tab title="Node.js">
+
 ```javascript
 const response = await fetch("https://www.ashtechpay.com/v1/collect", {
   method: "POST",
@@ -29,6 +32,84 @@ const response = await fetch("https://www.ashtechpay.com/v1/collect", {
 
 const payment = await response.json();
 ```
+
+  </Tab>
+  <Tab title="Python">
+
+```python
+import os
+import requests
+
+response = requests.post(
+    "https://www.ashtechpay.com/v1/collect",
+    headers={
+        "Authorization": f"Bearer {os.environ['ASHTECH_API_KEY']}",
+        "Content-Type": "application/json",
+    },
+    json={
+        "amount": 1000,
+        "currency": "XAF",
+        "country_code": "CM",
+        "operator": "MTN",
+        "phone": "2376XXXXXXXX",
+        "reference": "order_12345",
+        "notify_url": "https://example.com/webhooks/ashtechpay",
+    },
+)
+payment = response.json()
+```
+
+  </Tab>
+  <Tab title="cURL">
+
+```bash
+curl -X POST https://www.ashtechpay.com/v1/collect \
+  -H "Authorization: Bearer $ASHTECH_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "amount": 1000,
+    "currency": "XAF",
+    "country_code": "CM",
+    "operator": "MTN",
+    "phone": "2376XXXXXXXX",
+    "reference": "order_12345",
+    "notify_url": "https://example.com/webhooks/ashtechpay"
+  }'
+```
+
+  </Tab>
+  <Tab title="PHP / Laravel">
+
+```php
+<?php
+
+$payload = [
+    "amount" => 1000,
+    "currency" => "XAF",
+    "country_code" => "CM",
+    "operator" => "MTN",
+    "phone" => "2376XXXXXXXX",
+    "reference" => "order_12345",
+    "notify_url" => "https://example.com/webhooks/ashtechpay",
+];
+
+$ch = curl_init("https://www.ashtechpay.com/v1/collect");
+curl_setopt_array($ch, [
+    CURLOPT_POST => true,
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_HTTPHEADER => [
+        "Authorization: Bearer " . getenv("ASHTECH_API_KEY"),
+        "Content-Type: application/json",
+    ],
+    CURLOPT_POSTFIELDS => json_encode($payload),
+]);
+
+$payment = json_decode(curl_exec($ch), true);
+curl_close($ch);
+```
+
+  </Tab>
+</Tabs>
 
 ## Données importantes
 
@@ -52,7 +133,60 @@ Le traitement peut être asynchrone. Utilisez `GET /v1/transaction/:id` pour vé
 
 Pour les parcours USSD Push, Wave, OTP SMS et OTP USSD, consultez [les flux de paiement détaillés](/docs/direct-api/payment-flows).
 
+<Tabs>
+  <Tab title="Node.js">
+
+```javascript
+const response = await fetch(
+  "https://www.ashtechpay.com/v1/transaction/TRANSACTION_ID",
+  {
+    headers: {
+      Authorization: `Bearer ${process.env.ASHTECH_API_KEY}`,
+    },
+  },
+);
+const transaction = await response.json();
+```
+
+  </Tab>
+  <Tab title="Python">
+
+```python
+import os
+import requests
+
+response = requests.get(
+    "https://www.ashtechpay.com/v1/transaction/TRANSACTION_ID",
+    headers={"Authorization": f"Bearer {os.environ['ASHTECH_API_KEY']}"},
+)
+transaction = response.json()
+```
+
+  </Tab>
+  <Tab title="cURL">
+
 ```bash
-  curl https://www.ashtechpay.com/v1/transaction/TRANSACTION_ID \
+curl https://www.ashtechpay.com/v1/transaction/TRANSACTION_ID \
   -H "Authorization: Bearer $ASHTECH_API_KEY"
 ```
+
+  </Tab>
+  <Tab title="PHP / Laravel">
+
+```php
+<?php
+
+$ch = curl_init("https://www.ashtechpay.com/v1/transaction/TRANSACTION_ID");
+curl_setopt_array($ch, [
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_HTTPHEADER => [
+        "Authorization: Bearer " . getenv("ASHTECH_API_KEY"),
+    ],
+]);
+
+$transaction = json_decode(curl_exec($ch), true);
+curl_close($ch);
+```
+
+  </Tab>
+</Tabs>

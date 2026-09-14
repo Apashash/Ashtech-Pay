@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "wouter";
 import { PUBLIC_API_DOCS_URL } from "@/lib/public-links";
 import { QRCodeSVG } from "qrcode.react";
 import { Button } from "@/components/ui/button";
@@ -280,12 +279,12 @@ export default function TestCryptoPage() {
               </span>
             </div>
           </div>
-          <Link href="/docs/api#crypto" className="shrink-0">
+          <a href={`${PUBLIC_API_DOCS_URL}#crypto`} className="shrink-0">
             <Button variant="ghost" size="sm" className="text-xs text-gray-500 gap-1.5 px-2 sm:px-3">
               <Terminal className="w-3.5 h-3.5 shrink-0" />
               <span className="hidden sm:inline">Voir la documentation</span>
             </Button>
-          </Link>
+          </a>
         </div>
       </header>
 

@@ -67,6 +67,7 @@ import { useExchangeRates } from "@/hooks/use-exchange-rates";
 import type { SupportedCurrency } from "@shared/schema";
 import { COUNTRY_CURRENCIES } from "@shared/schema";
 import { useLanguage } from "@/lib/language";
+import { LoadingScreen } from "@/components/loading-indicator";
 import { getProfileImageSrc } from "@/lib/profile-image";
 import { LanguageSwitcher } from "@/components/language-switcher";
 
@@ -269,19 +270,11 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   }, [isLoading, user, setLocation]);
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
   if (!user) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
   const isPrivilegedUser = ["admin", "support", "finance"].includes(user.role);

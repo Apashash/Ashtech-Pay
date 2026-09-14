@@ -8,7 +8,6 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import { LanguageProvider } from "@/lib/language";
-import { PUBLIC_API_DOCS_URL, PUBLIC_CHECKOUT_DOCS_URL } from "@/lib/public-links";
 const LandingPage = React.lazy(() => import("@/pages/landing"));
 const LoginPage = React.lazy(() => import("@/pages/login"));
 const RegisterPage = React.lazy(() => import("@/pages/register"));
@@ -37,11 +36,9 @@ const KYCVerifiedPage = React.lazy(() => import("@/pages/dashboard/kyc-verified"
 const SupportPage = React.lazy(() => import("@/pages/dashboard/support"));
 const ApiKeysPage = React.lazy(() => import("@/pages/dashboard/api-keys"));
 const DirectApiPage = React.lazy(() => import("@/pages/dashboard/direct-api"));
-const DeveloperPage = React.lazy(() => import("@/pages/dashboard/developer"));
 const HostedPageDashboard = React.lazy(() => import("@/pages/dashboard/hosted-page"));
 const HostedPageKeys = React.lazy(() => import("@/pages/dashboard/hosted-page-keys"));
 const HostedPageGenerate = React.lazy(() => import("@/pages/dashboard/hosted-page-generate"));
-const HostedPageDocs = React.lazy(() => import("@/pages/dashboard/hosted-page-docs"));
 const TestPaymentPage = React.lazy(() => import("@/pages/docs/test-payment"));
 const TestCryptoPage = React.lazy(() => import("@/pages/docs/test-crypto"));
 const HPayPage = React.lazy(() => import("@/pages/hpay"));
@@ -106,6 +103,7 @@ const BlockedPage = React.lazy(() => import("@/pages/blocked"));
 import { getBlockedUntil } from "@/lib/appUtils";
 import AppInstallBanner from "@/components/app-install-banner";
 import { PushNotificationPrompt } from "@/components/push-notification-prompt";
+import { LoadingScreen } from "@/components/loading-indicator";
 
 // Redirige immédiatement vers /blocked si l'IP est bloquée (vérif. localStorage)
 // useLayoutEffect + return null = aucun flash de la page login/register
@@ -127,11 +125,9 @@ function BlockGuard({ children }: { children: React.ReactNode }) {
 function Router() {
   const A = getAdminPath();
   return (
-    <Suspense fallback={<div className="min-h-screen bg-background" aria-label="Chargement" />}>
+    <Suspense fallback={<LoadingScreen />}>
     <Switch>
       <Route path="/" component={LandingPage} />
-      <Route path="/docs/api" component={() => <ExternalDocsRedirect href={PUBLIC_API_DOCS_URL} />} />
-      <Route path="/docs/hosted-page" component={() => <ExternalDocsRedirect href={PUBLIC_CHECKOUT_DOCS_URL} />} />
       <Route path="/docs/test-pay" component={TestPaymentPage} />
       <Route path="/docs/test-crypto" component={TestCryptoPage} />
       <Route path="/blocked" component={BlockedPage} />
@@ -466,18 +462,6 @@ function AuthenticatedWatchers() {
       <ImpersonationBanner />
       <PushNotificationPrompt />
     </>
-  );
-}
-
-function ExternalDocsRedirect({ href }: { href: string }) {
-  useEffect(() => {
-    window.location.replace(href);
-  }, [href]);
-
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-background text-muted-foreground text-sm">
-      Redirection vers la documentation…
-    </div>
   );
 }
 
