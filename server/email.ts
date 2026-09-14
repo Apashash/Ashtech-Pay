@@ -30,6 +30,12 @@ function cleanEmailSubject(subject: string): string {
   return subject.replace(/\s*[—–-]\s*/g, " : ").replace(/\s{2,}/g, " ").trim();
 }
 
+function cleanEmailLinks(html: string): string {
+  return html
+    .replace(/https?:\/\/(?:www\.)?ashtechpay\.top/gi, APP_URL)
+    .replace(/\b(?:www\.)?ashtechpay\.top\b/gi, "www.ashtechpay.com");
+}
+
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
 const NAVY   = "#1E3A8A";
 const TEXT   = "#111827";
@@ -160,7 +166,8 @@ async function sendEmail(to: string, subject: string, html: string, label: strin
   }
   try {
     const cleanSubject = cleanEmailSubject(subject);
-    const { data, error } = await resend.emails.send({ from: FROM_EMAIL, to: [to], subject: cleanSubject, html });
+    const cleanHtml = cleanEmailLinks(html);
+    const { data, error } = await resend.emails.send({ from: FROM_EMAIL, to: [to], subject: cleanSubject, html: cleanHtml });
     if (error) console.error(`[Email] ${label} error:`, JSON.stringify(error));
     else console.log(`[Email] ${label} sent:`, data?.id, "→", to);
   } catch (err: any) {
