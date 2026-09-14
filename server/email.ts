@@ -10,7 +10,7 @@ const FROM_EMAIL    = "Ashtech Pay <noreply@ashtechpay.com>";
 const APP_URL       = "https://www.ashtechpay.com";
 const LOGO_URL      = "https://www.ashtechpay.com/logo.png";
 const WA_LOGO_URL   = "https://www.ashtechpay.com/wa-logo.svg";
-const FB_LOGO_URL   = "https://www.ashtechpay.com/fb-logo.svg";
+const FB_LOGO_URL   = "https://www.ashtechpay.com/fb-logo.png";
 const FACEBOOK_URL  = "https://www.facebook.com/share/1Eczpeowdp/?mibextid=wwXIfr";
 const WHATSAPP_URL  = "https://whatsapp.com/channel/0029VbC5tPPCxoAveJ44Vs2w";
 const SUPPORT_PHONE = "+237 6 83 67 78 72";
