@@ -26,6 +26,10 @@ function escapeHtml(str: string | null | undefined): string {
     .replace(/'/g, "&#x27;");
 }
 
+function cleanEmailSubject(subject: string): string {
+  return subject.replace(/\s*[—–-]\s*/g, " : ").replace(/\s{2,}/g, " ").trim();
+}
+
 // ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
 const NAVY   = "#1E3A8A";
 const TEXT   = "#111827";
@@ -42,7 +46,7 @@ function emailBase(title: string, bodyRows: string): string {
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
-  <title>${title} — Ashtech Pay</title>
+  <title>${cleanEmailSubject(title)}</title>
 </head>
 <body style="margin:0;padding:0;background-color:#F5F7FA;font-family:Arial,Helvetica,sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F5F7FA;">
@@ -155,7 +159,8 @@ async function sendEmail(to: string, subject: string, html: string, label: strin
     return;
   }
   try {
-    const { data, error } = await resend.emails.send({ from: FROM_EMAIL, to: [to], subject, html });
+    const cleanSubject = cleanEmailSubject(subject);
+    const { data, error } = await resend.emails.send({ from: FROM_EMAIL, to: [to], subject: cleanSubject, html });
     if (error) console.error(`[Email] ${label} error:`, JSON.stringify(error));
     else console.log(`[Email] ${label} sent:`, data?.id, "→", to);
   } catch (err: any) {
