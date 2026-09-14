@@ -10,6 +10,7 @@ import { formatCurrency } from "@/lib/currency";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { useLanguage } from "@/lib/language";
+import { getTransactionStatusCategory } from "@shared/transaction-status";
 
 interface TransactionDetails extends Transaction {
   paymentLink?: { title: string; slug: string } | null;
@@ -119,15 +120,18 @@ export default function TransactionDetailPage({ params }: { params: { id: string
   const isPaymentLink = tx.type === "payment_link";
 
   const amountPrefix = isConversion ? "⇄ " : (isIncoming ? "+" : "-");
-  const isSuccessful = ["completed", "success", "succeeded"].includes(tx.status);
-  const isPending = ["pending", "pending_manual"].includes(tx.status);
-  const isFailed = ["failed", "cancelled", "rejected"].includes(tx.status);
-  const statusTone = isSuccessful ? "success" : isPending ? "pending" : isFailed ? "failed" : null;
+  const statusCategory = getTransactionStatusCategory(tx.status);
+  const isSuccessful = statusCategory === "completed";
+  const isPending = statusCategory === "pending";
+  const isFailed = statusCategory === "failed" || statusCategory === "cancelled";
+  const statusTone = isSuccessful ? "success" : isPending ? "pending" : isFailed ? "failed" : statusCategory === "processing" ? "processing" : null;
 
   const headerBg = statusTone === "success"
     ? "bg-green-600"
-    : statusTone === "pending"
+      : statusTone === "pending"
       ? "bg-amber-500"
+        : statusTone === "processing"
+          ? "bg-blue-500"
       : statusTone === "failed"
         ? "bg-red-600"
         : isConversion
@@ -151,21 +155,19 @@ export default function TransactionDetailPage({ params }: { params: { id: string
   const iconColor = "text-white";
 
   const statusBadge = () => {
-    switch (tx.status) {
+    switch (statusCategory) {
       case "completed":
-      case "success":
-      case "succeeded":
         return <Badge className="bg-white/20 text-white border-white/30 font-semibold">{td.detailStatusCompleted}</Badge>;
       case "pending":
-      case "pending_manual":
         return <Badge className="bg-white/20 text-white border-white/30 font-semibold">{td.detailStatusPending}</Badge>;
+      case "processing":
+        return <Badge className="bg-white/20 text-white border-white/30 font-semibold">{td.statusProcessing}</Badge>;
       case "failed":
-      case "rejected":
         return <Badge className="bg-white/20 text-white border-white/30 font-semibold">{td.detailStatusFailed}</Badge>;
       case "cancelled":
         return <Badge className="bg-white/20 text-white border-white/30 font-semibold">{td.detailStatusCancelled}</Badge>;
       default:
-        return <Badge className="bg-white/20 text-white border-white/30 font-semibold">{tx.status}</Badge>;
+        return <Badge className="bg-white/20 text-white border-white/30 font-semibold">{td.statusUnknown}</Badge>;
     }
   };
 

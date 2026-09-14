@@ -17,6 +17,11 @@ import { formatCurrency, formatWalletBalance } from "@/lib/currency";
 import { useLocation } from "wouter";
 import { useExchangeRates } from "@/hooks/use-exchange-rates";
 import { useLanguage } from "@/lib/language";
+import {
+  getTransactionStatusCategory,
+  isTransactionCompletedStatus,
+  isTransactionOpenStatus,
+} from "@shared/transaction-status";
 
 const PAGE_SIZE = 25;
 
@@ -40,7 +45,17 @@ function exportToCSV(transactions: Transaction[], user: User | undefined, tObj: 
     tl[tx.type] || tx.type,
     tx.amount,
     tx.currency || currency,
-    tx.status === "completed" ? tObj.transactions.csvStatusCompleted : tx.status === "pending" ? tObj.transactions.csvStatusPending : tx.status === "failed" ? tObj.transactions.csvStatusFailed : tx.status,
+    getTransactionStatusCategory(tx.status) === "completed"
+      ? tObj.transactions.csvStatusCompleted
+      : getTransactionStatusCategory(tx.status) === "pending"
+        ? tObj.transactions.csvStatusPending
+        : getTransactionStatusCategory(tx.status) === "processing"
+          ? tObj.transactions.statusProcessing
+          : getTransactionStatusCategory(tx.status) === "failed"
+            ? tObj.transactions.csvStatusFailed
+            : getTransactionStatusCategory(tx.status) === "cancelled"
+              ? tObj.transactions.statusCancelled
+              : tObj.transactions.statusUnknown,
     tx.reference || "",
     tx.description || "",
   ]);
@@ -110,7 +125,7 @@ export default function TransactionsPage() {
 
   const filteredTransactions = useMemo(() => transactions.filter(tx => {
     if (typeFilter !== "all" && tx.type !== typeFilter) return false;
-    if (statusFilter !== "all" && tx.status !== statusFilter) return false;
+    if (statusFilter !== "all" && getTransactionStatusCategory(tx.status) !== statusFilter) return false;
     if (currencyFilter !== "all" && tx.currency !== currencyFilter) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
@@ -126,10 +141,10 @@ export default function TransactionsPage() {
 
   const stats = useMemo(() => {
     const cur = (user?.preferredCurrency || "XAF") as SupportedCurrency;
-    const completed = filteredTransactions.filter(tx => tx.status === "completed");
+    const completed = filteredTransactions.filter(tx => isTransactionCompletedStatus(tx.status));
     const incoming = completed.filter(tx => ["deposit", "transfer_in", "payment_link"].includes(tx.type));
     const outgoing = completed.filter(tx => ["withdrawal", "transfer_out"].includes(tx.type));
-    const pending = filteredTransactions.filter(tx => tx.status === "pending" || tx.status === "pending_manual");
+    const pending = filteredTransactions.filter(tx => isTransactionOpenStatus(tx.status));
     const totalIn = incoming.reduce((s, tx) => s + parseFloat(tx.amount || "0"), 0);
     const totalOut = outgoing.reduce((s, tx) => s + parseFloat(tx.amount || "0"), 0);
     return { totalIn, totalOut, pendingCount: pending.length, completedCount: completed.length, currency: cur };
@@ -172,31 +187,34 @@ export default function TransactionsPage() {
   };
 
   const getStatusBadge = (status: string) => {
-    switch (status) {
+    switch (getTransactionStatusCategory(status)) {
       case "completed":
-      case "success":
-      case "succeeded":
         return <Badge className="text-[10px] px-1.5 py-0 bg-green-500/20 text-green-600 border-green-500/30 font-medium">{t.transactions.statusCompleted}</Badge>;
       case "pending":
-      case "pending_manual":
         return <Badge className="text-[10px] px-1.5 py-0 bg-amber-500/20 text-amber-600 border-amber-500/30 font-medium">{t.transactions.statusPending}</Badge>;
+      case "processing":
+        return <Badge className="text-[10px] px-1.5 py-0 bg-blue-500/20 text-blue-600 border-blue-500/30 font-medium">{t.transactions.statusProcessing}</Badge>;
       case "failed":
         return <Badge className="text-[10px] px-1.5 py-0 bg-red-500/20 text-red-600 border-red-500/30 font-medium">{t.transactions.statusFailed}</Badge>;
       case "cancelled":
         return <Badge className="text-[10px] px-1.5 py-0 bg-muted text-muted-foreground font-medium">{t.transactions.statusCancelled}</Badge>;
       default:
-        return <Badge className="text-[10px] px-1.5 py-0 bg-muted text-muted-foreground">{status}</Badge>;
+        return <Badge className="text-[10px] px-1.5 py-0 bg-muted text-muted-foreground">{t.transactions.statusUnknown}</Badge>;
     }
   };
 
   const getTransactionRowClass = (status: string) => {
-    if (["completed", "success", "succeeded"].includes(status)) {
+    const category = getTransactionStatusCategory(status);
+    if (category === "completed") {
       return "border-l-4 border-green-500 bg-green-500/10 hover:bg-green-500/15";
     }
-    if (["pending", "pending_manual"].includes(status)) {
+    if (category === "pending") {
       return "border-l-4 border-amber-500 bg-amber-500/10 hover:bg-amber-500/15";
     }
-    if (["failed", "cancelled", "rejected"].includes(status)) {
+    if (category === "processing") {
+      return "border-l-4 border-blue-500 bg-blue-500/10 hover:bg-blue-500/15";
+    }
+    if (category === "failed" || category === "cancelled") {
       return "border-l-4 border-red-500 bg-red-500/10 hover:bg-red-500/15";
     }
     return "hover:bg-muted/40";
@@ -225,8 +243,8 @@ export default function TransactionsPage() {
 
   const getAmountColor = (tx: Transaction) => {
     if (tx.type === "conversion") return "text-blue-500";
-    if (["completed", "success", "succeeded"].includes(tx.status)) return ["deposit", "transfer_in", "payment_link"].includes(tx.type) ? "text-green-500" : "text-red-500";
-    if (tx.status === "pending" || tx.status === "pending_manual") return "text-amber-500";
+    if (isTransactionCompletedStatus(tx.status)) return ["deposit", "transfer_in", "payment_link"].includes(tx.type) ? "text-green-500" : "text-red-500";
+    if (isTransactionOpenStatus(tx.status)) return "text-amber-500";
     return "text-muted-foreground";
   };
 
@@ -353,6 +371,7 @@ export default function TransactionsPage() {
                   <SelectItem value="all">{t.transactions.allStatuses}</SelectItem>
                   <SelectItem value="completed">{t.transactions.statusCompleted}</SelectItem>
                   <SelectItem value="pending">{t.transactions.statusPending}</SelectItem>
+                  <SelectItem value="processing">{t.transactions.statusProcessing}</SelectItem>
                   <SelectItem value="failed">{t.transactions.statusFailed}</SelectItem>
                   <SelectItem value="cancelled">{t.transactions.statusCancelled}</SelectItem>
                 </SelectContent>

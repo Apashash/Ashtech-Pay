@@ -85,6 +85,10 @@ import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserW
 import { addPendingPayout, removePendingPayout } from "./payoutPoller";
 import { processPendingConversions } from "./conversionPoller";
 import { processPawaPayPayoutCallback } from "./payoutPoller";
+import {
+  isTransactionCompletedStatus,
+  isTransactionOpenStatus,
+} from "@shared/transaction-status";
 import { isPawaPayUuidV4, parsePawaPayCallback, verifyPawaPayCallbackSignature } from "./pawapay";
 import {
   getPawaPaySettingsView,
@@ -4176,7 +4180,7 @@ export async function registerRoutes(
       const now = new Date();
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
       
-      const completedTransactions = transactions.filter(t => t.status === "completed");
+      const completedTransactions = transactions.filter(t => isTransactionCompletedStatus(t.status));
       
       const totalReceived = completedTransactions
         .filter(t => t.type === "deposit" || t.type === "transfer_in" || t.type === "payment_link")
@@ -4200,7 +4204,7 @@ export async function registerRoutes(
         totalSent: totalSent.toFixed(2),
         totalTransactions: transactions.length,
         monthlyTransactions: monthlyTransactions.length,
-        pendingTransactions: transactions.filter(t => t.status === "pending").length,
+        pendingTransactions: transactions.filter(t => isTransactionOpenStatus(t.status)).length,
         totalClicks,
         linkPayments: linkPayments.length,
         totalCollected: totalCollected.toFixed(2),
@@ -4604,7 +4608,7 @@ export async function registerRoutes(
                 COALESCE(SUM(CASE WHEN status = 'completed' AND type IN ('withdrawal','transfer_out') THEN CAST(amount AS DECIMAL(20,2)) ELSE 0 END), 0) AS total_sent,
                 COUNT(*) AS total_transactions,
                 SUM(CASE WHEN created_at >= DATE_FORMAT(NOW(), '%Y-%m-01 00:00:00') THEN 1 ELSE 0 END) AS monthly_transactions,
-                SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending_transactions,
+                 SUM(CASE WHEN status IN ('pending', 'pending_manual', 'processing') THEN 1 ELSE 0 END) AS pending_transactions,
                 SUM(CASE WHEN status = 'completed' AND type = 'payment_link' THEN 1 ELSE 0 END) AS link_payments,
                 COALESCE(SUM(CASE WHEN status = 'completed' AND type = 'payment_link' THEN CAST(amount AS DECIMAL(20,2)) ELSE 0 END), 0) AS total_collected
               FROM transactions
@@ -4617,7 +4621,7 @@ export async function registerRoutes(
                 COALESCE(SUM(amount::numeric) FILTER (WHERE status='completed' AND type IN ('withdrawal','transfer_out')), 0) AS total_sent,
                 COUNT(*)::int AS total_transactions,
                 COUNT(*) FILTER (WHERE created_at >= date_trunc('month', NOW()))::int AS monthly_transactions,
-                COUNT(*) FILTER (WHERE status='pending')::int AS pending_transactions,
+                 COUNT(*) FILTER (WHERE status IN ('pending', 'pending_manual', 'processing'))::int AS pending_transactions,
                 COUNT(*) FILTER (WHERE status='completed' AND type='payment_link')::int AS link_payments,
                 COALESCE(SUM(amount::numeric) FILTER (WHERE status='completed' AND type='payment_link'), 0) AS total_collected
               FROM transactions

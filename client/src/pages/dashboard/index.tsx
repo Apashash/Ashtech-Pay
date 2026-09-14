@@ -47,6 +47,10 @@ import { Link } from "wouter";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { useLanguage } from "@/lib/language";
 import { getAdminPath } from "@/lib/adminPath";
+import {
+  getTransactionStatusCategory,
+  isTransactionCompletedStatus,
+} from "@shared/transaction-status";
 
 interface UserStats {
   totalReceived: string;
@@ -714,7 +718,7 @@ export default function DashboardHome() {
       const dayTransactions = transactions.filter(t => {
         if (!t.createdAt) return false;
         const tDate = new Date(t.createdAt);
-        return tDate.toDateString() === date.toDateString() && t.status === "completed";
+        return tDate.toDateString() === date.toDateString() && isTransactionCompletedStatus(t.status);
       });
       return {
         period: days[date.getDay()],
@@ -1015,13 +1019,15 @@ export default function DashboardHome() {
                           conversion: t.transactions.typeConversion,
                         };
                         const isIncoming = ["deposit", "transfer_in", "payment_link"].includes(tx.type);
-                        const isSuccessful = ["completed", "success", "succeeded"].includes(tx.status);
-                        const isPending = ["pending", "pending_manual"].includes(tx.status);
+                        const statusCategory = getTransactionStatusCategory(tx.status);
+                        const isSuccessful = statusCategory === "completed";
+                        const isPending = statusCategory === "pending";
+                        const isProcessing = statusCategory === "processing";
                         const rowClass = isSuccessful
                           ? "border-l-4 border-green-500 bg-green-500/10 hover:bg-green-500/15"
-                          : isPending
+                          : isPending || isProcessing
                             ? "border-l-4 border-amber-500 bg-amber-500/10 hover:bg-amber-500/15"
-                            : ["failed", "cancelled", "rejected"].includes(tx.status)
+                            : statusCategory === "failed" || statusCategory === "cancelled"
                               ? "border-l-4 border-red-500 bg-red-500/10 hover:bg-red-500/15"
                               : "hover:bg-muted/40";
                         const iconBg = tx.type === "conversion"
@@ -1033,15 +1039,19 @@ export default function DashboardHome() {
                           ? "text-blue-500"
                           : isSuccessful
                             ? isIncoming ? "text-green-500" : "text-red-500"
-                            : isPending ? "text-amber-500" : "text-muted-foreground";
+                            : isPending || isProcessing ? "text-amber-500" : "text-muted-foreground";
                         const amountPrefix = tx.type === "conversion" ? "⇄ " : isIncoming ? "+" : "-";
                         const statusBadge = isSuccessful
                           ? <Badge className="text-[10px] px-1.5 py-0 bg-green-500/20 text-green-600 border-green-500/30 font-medium">{t.transactions.statusCompleted}</Badge>
                           : isPending
                             ? <Badge className="text-[10px] px-1.5 py-0 bg-amber-500/20 text-amber-600 border-amber-500/30 font-medium">{t.transactions.statusPending}</Badge>
-                            : tx.status === "failed"
+                            : isProcessing
+                              ? <Badge className="text-[10px] px-1.5 py-0 bg-blue-500/20 text-blue-600 border-blue-500/30 font-medium">{t.transactions.statusProcessing}</Badge>
+                            : statusCategory === "failed"
                               ? <Badge className="text-[10px] px-1.5 py-0 bg-red-500/20 text-red-600 border-red-500/30 font-medium">{t.transactions.statusFailed}</Badge>
-                              : <Badge className="text-[10px] px-1.5 py-0 bg-muted text-muted-foreground font-medium">{tx.status}</Badge>;
+                            : statusCategory === "cancelled"
+                              ? <Badge className="text-[10px] px-1.5 py-0 bg-muted text-muted-foreground font-medium">{t.transactions.statusCancelled}</Badge>
+                            : <Badge className="text-[10px] px-1.5 py-0 bg-muted text-muted-foreground font-medium">{t.transactions.statusUnknown}</Badge>;
 
                         return (
                           <div
