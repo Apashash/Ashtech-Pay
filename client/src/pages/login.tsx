@@ -174,7 +174,11 @@ export default function LoginPage() {
   // `ok` only means that Node is listening. Login must wait until the
   // database/migration gate is open as well, otherwise the first POST gets a
   // 503 while the page incorrectly appears ready.
-  const serverReady = serverStatus?.ready === true && serverStatus?.migrations_ready === true;
+  // `ready` is the server's combined startup + migration gate. The
+  // migrations_ready fallback keeps login compatible with older production
+  // servers that returned only `{ ok, ready }`.
+  const serverReady = serverStatus?.ready === true
+    && (serverStatus?.migrations_ready === undefined || serverStatus.migrations_ready === true);
   const serverBootstrapFailed = serverStatus?.bootstrap_failed === true;
 
   useEffect(() => {

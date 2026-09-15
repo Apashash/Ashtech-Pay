@@ -324,6 +324,11 @@ app.get("/api/ping", (_req, res) => {
   res.json({
     ok: true,
     ready: startupReady && migrationsReady,
+    // Keep the individual readiness fields in the response because the
+    // login/register forms use them to distinguish a cold start from a
+    // completed database migration. `ready` remains the combined gate.
+    migrations_ready: migrationsReady,
+    bootstrap_failed: Boolean(startupFailure || migrationFailure),
   });
 });
 
