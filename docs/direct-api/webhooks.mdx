@@ -3,7 +3,23 @@ title: "Webhooks"
 description: "Synchronisez vos commandes avec les événements AshTech Pay."
 ---
 
-Configurez un `notify_url` HTTPS lors de la création de votre paiement ou dans la configuration Hosted Page.
+Configurez un `notify_url` HTTPS lors de la création de votre paiement ou dans la configuration Hosted Checkout.
+
+AshTech Pay envoie les notifications avec ces headers :
+
+```http
+X-Ashtech-Event-Id: id-de-livraison
+X-Ashtech-Timestamp: 1735643554
+X-Ashtech-Signature: sha256=...
+```
+
+Quand votre secret webhook `whsec_...` est configuré, vérifiez :
+
+```text
+HMAC-SHA256(webhook_secret, timestamp + "." + raw_request_body)
+```
+
+La vérification doit utiliser le corps brut avant le parsing JSON. Refusez les timestamps trop anciens et dédupliquez avec `X-Ashtech-Event-Id` ou `transaction_id`.
 
 ## Bon traitement d'un webhook
 
@@ -16,8 +32,17 @@ Configurez un `notify_url` HTTPS lors de la création de votre paiement ou dans 
 Exemple Express :
 
 ```javascript
-app.post("/webhooks/ashtechpay", express.json(), async (req, res) => {
-  const event = req.body;
+app.post("/webhooks/ashtechpay", express.raw({ type: "application/json" }), async (req, res) => {
+  const rawBody = req.body.toString("utf8");
+  const timestamp = req.header("X-Ashtech-Timestamp") || "";
+  const signature = req.header("X-Ashtech-Signature") || "";
+
+  // Vérifier HMAC-SHA256(secret, timestamp + "." + rawBody)
+  if (!isValidAshtechSignature(rawBody, timestamp, signature, process.env.WHSEC)) {
+    return res.sendStatus(401);
+  }
+
+  const event = JSON.parse(rawBody);
 
   // Accuser réception rapidement.
   res.sendStatus(200);
