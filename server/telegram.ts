@@ -5,25 +5,34 @@
 
 import crypto from "crypto";
 
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
-const BOT_API = BOT_TOKEN ? `https://api.telegram.org/bot${BOT_TOKEN}` : null;
+// Read these values lazily. In production, server/index.ts can load .env after
+// ESM dependencies have been evaluated, so module-level constants may capture
+// empty values and make Telegram silently unavailable.
+function getBotToken(): string {
+  return process.env.TELEGRAM_BOT_TOKEN?.trim() ?? "";
+}
 
-const TELEGRAM_API = BOT_TOKEN
-  ? `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`
-  : null;
+function getChatId(): string {
+  return process.env.TELEGRAM_CHAT_ID?.trim() ?? "";
+}
+
+function getBotApi(): string | null {
+  const token = getBotToken();
+  return token ? `https://api.telegram.org/bot${token}` : null;
+}
 
 function isConfigured(): boolean {
-  return !!(BOT_TOKEN && CHAT_ID);
+  return Boolean(getBotToken() && getChatId());
 }
 
 async function callBotApi(method: string, body: Record<string, any>): Promise<any> {
-  if (!BOT_API) {
+  const botApi = getBotApi();
+  if (!botApi) {
     console.warn("[Telegram] callBotApi: BOT_API non configuré — TELEGRAM_BOT_TOKEN manquant.");
     return null;
   }
   try {
-    const res = await fetch(`${BOT_API}/${method}`, {
+    const res = await fetch(`${botApi}/${method}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -42,7 +51,7 @@ async function callBotApi(method: string, body: Record<string, any>): Promise<an
 export async function sendMessage(text: string): Promise<void> {
   if (!isConfigured()) return;
   await callBotApi("sendMessage", {
-    chat_id: CHAT_ID,
+    chat_id: getChatId(),
     text,
     parse_mode: "HTML",
     disable_web_page_preview: true,
@@ -52,7 +61,7 @@ export async function sendMessage(text: string): Promise<void> {
 async function sendMessageWithKeyboard(text: string, inline_keyboard: any[][]): Promise<number | null> {
   if (!isConfigured()) return null;
   const result = await callBotApi("sendMessage", {
-    chat_id: CHAT_ID,
+    chat_id: getChatId(),
     text,
     parse_mode: "HTML",
     disable_web_page_preview: true,
@@ -68,11 +77,12 @@ export type TelegramKycFile = {
 };
 
 async function sendDocumentBuffer(document: TelegramKycFile, caption?: string): Promise<void> {
-  if (!isConfigured() || !BOT_API) return;
+  const botApi = getBotApi();
+  if (!isConfigured() || !botApi) return;
 
   try {
     const form = new FormData();
-    form.append("chat_id", CHAT_ID!);
+    form.append("chat_id", getChatId());
     form.append(
       "document",
       new Blob([new Uint8Array(document.buffer)], { type: document.contentType }),
@@ -83,7 +93,7 @@ async function sendDocumentBuffer(document: TelegramKycFile, caption?: string): 
       form.append("parse_mode", "HTML");
     }
 
-    const response = await fetch(`${BOT_API}/sendDocument`, {
+    const response = await fetch(`${botApi}/sendDocument`, {
       method: "POST",
       body: form,
     });
@@ -102,7 +112,7 @@ async function sendWithBanner(
   text: string,
   replyMarkup?: any
 ): Promise<void> {
-  if (!BOT_API) return;
+  if (!getBotApi()) return;
   const appUrl = process.env.APP_URL || "";
   const extra = replyMarkup ? { reply_markup: replyMarkup } : {};
   if (!appUrl) {
@@ -129,7 +139,7 @@ async function answerCallbackQuery(callbackQueryId: string, text?: string): Prom
 async function editMessageKeyboard(messageId: number, inline_keyboard: any[][] | null): Promise<void> {
   if (!isConfigured()) return;
   await callBotApi("editMessageReplyMarkup", {
-    chat_id: CHAT_ID,
+    chat_id: getChatId(),
     message_id: messageId,
     reply_markup: inline_keyboard ? { inline_keyboard } : {},
   });
@@ -138,7 +148,7 @@ async function editMessageKeyboard(messageId: number, inline_keyboard: any[][] |
 async function editMessageText(messageId: number, text: string): Promise<void> {
   if (!isConfigured()) return;
   await callBotApi("editMessageText", {
-    chat_id: CHAT_ID,
+    chat_id: getChatId(),
     message_id: messageId,
     text,
     parse_mode: "HTML",
