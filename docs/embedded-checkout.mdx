@@ -12,9 +12,7 @@ Pour ce flux :
 - `hp_live_...` est la **clé Checkout**. Elle reste sur votre serveur et authentifie `POST /api/v1/hosted-payment/create` ainsi que `GET /api/v1/hosted-payment/{payment_id}`.
 - `ak_...` est la **clé Direct API**, séparée du checkout Hosted/Embedded. Elle sert aux endpoints `/v1/*`, comme `/v1/collect`.
 
-Le navigateur du client reçoit uniquement le `payment_link`. Ne mettez jamais `hp_live_...`, `sk_live_...` ou `ak_...` dans le code frontend.
-
-Les anciennes clés `pk_live_...` et `sk_live_...` peuvent encore apparaître sur un compte historique, mais les nouvelles clés Checkout ne génèrent plus ces deux valeurs.
+Le navigateur du client reçoit uniquement le `payment_link`. Ne mettez jamais `hp_live_...` ou `ak_...` dans le code frontend.
 
 ## Créer un lien de paiement
 

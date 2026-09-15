@@ -451,7 +451,7 @@ export function downloadHostedPagePDF() {
     ],
     y, [30, 26, 35, 79]
   );
-  y = paragraph(doc, "Le popup Embedded checkout ne demande aucune cle dans le navigateur : le serveur utilise hp_live_… puis transmet seulement le payment_link. Les anciennes cles pk_live_… et sk_live_… peuvent encore exister sur des comptes historiques, mais ne sont plus generees.", y);
+  y = paragraph(doc, "Le popup Embedded checkout ne demande aucune cle dans le navigateur : le serveur utilise hp_live_… puis transmet seulement le payment_link.", y);
   y = banner(doc, "warn", "Securite — hp_live_… et ak_… doivent rester dans des variables d'environnement cote serveur. Ne les publie jamais dans du code frontend ni dans un depot Git public.", y);
 
   // ── §2  Créer un lien ─────────────────────────────────────────────────────
