@@ -1,0 +1,47 @@
+{
+  "$schema": "https://schemas.agentskills.io/discovery/0.2.0/schema.json",
+  "skills": [
+    {
+      "name": "ashtech",
+      "description": "Complete AshTech Pay integration guidance for Hosted Checkout, Direct API, Mobile Money, crypto, webhooks, and transaction verification.",
+      "type": "skill-md",
+      "url": "/skill.md",
+      "digest": "sha256:a4384eea90ce007756644a7fc0e61d8f63fdb53861b630b3ba4e70b5eb5d2ab9"
+    },
+    {
+      "name": "ashtech-direct-api",
+      "description": "Integrate AshTech Pay Direct API payments with server-side authentication, catalogues, transaction verification, and idempotent fulfillment.",
+      "type": "skill-md",
+      "url": "/.well-known/skills/ashtech-direct-api/SKILL.md",
+      "digest": "sha256:fd12d494d71f698820507e2d8831ac67b0230a5e9cf4267fc447e28d3b411b3c"
+    },
+    {
+      "name": "ashtech-checkout",
+      "description": "Integrate AshTech Pay Hosted Checkout while keeping checkout keys server-side and confirming payment before fulfillment.",
+      "type": "skill-md",
+      "url": "/.well-known/skills/ashtech-checkout/SKILL.md",
+      "digest": "sha256:3397a141d82ef48649ef1631964dc0d859d064a086a60b25548cb62cb97f56f8"
+    },
+    {
+      "name": "ashtech-crypto",
+      "description": "Integrate AshTech Pay cryptocurrency payments with documented assets, networks, customer fields, expiry, verification, and webhooks.",
+      "type": "skill-md",
+      "url": "/.well-known/skills/ashtech-crypto/SKILL.md",
+      "digest": "sha256:1bbf1bd5b25ef100613df08d318415c71eb570250b8e786b3eff391ecde537a0"
+    },
+    {
+      "name": "ashtech-mobile-money",
+      "description": "Integrate AshTech Pay Mobile Money flows including catalogues, USSD Push, Wave, OTP, status handling, and webhooks.",
+      "type": "skill-md",
+      "url": "/.well-known/skills/ashtech-mobile-money/SKILL.md",
+      "digest": "sha256:e8635e530130ca8cc7de0acf3832fd2dd8d9899d075ec881d7fbd9ae1a0adfc4"
+    },
+    {
+      "name": "ashtech-webhooks",
+      "description": "Implement secure, verified, idempotent AshTech Pay webhooks for payment status and order fulfillment.",
+      "type": "skill-md",
+      "url": "/.well-known/skills/ashtech-webhooks/SKILL.md",
+      "digest": "sha256:2f42622b8107a09227bcbaf1eeae3bdbaf2fdea1d0c5b33afee3c4f947d0d02e"
+    }
+  ]
+}

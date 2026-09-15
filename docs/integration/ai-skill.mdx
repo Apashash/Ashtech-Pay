@@ -1,65 +1,114 @@
 ---
-title: "AshTech Pay AI Integration Skill"
-description: "Installez la Skill officielle AshTech Pay dans votre agent de programmation en une commande."
+title: "AshTech Pay AI Integration Skills"
+description: "Installez tous les Skills AshTech Pay ou choisissez uniquement Direct API, Checkout, crypto, Mobile Money ou Webhooks."
 ---
 
-Le Skill complet reste hébergé sur le serveur officiel AshTech Pay. Vous ne
-devez pas copier plusieurs pages de texte : copiez simplement la commande
-ci-dessous dans votre agent de programmation.
+Les Skills complets restent hébergés sur le serveur officiel AshTech Pay. Vous
+ne devez pas copier un long bloc de texte : choisissez un bouton, puis copiez la
+commande courte affichée.
 
-## Installer tous les Skills AshTech Pay
+## Installer un Skill
+
+<Tabs>
+  <Tab title="Tous les Skills">
+
+Installe tous les Skills publiés par AshTech Pay, y compris les nouveaux Skills
+ajoutés plus tard :
 
 ```bash
 npx skills add https://doc.ashtechpay.com --all
 ```
 
-Cette commande demande à l'outil officiel `skills` de télécharger et
-d'installer tous les Skills publiés par `doc.ashtechpay.com` dans l'agent
-détecté.
-
-<Note>
-  Le Skill principal est servi par
-  [https://doc.ashtechpay.com/skill.md](https://doc.ashtechpay.com/skill.md).
-  L'option `--all` permet d'ajouter aussi les nouveaux Skills publiés plus tard
-  sur le même serveur.
-</Note>
-
-## Installer uniquement le Skill AshTech Pay
-
-Si vous ne voulez installer que le Skill principal :
+  </Tab>
+  <Tab title="Direct API">
 
 ```bash
-npx skills add https://doc.ashtechpay.com --skill ashtech
+npx skills add https://doc.ashtechpay.com --skill ashtech-direct-api
 ```
 
-## Ce que le Skill installe
+Ce Skill couvre les catalogues, les collectes Mobile Money, les paiements
+crypto, les statuts et la vérification serveur.
 
-Une fois installé, l'agent dispose des règles officielles AshTech Pay pour :
+  </Tab>
+  <Tab title="Checkout">
 
-- inspecter le langage, le framework et l'architecture du projet ;
-- choisir Hosted Checkout, Direct API, Mobile Money, crypto ou webhooks ;
-- garder les clés et secrets côté serveur ;
-- vérifier une transaction avant de créditer ou livrer une commande ;
-- rendre les webhooks idempotents ;
-- tester les erreurs, les statuts pending/completed/failed et les doublons.
+```bash
+npx skills add https://doc.ashtechpay.com --skill ashtech-checkout
+```
+
+Ce Skill couvre Hosted Checkout, les clés `hp_live_...`, l'idempotence des
+liens et la confirmation avant livraison.
+
+  </Tab>
+  <Tab title="Crypto">
+
+```bash
+npx skills add https://doc.ashtechpay.com --skill ashtech-crypto
+```
+
+Ce Skill couvre les actifs, réseaux, adresses, `memo/tag`, champs client,
+expiration, vérification et webhooks crypto.
+
+  </Tab>
+  <Tab title="Mobile Money">
+
+```bash
+npx skills add https://doc.ashtechpay.com --skill ashtech-mobile-money
+```
+
+Ce Skill couvre les catalogues pays/opérateurs, USSD Push, Wave, OTP SMS et
+OTP USSD.
+
+  </Tab>
+  <Tab title="Webhooks">
+
+```bash
+npx skills add https://doc.ashtechpay.com --skill ashtech-webhooks
+```
+
+Ce Skill couvre les signatures, les événements, la déduplication et la
+fulfillment idempotente.
+
+  </Tab>
+</Tabs>
+
+<Note>
+  L'outil `skills` installe le Skill dans l'agent détecté. Le catalogue distant
+  est publié à
+  [https://doc.ashtechpay.com/.well-known/skills/index.json](https://doc.ashtechpay.com/.well-known/skills/index.json).
+</Note>
+
+## Flux de transaction inclus
+
+Les Skills demandent toujours à l'agent de :
+
+1. inspecter le projet avant de modifier le code ;
+2. consulter la documentation officielle actuelle ;
+3. garder les clés API et secrets webhook côté serveur ;
+4. créer une référence unique ;
+5. gérer `pending`, `completed`, `failed`, `cancelled`, `expired` et OTP
+   selon la méthode sélectionnée ;
+6. vérifier la transaction côté serveur ou par webhook ;
+7. dédupliquer les webhooks et empêcher une double livraison ;
+8. ne jamais considérer une redirection navigateur comme une confirmation de
+   paiement ;
+9. ne pas relancer aveuglément une initiation après un timeout.
 
 ## Crypto incluse
 
-Le Skill distant inclut aussi le parcours crypto complet :
+Le Skill crypto applique notamment les règles suivantes :
 
-- chargement de `GET /v1/crypto/assets` ;
-- création avec `POST /v1/crypto/collect` ;
-- champs obligatoires `customer.email`, `customer.firstName` et
-  `customer.lastName` ;
-- utilisation exacte de l'`asset_code`, du réseau, de l'adresse et du
-  `memo/tag` retournés ;
-- vérification serveur et webhook avant tout crédit ;
-- expiration serveur documentée pour les paiements crypto `pending` ;
-- interdiction d'inventer une monnaie, un réseau ou un endpoint.
+- `GET /v1/crypto/assets` pour les actifs et réseaux actifs ;
+- `POST /v1/crypto/collect` pour créer le paiement ;
+- `customer.email`, `customer.firstName` et `customer.lastName` obligatoires ;
+- `asset_code`, réseau, adresse et `memo/tag` conservés exactement ;
+- statut serveur et webhook comme sources de vérité ;
+- expiration crypto `pending` documentée ;
+- aucun crédit ou envoi de commande avant confirmation ;
+- aucune monnaie, réseau, adresse ou règle de confirmation inventée.
 
 <Warning>
-  La commande nécessite un agent compatible avec l'outil `skills`. Si votre
-  agent ne le prend pas encore en charge, donnez-lui directement l'URL
-  [https://doc.ashtechpay.com/skill.md](https://doc.ashtechpay.com/skill.md) et
-  demandez-lui de la lire avant d'intégrer AshTech Pay.
+  Les commandes installent uniquement les Skills publiés dans le catalogue
+  officiel AshTech Pay. Les méthodes non documentées ne sont pas devinées par
+  l'agent.
 </Warning>
