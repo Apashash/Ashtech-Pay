@@ -64,6 +64,12 @@ Choisissez un `asset_code` retourné par l'API. Ne supposez pas que tous les ré
 
 ## Créer un paiement crypto
 
+<Warning>
+  Pour tout paiement crypto, les trois informations client sont obligatoires :
+  `customer.email`, `customer.firstName` et `customer.lastName`. La requête est
+  refusée si l'une de ces valeurs manque ou n'est pas valide.
+</Warning>
+
 ```http
 POST https://www.ashtechpay.com/v1/crypto/collect
 ```
@@ -199,7 +205,7 @@ curl_close($ch);
 }
 ```
 
-L'email du payeur est obligatoire pour le Hosted Checkout crypto comme pour la Direct API. Les champs `firstName` et `lastName` sont facultatifs. N'inventez jamais une adresse email : demandez-la au payeur ou arrêtez la requête avec une erreur explicite.
+Les trois champs `email`, `firstName` et `lastName` sont obligatoires pour le Hosted Checkout crypto comme pour la Direct API. N'inventez jamais ces informations : demandez-les au payeur ou arrêtez la requête avec une erreur explicite.
 
 ## Adresse et QR code
 
