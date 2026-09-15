@@ -61,3 +61,4 @@
 - [Transient startup errors](transient-startup-errors.md) — treat DB bootstrap and lazy page chunk failures as recoverable during restarts, deploys, and brief mobile interruptions.
 - [Conversion polling authentication](conversion-polling-auth.md) — status polling must send Bearer headers as well as cookies on mobile/PWA sessions.
 - [Mintlify local branding](mintlify-local-branding.md) — serve docs logos and favicon from Mintlify-local assets; the main site's same-origin CORP blocks remote branding images.
+- [Mintlify internal links](mintlify-link-prefix.md) — internal MDX links must include the public `/docs/` prefix when source files live under `docs/`.
