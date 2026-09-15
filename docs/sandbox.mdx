@@ -19,5 +19,96 @@ Testez au minimum :
 Le dashboard AshTech Pay contient des outils de test pour les parcours de paiement. N'utilisez jamais de vraies clés dans des captures d'écran, des logs ou un dépôt Git.
 
 <Note>
-  Les détails d'un compte de test, les montants simulés et les opérateurs disponibles peuvent dépendre de l'environnement activé pour votre marchand. Contactez AshTech Pay avant une recette publique.
+  Les numéros ci-dessous sont fictifs. Ils ne correspondent à aucun abonné et ne doivent jamais être utilisés avec un autre service de paiement.
 </Note>
+
+## Numéros Mobile Money simulés
+
+Les numéros de test fonctionnent avec **chaque opérateur actif du pays sélectionné**. Le pays, l'opérateur et la devise doivent tout de même être valides dans `GET /v1/countries`.
+
+Le même numéro local est utilisable avec tous les opérateurs du pays. Vous pouvez envoyer le numéro au format international indiqué ou uniquement sa partie locale.
+
+| Pays | Indicatif | Numéro succès | Numéro en attente | Numéro échoué | Numéro OTP | Numéro annulé |
+| --- | --- | --- | --- | --- | --- | --- |
+| Bénin (BJ) | `+229` | `+229000000001` | `+229000000002` | `+229000000003` | `+229000000004` | `+229000000005` |
+| Burkina Faso (BF) | `+226` | `+226000000001` | `+226000000002` | `+226000000003` | `+226000000004` | `+226000000005` |
+| Cameroun (CM) | `+237` | `+237000000001` | `+237000000002` | `+237000000003` | `+237000000004` | `+237000000005` |
+| Côte d'Ivoire (CI) | `+225` | `+225000000001` | `+225000000002` | `+225000000003` | `+225000000004` | `+225000000005` |
+| Gabon (GA) | `+241` | `+241000000001` | `+241000000002` | `+241000000003` | `+241000000004` | `+241000000005` |
+| Mali (ML) | `+223` | `+223000000001` | `+223000000002` | `+223000000003` | `+223000000004` | `+223000000005` |
+| Niger (NE) | `+227` | `+227000000001` | `+227000000002` | `+227000000003` | `+227000000004` | `+227000000005` |
+| RD Congo (CD) | `+243` | `+243000000001` | `+243000000002` | `+243000000003` | `+243000000004` | `+243000000005` |
+| Sénégal (SN) | `+221` | `+221000000001` | `+221000000002` | `+221000000003` | `+221000000004` | `+221000000005` |
+| Togo (TG) | `+228` | `+228000000001` | `+228000000002` | `+228000000003` | `+228000000004` | `+228000000005` |
+
+### Réponses simulées
+
+| Numéro utilisé | Réponse |
+| --- | --- |
+| `...000000001` | HTTP `200`, `status: "success"` |
+| `...000000002` | HTTP `202`, `status: "pending"` |
+| `...000000003` | HTTP `200`, `status: "failed"` |
+| `...000000004` | HTTP `400`, `error: "otp_required"` ; relancez avec `otp: "000000"` pour obtenir `status: "pending"` |
+| `...000000005` | HTTP `200`, `status: "cancelled"` |
+
+Toutes ces réponses contiennent `sandbox: true` et `simulation: true`. Elles ne créent pas de transaction, n'envoient pas de webhook et n'appellent ni AfribaPay, ni PixPay, ni PawaPay.
+
+### OTP fictif
+
+Pour tous les opérateurs dont le vrai parcours demande un OTP, utilisez :
+
+```json
+{
+  "otp": "000000"
+}
+```
+
+Le premier appel avec un numéro `...000000004` répond :
+
+```json
+{
+  "error": "otp_required",
+  "sandbox": true,
+  "simulation": true,
+  "ussd_code": "#SANDBOX#",
+  "message": "OTP de démonstration requis. Utilisez 000000 avec la même requête."
+}
+```
+
+Renvoyez ensuite exactement la même requête avec `otp: "000000"`. La réponse sera `HTTP 202` avec `status: "pending"`. Aucun SMS, code USSD réel, transaction ou appel fournisseur n'est déclenché. Tout autre OTP retourne `error: "invalid_otp"`.
+
+### Exemple
+
+```bash
+curl -X POST https://www.ashtechpay.com/v1/collect \
+  -H "Authorization: Bearer $ASHTECH_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "amount": 1000,
+    "currency": "XAF",
+    "country_code": "CM",
+    "operator": "MTN Money",
+    "phone": "+237000000001",
+    "reference": "sandbox-success-001"
+  }'
+```
+
+Réponse :
+
+```json
+{
+  "sandbox": true,
+  "simulation": true,
+  "status": "success",
+  "amount": 1000,
+    "credited_amount": 950,
+    "fee_amount": 50,
+  "currency": "XAF",
+  "country_code": "CM",
+  "operator": "MTN Money",
+  "phone": "+237000000001",
+  "message": "Paiement confirmé immédiatement"
+}
+```
+
+Le scénario `pending` est uniquement une réponse initiale de démonstration : aucune transaction n'est créée et aucun statut réel ne sera ensuite disponible à interroger.

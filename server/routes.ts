@@ -76,6 +76,11 @@ import {
   parseDirectCryptoRequest,
   type DirectCryptoRequest,
 } from "./directCrypto";
+import {
+  getSandboxCollectScenario,
+  sandboxStatusLabel,
+  type SandboxCollectStatus,
+} from "./sandboxTestNumbers";
 import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, checkAfribaPayStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, getAfribaPayOtpInfo, confirmAfribaPayOtp, isAfribaPayOtpRequiredMessage } from "./afribapay";
 import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, initiatePixPayPayout, checkPixPayStatus, computePixPayFees, parsePixPayWebhook, PIXPAY_CURRENCY_MAP, PIXPAY_SUPPORTED_COUNTRIES, detectPixPayFlowType, getPixPayServiceId, PIXPAY_OTP_USSD_CODES } from "./pixpay";
 import { assertPawaPayProviderActive, classifyPawaPayControlledTransaction, createPawaPayDeposit, createPawaPayId, createPawaPayPayout, createPawaPayPaymentPage, getPawaPayActiveConfiguration, getPawaPayDeposit, getPawaPayPayout, resolvePawaPayOperationConfiguration, PAWAPAY_CUSTOMER_MESSAGE } from "./pawapay";
@@ -16871,6 +16876,67 @@ export async function registerRoutes(
           message: `Devise incorrecte pour ce pays. Attendu : ${expectedIso}`,
         });
       }
+
+       // ── Sandbox test numbers ─────────────────────────────────────────────
+       // These exact fictional numbers return deterministic responses without
+       // creating a transaction or calling a payment provider. They are
+       // documented on doc.ashtechpay.com/docs/sandbox and are matched only
+       // after country/operator/currency validation has succeeded.
+       const sandboxStatus = getSandboxCollectScenario(phone, (country as any).dialCode);
+       if (sandboxStatus) {
+         const sandboxReference = `sandbox_${country.code.toLowerCase()}_${sandboxStatus}`;
+         const sandboxFeeAmount = Number((amountNum * 0.05).toFixed(2));
+         const sandboxCreditedAmount = Number((amountNum - sandboxFeeAmount).toFixed(2));
+         const sandboxBaseResponse: Record<string, any> = {
+           sandbox: true,
+           simulation: true,
+           transaction_id: null,
+           reference: sandboxReference,
+           merchant_reference: merchantReference,
+           status: sandboxStatus === "success" ? "success" : sandboxStatus,
+           amount: amountNum,
+           credited_amount: sandboxCreditedAmount,
+           fee_amount: sandboxFeeAmount,
+           currency: expectedIso,
+           operator: operatorName,
+           phone,
+           country_code: country.code,
+           message: sandboxStatusLabel(sandboxStatus),
+           note: "Réponse simulée : aucun fournisseur n'a été appelé et aucune transaction n'a été créée.",
+         };
+
+         if (sandboxStatus === "otp_required" && !otp) {
+           return res.status(400).json({
+             ...sandboxBaseResponse,
+             error: "otp_required",
+             reference: sandboxReference,
+             ussd_code: "#SANDBOX#",
+             message: "OTP de démonstration requis. Utilisez 000000 avec la même requête.",
+           });
+         }
+
+         if (sandboxStatus === "otp_required" && otp !== "000000") {
+           return res.status(400).json({
+             ...sandboxBaseResponse,
+             error: "invalid_otp",
+             message: "OTP de démonstration invalide. Utilisez 000000.",
+           });
+         }
+
+         if (sandboxStatus === "otp_required") {
+           sandboxBaseResponse.status = "pending";
+           sandboxBaseResponse.message = "OTP de démonstration accepté. Paiement en attente de confirmation.";
+         }
+
+         const responseStatus: Record<SandboxCollectStatus, number> = {
+           success: 200,
+           pending: 202,
+           failed: 200,
+           otp_required: 202,
+           cancelled: 200,
+         };
+         return res.status(responseStatus[sandboxStatus]).json(sandboxBaseResponse);
+       }
 
       // ── Resolve payment provider (use operator tag, fallback to country-based detection) ─
         const PIXPAY_COLLECT_CODES = new Set(["CM","CD","CI","SN","BF"]);
