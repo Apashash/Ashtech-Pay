@@ -1209,7 +1209,7 @@ export async function notifyNewTicket(opts: {
     `🆔 <code>${opts.ticketId}</code>\n` +
     `🕐 ${now()}`;
   await callBotApi("sendMessage", {
-    chat_id: CHAT_ID,
+    chat_id: getChatId(),
     text: msg,
     parse_mode: "HTML",
     reply_markup: {
@@ -1243,7 +1243,7 @@ export async function notifySupportMessage(opts: {
     `🆔 <code>${opts.ticketId}</code>\n` +
     `🕐 ${now()}`;
   await callBotApi("sendMessage", {
-    chat_id: CHAT_ID,
+    chat_id: getChatId(),
     text: msg,
     parse_mode: "HTML",
     reply_markup: {
@@ -1607,14 +1607,15 @@ export async function handleTelegramUpdate(
   }
 ): Promise<void> {
   // ── Filtre admin : ignore tout message qui ne vient pas du CHAT_ID autorisé ──
-  if (CHAT_ID) {
+  const configuredChatId = getChatId();
+  if (configuredChatId) {
     const incomingChatId =
       String(update.message?.chat?.id ?? "") ||
       String(update.callback_query?.message?.chat?.id ?? "") ||
       String(update.edited_message?.chat?.id ?? "") ||
       String(update.channel_post?.chat?.id ?? "");
 
-    if (incomingChatId && incomingChatId !== String(CHAT_ID)) {
+    if (incomingChatId && incomingChatId !== configuredChatId) {
       // Répondre une seule fois "bot non disponible" pour ne pas révéler son existence
       if (update.message?.chat?.id) {
         await callBotApi("sendMessage", {
@@ -2864,15 +2865,19 @@ export function getTelegramWebhookSecret(): string {
 }
 
 export async function getWebhookInfo(): Promise<any> {
-  if (!BOT_API) return { error: "TELEGRAM_BOT_TOKEN not configured on this instance" };
+  if (!getBotApi()) return { error: "TELEGRAM_BOT_TOKEN not configured on this instance" };
   const result = await callBotApi("getWebhookInfo", {});
   return result;
 }
 
 export async function registerTelegramWebhook(webhookUrl: string): Promise<void> {
-  if (!BOT_API) return;
+  const botApi = getBotApi();
+  if (!botApi) {
+    console.warn("[Telegram] Webhook non enregistré : TELEGRAM_BOT_TOKEN manquant sur cette instance.");
+    return;
+  }
   try {
-    const res = await fetch(`${BOT_API}/setWebhook`, {
+    const res = await fetch(`${botApi}/setWebhook`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
