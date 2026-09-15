@@ -36,19 +36,6 @@ If the merchant receives `api_not_enabled`, explain that the API key may be
 valid but Direct API access is not activated on the merchant account. Do not
 try to bypass this status or replace the key without a reason.
 
-### Example requests from a developer
-
-Interpret requests like these as follows:
-
-- “Ajoute AshTech Pay à mon checkout” → inspect the project and propose or
-  implement the documented Hosted Checkout flow.
-- “Affiche les pays et opérateurs puis lance Mobile Money” → use Direct API,
-  load `GET /v1/countries` server side, and use the returned values.
-- “Ajoute les confirmations de paiement” → read the webhook and transaction
-  status documentation, then implement signature verification and idempotency.
-- “Ajoute le crypto” → load `GET /v1/crypto/assets`, use only returned
-  `asset_code` values, and preserve the address and memo/tag separately.
-
 Do not claim that installation of this Skill activates an API account, creates
 credentials, or enables a payment provider. Those actions require the merchant
 dashboard or AshTech Pay support.
