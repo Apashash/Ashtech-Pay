@@ -9243,7 +9243,7 @@ export async function registerRoutes(
   app.post("/api/payment-links/:slug/crypto/address", publicPayLimiter, async (req, res) => {
     try {
       const { slug } = req.params;
-      const { assetCode, email, firstName, lastName, amountUsdt: clientAmountUsdt, refundAddress, country: payerCountry } = req.body;
+       const { assetCode, email, firstName, lastName, amountUsdt: clientAmountUsdt, refundAddress, country: payerCountry } = req.body;
 
       const link = await storage.getPaymentLinkBySlug(slug);
       if (!link || !link.isActive) {
@@ -9260,6 +9260,19 @@ export async function registerRoutes(
       if (!payerCountry) {
         return res.status(400).json({ message: "Veuillez sélectionner un pays" });
       }
+       const normalizedPayerEmail = typeof email === "string" ? email.trim() : "";
+       if (!normalizedPayerEmail) {
+         return res.status(400).json({
+           error: "missing_customer_email",
+           message: "L'adresse email du client est obligatoire pour un paiement crypto.",
+         });
+       }
+       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedPayerEmail)) {
+         return res.status(400).json({
+           error: "invalid_customer_email",
+           message: "L'adresse email du client est invalide.",
+         });
+       }
       const payerCountryRecord = await storage.getCountry(String(payerCountry));
       if (!payerCountryRecord) {
         return res.status(400).json({ message: "Pays invalide" });
@@ -9320,7 +9333,7 @@ export async function registerRoutes(
           customer: {
             firstName: safeFirst,
             lastName:  safeLast,
-            email: email || undefined,
+             email: normalizedPayerEmail,
             refundAddress: refundAddress || undefined,
           },
           merchantReference: reference,
@@ -9344,7 +9357,7 @@ export async function registerRoutes(
         paymentMethod: "crypto",
         reference,
         paymentLinkId: link.id,
-        payerEmail: email || null,
+         payerEmail: normalizedPayerEmail,
         payerName: firstName && lastName ? `${firstName} ${lastName}` : (email || null),
         externalReference: charge.id || undefined,   // IziChange transaction ID
          metadata: await (async () => {
@@ -16660,7 +16673,7 @@ export async function registerRoutes(
         charge = await createDirectCharge({
           requestedCoin: request.assetCode,
           amount: amounts.grossUsdt.toFixed(6),
-           ...(customer ? { customer } : {}),
+           customer,
           merchantReference: reference,
           metadata: {
             merchantId: merchant.id,

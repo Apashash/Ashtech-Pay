@@ -18,7 +18,7 @@ export interface DirectCryptoRequest {
   refundAddress?: string | null;
   firstName?: string;
   lastName?: string;
-  email?: string;
+  email: string;
 }
 
 export interface DirectCryptoAmounts {
@@ -68,6 +68,19 @@ export function parseDirectCryptoRequest(body: any):
     return { ok: false, error: "missing_fields", message: "Champs requis : amount, currency, asset_code" };
   }
 
+  if (
+    body?.customer !== undefined &&
+    (body.customer === null ||
+      typeof body.customer !== "object" ||
+      Array.isArray(body.customer))
+  ) {
+    return {
+      ok: false,
+      error: "invalid_customer",
+      message: "customer doit être un objet JSON contenant email, firstName ou lastName.",
+    };
+  }
+
   const customer = body?.customer && typeof body.customer === "object" ? body.customer : {};
   const email = String(customer.email ?? body?.email ?? "").trim() || undefined;
   const firstName = String(customer.firstName ?? customer.first_name ?? body?.first_name ?? "").trim() || undefined;
@@ -79,6 +92,13 @@ export function parseDirectCryptoRequest(body: any):
 
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return { ok: false, error: "invalid_email", message: "customer.email doit être une adresse email valide." };
+  }
+  if (!email) {
+    return {
+      ok: false,
+      error: "missing_customer_email",
+      message: "customer.email est obligatoire pour un paiement crypto.",
+    };
   }
   if (notifyUrl) {
     try {
@@ -106,16 +126,12 @@ export function parseDirectCryptoRequest(body: any):
 }
 
 /**
- * The public API keeps customer details optional. The upstream crypto charge
- * endpoint requires an email whenever its `customer` object is sent, so do
- * not send an empty/name-only customer object when the merchant omitted email.
- * This preserves the optional-email contract instead of turning it into a
- * provider validation error.
+ * The upstream crypto charge endpoint requires an email-bearing customer
+ * object. Parsing rejects requests without that email before this helper runs.
  */
 export function buildDirectCryptoCustomer(
   request: DirectCryptoRequest,
-): DirectCryptoCustomer | undefined {
-  if (!request.email) return undefined;
+): DirectCryptoCustomer {
   return {
     firstName: request.firstName,
     lastName: request.lastName,

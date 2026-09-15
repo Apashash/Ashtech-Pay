@@ -55,7 +55,7 @@ test("sandbox request supports fiat currencies and camelCase aliases", () => {
   }
 });
 
-test("sandbox customer email is optional and omitted from the upstream customer object", () => {
+test("sandbox customer email is required and produces an upstream customer object", () => {
   const parsed = parseDirectCryptoRequest({
     amount: 1,
     currency: "USDT",
@@ -63,11 +63,8 @@ test("sandbox customer email is optional and omitted from the upstream customer 
     first_name: "J",
     last_name: "S",
   });
-  assert.equal(parsed.ok, true);
-  if (parsed.ok) {
-    assert.equal(parsed.value.email, undefined);
-    assert.deepEqual(buildDirectCryptoCustomer(parsed.value), undefined);
-  }
+  assert.equal(parsed.ok, false);
+  assert.equal(parsed.error, "missing_customer_email");
 
   const withEmail = parseDirectCryptoRequest({
     amount: 1,
@@ -102,6 +99,13 @@ test("sandbox validation rejects missing fields, invalid amount, and invalid cur
     amount: 1,
     currency: "USDT",
     asset_code: "BTC",
+    customer: "payer@example.com",
+  }).error, "invalid_customer");
+  assert.equal(parseDirectCryptoRequest({
+    amount: 1,
+    currency: "USDT",
+    asset_code: "BTC",
+    customer: { email: "payer@example.com" },
     notify_url: "http://merchant.example/webhook",
   }).error, "invalid_notify_url");
 });

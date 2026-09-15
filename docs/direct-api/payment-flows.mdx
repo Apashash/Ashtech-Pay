@@ -112,20 +112,21 @@ Affichez `ussd_code` directement au client. Certains codes contiennent le montan
 
 Exemples de familles de flux actuellement configurées :
 
-| Pays | Opérateur / cas | Parcours |
-| --- | --- | --- |
-| Côte d'Ivoire | Orange | OTP obtenu par USSD |
-| Côte d'Ivoire | Wave | Redirection Wave |
-| Côte d'Ivoire | MTN, Moov | USSD Push |
-| Sénégal | Orange | OTP obtenu par USSD |
-| Sénégal | Wave | Redirection Wave |
-| Sénégal | Free, Mix, Expresso | USSD Push |
-| Mali | Orange | OTP obtenu par USSD |
-| Burkina Faso | Orange | OTP USSD, avec montant dans certains codes |
-| Burkina Faso | Moov / Flooz | USSD Push |
-| Cameroun | MTN, Orange | USSD Push |
-| Congo RDC | Orange, Airtel, M-Pesa, Afrimoney | USSD Push |
-| Autres opérateurs actifs | Selon le catalogue et le fournisseur | USSD Push, OTP ou redirection |
+| Pays | Opérateur / cas | Parcours | Code à composer |
+| --- | --- | --- | --- |
+| Côte d'Ivoire | Orange | OTP obtenu par USSD | `#144*82#` |
+| Côte d'Ivoire | Wave | Redirection Wave | Aucun — ouvrir la redirection |
+| Côte d'Ivoire | MTN, Moov | USSD Push | Aucun — valider la notification |
+| Sénégal | Orange | OTP obtenu par USSD | `#144#391#` |
+| Sénégal | Wave | Redirection Wave | Aucun — ouvrir la redirection |
+| Sénégal | Free, E-money | USSD Push | Aucun — valider la notification |
+| Mali | Orange | OTP obtenu par USSD | `#144#77#` |
+| Mali | Moov | USSD Push | Aucun — valider la notification |
+| Burkina Faso | Orange | OTP USSD, avec montant dans certains codes | `*144*4*6*montant#` |
+| Burkina Faso | Moov / Flooz | USSD Push | Aucun — valider la notification |
+| Cameroun | MTN, Orange | USSD Push | Aucun — valider la notification |
+| Congo RDC | Orange, Airtel, M-Pesa, Afrimoney | USSD Push | Aucun — valider la notification |
+| Autres opérateurs actifs | Selon le catalogue et le fournisseur | USSD Push, OTP ou redirection | Utiliser `ussd_code` ou l'URL retournée |
 
 Cette matrice décrit le routage actuellement configuré pour les opérateurs concernés. Le statut actif peut changer. La réponse de [`GET /v1/countries`](/docs/reference/countries) reste la source de vérité pour votre formulaire.
 

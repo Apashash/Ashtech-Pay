@@ -84,6 +84,11 @@ const response = await fetch("https://www.ashtechpay.com/v1/crypto/collect", {
     asset_code: "USDT.TRC20",
     country: "CM",
     reference: "crypto_order_12345",
+    customer: {
+      email: "payer@example.com",
+      firstName: "Ada",
+      lastName: "Lovelace"
+    },
     notify_url: "https://example.com/webhooks/ashtechpay",
   }),
 });
@@ -109,6 +114,11 @@ response = requests.post(
         "asset_code": "USDT.TRC20",
         "country": "CM",
         "reference": "crypto_order_12345",
+        "customer": {
+            "email": "payer@example.com",
+            "firstName": "Ada",
+            "lastName": "Lovelace"
+        },
         "notify_url": "https://example.com/webhooks/ashtechpay",
     },
 )
@@ -128,6 +138,11 @@ curl -X POST https://www.ashtechpay.com/v1/crypto/collect \
     "asset_code": "USDT.TRC20",
     "country": "CM",
     "reference": "crypto_order_12345",
+    "customer": {
+      "email": "payer@example.com",
+      "firstName": "Ada",
+      "lastName": "Lovelace"
+    },
     "notify_url": "https://example.com/webhooks/ashtechpay"
   }'
 ```
@@ -144,6 +159,11 @@ $payload = [
     "asset_code" => "USDT.TRC20",
     "country" => "CM",
     "reference" => "crypto_order_12345",
+    "customer" => [
+        "email" => "payer@example.com",
+        "firstName" => "Ada",
+        "lastName" => "Lovelace",
+    ],
     "notify_url" => "https://example.com/webhooks/ashtechpay",
 ];
 
@@ -164,6 +184,22 @@ curl_close($ch);
 
   </Tab>
 </Tabs>
+
+### Champ `customer`
+
+`customer` doit être un objet JSON, jamais une chaîne ou un tableau :
+
+```json
+{
+  "customer": {
+    "email": "payer@example.com",
+    "firstName": "Ada",
+    "lastName": "Lovelace"
+  }
+}
+```
+
+L'email du payeur est obligatoire pour le Hosted Checkout crypto comme pour la Direct API. Les champs `firstName` et `lastName` sont facultatifs. N'inventez jamais une adresse email : demandez-la au payeur ou arrêtez la requête avec une erreur explicite.
 
 ## Adresse et QR code
 

@@ -17,12 +17,66 @@ const ALL_COUNTRIES = [
   { code: "CM", name: "Cameroun",           currency: "XAF",  operators: ["MTN Money", "Orange Money"],                                  otpOps: [] },
   { code: "CI", name: "Côte d'Ivoire",      currency: "XOF", operators: ["Moov Money", "MTN Money", "Orange Money", "Wave Money"],     otpOps: ["Orange Money"] },
   { code: "GA", name: "Gabon",              currency: "XAF", operators: ["Airtel Money", "Moov Money"],                                otpOps: [] },
-  { code: "ML", name: "Mali",               currency: "XOF", operators: ["Moov Money", "Orange Money"],                                otpOps: [] },
+  { code: "ML", name: "Mali",               currency: "XOF", operators: ["Moov Money", "Orange Money"],                                otpOps: ["Orange Money"] },
   { code: "NE", name: "Niger",              currency: "XOF", operators: ["Airtel Money"],                                              otpOps: [] },
   { code: "CD", name: "RD Congo",           currency: "CDF", operators: ["Afri Money", "Airtel Money", "Mpesa Money", "Orange Money", "Vodacom"], otpOps: [] },
   { code: "SN", name: "Sénégal",            currency: "XOF", operators: ["E-money", "Free Money", "Orange Money", "Wave Money"],        otpOps: ["Orange Money"] },
   { code: "TG", name: "Togo",               currency: "XOF", operators: ["Flooz (Moov)", "T-Money"],                                     otpOps: [] },
 ];
+
+const OTP_USSD_CODES: Record<string, string> = {
+  BF: "*144*4*6*montant#",
+  CI: "#144*82#",
+  ML: "#144#77#",
+  SN: "#144#391#",
+};
+
+function operatorPaymentInstruction(country: (typeof ALL_COUNTRIES)[number], operator: string): string {
+  if (country.otpOps.includes(operator)) {
+    return `OTP par USSD : ${OTP_USSD_CODES[country.code] ?? "code retourné par l'API"}`;
+  }
+  if (operator.toLowerCase().includes("wave")) {
+    return "Ouvrir la redirection Wave";
+  }
+  return "USSD Push : valider la demande sur le téléphone";
+}
+
+function MobileMoneyReferenceTable() {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+      <div className="px-4 sm:px-5 py-4 border-b border-gray-100">
+        <p className="text-sm font-semibold text-gray-900">Pays, opérateurs et instructions de paiement</p>
+        <p className="mt-1 text-xs text-gray-500">
+          Le catalogue actif de l’API reste la source de vérité. Un code USSD est affiché uniquement lorsqu’il est confirmé pour le flux OTP.
+        </p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[720px] text-left text-xs">
+          <thead className="bg-gray-50 text-[10px] uppercase tracking-wider text-gray-500">
+            <tr>
+              <th className="px-4 py-3 font-semibold">Pays</th>
+              <th className="px-4 py-3 font-semibold">Devise</th>
+              <th className="px-4 py-3 font-semibold">Opérateur</th>
+              <th className="px-4 py-3 font-semibold">Action client</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {ALL_COUNTRIES.flatMap(country =>
+              country.operators.map(operator => (
+                <tr key={`${country.code}-${operator}`} className="text-gray-700">
+                  <td className="px-4 py-3 font-medium text-gray-900">{country.name} <span className="text-gray-400">({country.code})</span></td>
+                  <td className="px-4 py-3 font-mono text-gray-500">{country.currency}</td>
+                  <td className="px-4 py-3">{operator}</td>
+                  <td className="px-4 py-3">{operatorPaymentInstruction(country, operator)}</td>
+                </tr>
+              )),
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
@@ -657,6 +711,8 @@ export default function TestPaymentPage() {
             </button>
           ))}
         </div>
+
+        <MobileMoneyReferenceTable />
 
         <Link href="/docs/test-crypto">
           <button
