@@ -17,9 +17,25 @@ les fichiers modifiés.
 
 ## Copy Skill
 
-Le bouton de copie natif du bloc ci-dessous copie l'intégralité de la Skill.
-Vous pouvez ensuite la coller dans votre agent de programmation et répéter
-l'opération autant de fois que nécessaire.
+Pour la plupart des agents capables de lire une URL, copiez uniquement ce
+prompt court. Il leur demande de charger la version officielle et actuelle de
+la Skill depuis AshTech Pay :
+
+```text
+Use the official AshTech Pay AI Integration Skill:
+https://doc.ashtechpay.com/integration/ai-skill
+
+Read it first, then integrate AshTech Pay into this project using only the
+documented payment, webhook, verification, and crypto flows.
+```
+
+<Note>
+  Ce prompt court ne peut pas installer une Skill dans un agent qui ne sait pas
+  lire une URL. Dans ce cas, ouvrez le bloc de secours ci-dessous et copiez son
+  contenu complet.
+</Note>
+
+<Accordion title="Afficher le Skill complet (solution de secours)">
 
 ```text
 ASH TECH PAY — AI INTEGRATION SKILL
@@ -236,13 +252,15 @@ verification, and webhook flow. If crypto is selected, use only the documented
 crypto assets, networks, customer fields, expiry, and confirmation rules."
 ```
 
+</Accordion>
+
 ## How to use
 
-1. Copiez la Skill avec le bouton intégré au bloc.
-2. Collez-la dans votre agent de programmation.
-3. Ouvrez votre projet marchand.
-4. Demandez : « Intègre AshTech Pay dans ce projet. »
-5. Vérifiez que l'agent consulte la documentation officielle avant de coder.
+1. Copiez le prompt court.
+2. Collez-le dans votre agent de programmation.
+3. Ouvrez votre projet marchand ou demandez à l'agent de travailler dans le
+   projet déjà ouvert.
+4. Vérifiez que l'agent consulte la documentation officielle avant de coder.
 
 ## Crypto incluse
 
