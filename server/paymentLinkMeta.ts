@@ -1,11 +1,12 @@
 import type { Request } from "express";
 import { storage } from "./storage";
 
-type PaymentLinkMeta = {
+export type PaymentLinkMeta = {
   title: string;
   description?: string | null;
   imagePath?: string | null;
   slug: string;
+  expiresAt?: Date | string | null;
 };
 
 function escapeHtml(value: string): string {
@@ -52,8 +53,9 @@ export async function renderPaymentLinkMeta(
   req: Request,
   html: string,
   slug: string,
+  linkOverride?: PaymentLinkMeta,
 ): Promise<string> {
-  const link = await storage.getPaymentLinkBySlug(slug) as PaymentLinkMeta | undefined;
+  const link = linkOverride || (await storage.getPaymentLinkBySlug(slug) as PaymentLinkMeta | undefined);
   if (!link || !link.title) return html;
 
   const baseUrl = getPublicBaseUrl(req);

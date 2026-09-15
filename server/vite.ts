@@ -6,7 +6,8 @@ import fs from "fs";
 import path from "path";
 import { nanoid } from "nanoid";
 import { isSpaRoute } from "./spaRoutes";
-import { renderPaymentLinkMeta } from "./paymentLinkMeta";
+import { renderPaymentLinkMeta, type PaymentLinkMeta } from "./paymentLinkMeta";
+import { storage } from "./storage";
 
 const viteLogger = createLogger();
 
@@ -63,8 +64,18 @@ export async function setupVite(server: Server, app: Express) {
       let template = await fs.promises.readFile(clientTemplate, "utf-8");
       const isEmbeddedCheckout = req.query.embed === "1";
       template = template.replace(`src="/src/main.tsx"`, `src="/src/main.tsx?v=${nanoid()}"`);
+      let isExpiredPaymentLink = false;
       if (req.path.startsWith("/pay/")) {
-        template = await renderPaymentLinkMeta(req, template, req.params.slug);
+        const paymentLink = await storage.getPaymentLinkBySlug(req.params.slug);
+        isExpiredPaymentLink = Boolean(
+          paymentLink?.expiresAt && new Date(paymentLink.expiresAt) < new Date(),
+        );
+        template = await renderPaymentLinkMeta(
+          req,
+          template,
+          req.params.slug,
+          paymentLink as PaymentLinkMeta | undefined,
+        );
       }
       const page = await vite.transformIndexHtml(req.originalUrl, template);
       if (isEmbeddedCheckout) {
@@ -84,7 +95,7 @@ export async function setupVite(server: Server, app: Express) {
           res.setHeader("Content-Security-Policy", "frame-ancestors *");
         }
       }
-      res.status(200).set({ "Content-Type": "text/html" }).end(page);
+      res.status(isExpiredPaymentLink ? 410 : 200).set({ "Content-Type": "text/html" }).end(page);
     } catch (e) {
       vite.ssrFixStacktrace(e as Error);
       next(e);

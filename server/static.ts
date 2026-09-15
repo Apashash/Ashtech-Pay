@@ -2,8 +2,9 @@ import express, { type Express } from "express";
 import fs from "fs";
 import path from "path";
 import { isSpaRoute } from "./spaRoutes";
-import { renderPaymentLinkMeta } from "./paymentLinkMeta";
+import { renderPaymentLinkMeta, type PaymentLinkMeta } from "./paymentLinkMeta";
 import { appPath } from "./appPaths";
+import { storage } from "./storage";
 
 export function serveStatic(app: Express) {
   const distPath = appPath("dist", "public");
@@ -58,14 +59,25 @@ export function serveStatic(app: Express) {
     try {
       let html = await fs.promises.readFile(indexPath, "utf-8");
       const isEmbeddedCheckout = req.query.embed === "1";
+      let isExpiredPaymentLink = false;
       if (req.path.startsWith("/pay/")) {
-        html = await renderPaymentLinkMeta(req, html, req.params.slug);
+        const paymentLink = await storage.getPaymentLinkBySlug(req.params.slug);
+        isExpiredPaymentLink = Boolean(
+          paymentLink?.expiresAt && new Date(paymentLink.expiresAt) < new Date(),
+        );
+        html = await renderPaymentLinkMeta(
+          req,
+          html,
+          req.params.slug,
+          paymentLink as PaymentLinkMeta | undefined,
+        );
       }
       const response = res
         .set("Content-Type", "text/html")
         .set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
         .set("Pragma", "no-cache")
         .set("Expires", "0");
+      if (isExpiredPaymentLink) response.status(410);
 
       // Direct payment pages remain protected from framing. The explicit
       // embed=1 mode is used by the public checkout SDK and contains no
