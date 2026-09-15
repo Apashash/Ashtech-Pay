@@ -273,23 +273,6 @@ export default function PaymentPage() {
 
   const redirectAfterPayment = (outcome: "success" | "failed", ref: string) => {
     const link: any = paymentLink;
-    const isEmbedded = new URLSearchParams(window.location.search).get("embed") === "1";
-    if (isEmbedded && window.parent !== window) {
-      const message = {
-        source: "ashtechpay-checkout",
-        event: outcome === "success" ? "success" : "failure",
-        reference: ref,
-        status: outcome === "success" ? "completed" : "failed",
-      };
-      let targetOrigin = "*";
-      try {
-        if (document.referrer) targetOrigin = new URL(document.referrer).origin;
-      } catch {
-        // A restrictive referrer policy can leave no usable parent origin.
-      }
-      window.parent.postMessage(message, targetOrigin);
-      return;
-    }
     const target = outcome === "success" ? link?.successUrl : link?.cancelUrl;
     if (!target || typeof target !== "string") return;
     try {

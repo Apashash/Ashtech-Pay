@@ -9767,6 +9767,7 @@ export async function registerRoutes(
         reference,
         paymentLinkId: paymentLink.id,
         paymentIntentId: intent.id,
+         notifyUrl: paymentLink.notifyUrl || null,
         payerName: fullName,
         payerEmail: typeof email === "string" ? email.trim() : "",
         recipientCountry: countryDisplay,

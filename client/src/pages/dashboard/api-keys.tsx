@@ -72,7 +72,7 @@ export default function ApiKeysPage() {
         <div className="grid gap-4 lg:grid-cols-2">
           <OptionCard
             iconSrc="/embedded-checkout-icon.png"
-            iconAlt="Embedded checkout"
+            iconAlt="Hosted Checkout"
             iconClassName="bg-violet-500/10 text-violet-500"
             title={copy.embeddedTitle}
             description={copy.embeddedDescription}

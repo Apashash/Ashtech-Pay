@@ -75,10 +75,10 @@ AshTech Pay utilise deux clés actives pour les intégrations actuelles. Elles n
 
 | Clé | Où l'utiliser | Usage |
 | --- | --- | --- |
-| `hp_live_...` — clé Checkout | Backend uniquement | Crée les liens Hosted/Embedded checkout et permet de consulter leur statut. |
+| `hp_live_...` — clé Checkout | Backend uniquement | Crée les liens Hosted Checkout par redirection et permet de consulter leur statut. |
 | `ak_...` — clé Direct API | Backend uniquement | Authentifie les endpoints Direct API comme `/v1/collect`, `/v1/crypto/collect` et `/v1/countries`. |
 
-Pour le popup Embedded checkout, le navigateur reçoit uniquement le `payment_link`. Il ne reçoit aucune clé secrète et le script public `ashtechpay-checkout.js` ne nécessite pas de clé.
+Pour le Hosted Checkout par redirection, le navigateur reçoit uniquement le `payment_link`. Il ne reçoit aucune clé secrète et aucun script public n'est nécessaire.
 
 ## Règles de sécurité
 
@@ -89,7 +89,7 @@ Pour le popup Embedded checkout, le navigateur reçoit uniquement le `payment_li
 - Faites tourner immédiatement une clé exposée depuis le dashboard.
 
 <Note>
-  Pour créer un lien Embedded checkout, utilisez `Authorization: Bearer hp_live_...` depuis votre serveur. Pour les endpoints Direct API `/v1/*`, utilisez `Authorization: Bearer ak_...`.
+  Pour créer un lien Hosted Checkout, utilisez `Authorization: Bearer hp_live_...` depuis votre serveur. Pour les endpoints Direct API `/v1/*`, utilisez `Authorization: Bearer ak_...`.
 </Note>
 
 ## Réponse non authentifiée
