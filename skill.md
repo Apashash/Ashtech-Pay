@@ -33,6 +33,8 @@ Use this Skill when:
 - adding Hosted Checkout to a website;
 - integrating Direct API payments;
 - accepting Mobile Money payments;
+- handling the documented Mobile Money flows: USSD Push, Wave, OTP SMS, and
+  OTP USSD;
 - accepting cryptocurrency payments;
 - implementing payment webhooks;
 - verifying transaction status;
@@ -113,6 +115,10 @@ Before creating a Mobile Money collection:
 4. Configure the documented HTTPS `notify_url` when webhooks are required.
 5. Handle pending, completed, failed, cancelled, OTP-required, and timeout
    states only as documented.
+
+Consult the payment-flow documentation for the exact USSD Push, Wave, OTP SMS,
+and OTP USSD request and retry rules. Do not reuse an OTP reference or retry
+an expired payment unless the current documentation explicitly allows it.
 
 Never hardcode a provider code when the live catalogue provides it.
 
