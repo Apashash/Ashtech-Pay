@@ -71,22 +71,22 @@ curl_close($ch);
 
 ## Quelle clé utiliser ?
 
-AshTech Pay possède plusieurs clés. Elles ne sont pas interchangeables :
+AshTech Pay utilise deux clés actives pour les intégrations actuelles. Elles ne sont pas interchangeables :
 
 | Clé | Où l'utiliser | Usage |
 | --- | --- | --- |
-| `pk_live_...` — clé publique | Frontend uniquement si une intégration la demande | Identifie le compte côté client. Elle n'est pas nécessaire au popup Embedded checkout actuel. |
-| `sk_live_...` — clé secrète | Backend uniquement | Réservée aux opérations sensibles. Ne l'utilisez jamais dans le navigateur et ne la remplacez pas par `hp_live_...` pour créer un lien checkout. |
 | `hp_live_...` — clé Checkout | Backend uniquement | Crée les liens Hosted/Embedded checkout et permet de consulter leur statut. |
 | `ak_...` — clé Direct API | Backend uniquement | Authentifie les endpoints Direct API comme `/v1/collect`, `/v1/crypto/collect` et `/v1/countries`. |
 
 Pour le popup Embedded checkout, le navigateur reçoit uniquement le `payment_link`. Il ne reçoit aucune clé secrète et le script public `ashtechpay-checkout.js` ne nécessite pas de clé.
 
+Les anciennes clés `pk_live_...` et `sk_live_...` peuvent encore exister sur des comptes historiques, mais elles ne sont plus générées ni nécessaires pour les intégrations actuelles.
+
 ## Règles de sécurité
 
 - Conservez la clé dans un secret ou une variable d'environnement.
 - Effectuez les appels depuis votre backend.
-- Ne mettez jamais la clé dans une page web, une application mobile ou un dépôt Git.
+- Ne mettez jamais `hp_live_...` ou `ak_...` dans une page web, une application mobile ou un dépôt Git.
 - Utilisez une clé distincte pour chaque environnement lorsque cela est possible.
 - Faites tourner immédiatement une clé exposée depuis le dashboard.
 

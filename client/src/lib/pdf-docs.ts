@@ -418,7 +418,7 @@ export function downloadHostedPagePDF() {
   y += 6;
 
   const toc = [
-    "1.  Les 3 clés API (pk_live_ · sk_live_ · hp_live_)",
+    "1.  Les clés d'intégration (hp_live_ · ak_)",
     "2.  Créer un lien de paiement   POST /api/v1/hosted-payment/create",
     "3.  Prix fixe — montant défini à l'avance",
     "4.  Prix libre — le client choisit le montant",
@@ -438,22 +438,21 @@ export function downloadHostedPagePDF() {
   }
   y += 8;
 
-  // ── §1  Les 3 clés API ────────────────────────────────────────────────────
-  y = sectionTitle(doc, "1. Les 3 clés API", y);
-  y = paragraph(doc, "En generant tes cles dans l'onglet Hosted Page, tu obtiens 3 cles distinctes :", y);
+  // ── §1  Les clés d'intégration ────────────────────────────────────────────
+  y = sectionTitle(doc, "1. Les clés d'intégration", y);
+  y = paragraph(doc, "Pour les intégrations actuelles, tu utilises deux clés distinctes :", y);
   y += 4;
 
   y = table(doc,
     ["Cle", "Prefixe", "Role", "Ou l'utiliser"],
     [
-      ["Public Key",       "pk_live_", "Identification publique",    "Frontend si une integration la demande"],
-      ["Secret Key",       "sk_live_", "Operations sensibles",       "Backend uniquement — jamais dans le navigateur"],
       ["Hosted Page Key",  "hp_live_", "Liens de paiement heberges", "Backend — creer et suivre les liens checkout"],
+      ["Direct API Key",   "ak_",       "API directe",                 "Backend — endpoints /v1/*"],
     ],
     y, [30, 26, 35, 79]
   );
-  y = paragraph(doc, "La cle Direct API ak_… est distincte des trois cles Hosted Page et sert aux endpoints /v1/*. Le popup Embedded checkout actuel ne demande aucune cle dans le navigateur : le serveur utilise hp_live_… puis transmet seulement le payment_link.", y);
-  y = banner(doc, "warn", "Securite — sk_live_, hp_live_ et ak_… doivent rester dans des variables d'environnement cote serveur. Ne les publie jamais dans du code frontend ni dans un depot Git public.", y);
+  y = paragraph(doc, "Le popup Embedded checkout ne demande aucune cle dans le navigateur : le serveur utilise hp_live_… puis transmet seulement le payment_link. Les anciennes cles pk_live_… et sk_live_… peuvent encore exister sur des comptes historiques, mais ne sont plus generees.", y);
+  y = banner(doc, "warn", "Securite — hp_live_… et ak_… doivent rester dans des variables d'environnement cote serveur. Ne les publie jamais dans du code frontend ni dans un depot Git public.", y);
 
   // ── §2  Créer un lien ─────────────────────────────────────────────────────
   y = sectionTitle(doc, "2. Creer un lien de paiement", y);

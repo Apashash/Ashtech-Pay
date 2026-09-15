@@ -213,8 +213,9 @@ export const hostedPageKeys = mysqlTable("hosted_page_keys", {
   id: id(),
   userId: varchar("user_id", { length: 191 }).notNull(),
   name: varchar("name", { length: 191 }).notNull(),
-  pkLive: varchar("pk_live", { length: 191 }).notNull().unique(),
-  skLive: varchar("sk_live", { length: 191 }).notNull().unique(),
+  // Legacy public/secret Hosted Page keys. New Checkout keys only use hpLive.
+  pkLive: varchar("pk_live", { length: 191 }).unique(),
+  skLive: varchar("sk_live", { length: 191 }).unique(),
   hpLive: varchar("hp_live", { length: 191 }).notNull().unique(),
   hpLiveHash: varchar("hp_live_hash", { length: 191 }).unique(),
   successUrl: text("success_url"),

@@ -90,8 +90,6 @@ export function CreateHostedPageKeyDialog({
                 <p className="mt-1 font-medium">{createdKey.name}</p>
               </div>
               <div className="space-y-3">
-                <CopyableKey label={hp.publicKey} value={createdKey.pkLive} testId="generated-public" />
-                <CopyableKey label={hp.secretKey} value={createdKey.skLive} testId="generated-secret" />
                 <CopyableKey label={hp.checkoutKey} value={createdKey.hpLive} testId="generated-checkout" />
               </div>
               <p className="text-xs text-muted-foreground">{hp.generatedKeyWarning}</p>

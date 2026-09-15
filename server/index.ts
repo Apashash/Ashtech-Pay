@@ -67,7 +67,7 @@ const STARTUP_PUBLIC_API_PATHS = new Set([
 // Bump this value whenever the idempotent migration block below gains a new
 // schema change. Completed versions are stored in platform_settings so a
 // normal Passenger restart does not repeat every ALTER TABLE/CREATE INDEX.
-const SCHEMA_MIGRATION_VERSION = "2026-09-15-hosted-payment-idempotency-v1";
+const SCHEMA_MIGRATION_VERSION = "2026-09-15-hosted-checkout-key-cleanup-v1";
 
 // ── Gestionnaires d'erreurs globaux ──────────────────────────────────────────
 // unhandledRejection: log + continue — safe, these are async promise failures.
@@ -654,8 +654,8 @@ app.use((req, res, next) => {
         id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id VARCHAR NOT NULL,
         name TEXT NOT NULL,
-        pk_live TEXT NOT NULL UNIQUE,
-        sk_live TEXT NOT NULL UNIQUE,
+        pk_live TEXT UNIQUE,
+        sk_live TEXT UNIQUE,
         hp_live TEXT NOT NULL UNIQUE,
         hp_live_hash TEXT UNIQUE,
         success_url TEXT,
@@ -668,6 +668,8 @@ app.use((req, res, next) => {
     await db.execute(sql`ALTER TABLE hosted_page_keys ADD COLUMN IF NOT EXISTS success_url TEXT`);
     await db.execute(sql`ALTER TABLE hosted_page_keys ADD COLUMN IF NOT EXISTS cancel_url TEXT`);
     await db.execute(sql`ALTER TABLE hosted_page_keys ADD COLUMN IF NOT EXISTS notify_url TEXT`);
+    await db.execute(sql`ALTER TABLE hosted_page_keys ALTER COLUMN pk_live DROP NOT NULL`);
+    await db.execute(sql`ALTER TABLE hosted_page_keys ALTER COLUMN sk_live DROP NOT NULL`);
     await db.execute(sql`CREATE INDEX IF NOT EXISTS hosted_page_keys_user_id_idx ON hosted_page_keys(user_id)`);
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS hosted_payment_sessions (

@@ -1183,8 +1183,9 @@ export const hostedPageKeys = pgTable("hosted_page_keys", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull(),
   name: text("name").notNull(),
-  pkLive: text("pk_live").notNull().unique(),
-  skLive: text("sk_live").notNull().unique(),
+  // Legacy public/secret Hosted Page keys. New Checkout keys only use hpLive.
+  pkLive: text("pk_live").unique(),
+  skLive: text("sk_live").unique(),
   hpLive: text("hp_live").notNull().unique(),
   hpLiveHash: text("hp_live_hash").unique(),
   successUrl: text("success_url"),

@@ -8,8 +8,9 @@ import { useLanguage } from "@/lib/language";
 export interface HostedPageKey {
   id: string;
   name: string;
-  pkLive: string;
-  skLive: string;
+  /** Legacy fields returned only for historical keys. */
+  pkLive?: string | null;
+  skLive?: string | null;
   hpLive: string;
   successUrl?: string | null;
   cancelUrl?: string | null;

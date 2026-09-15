@@ -119,8 +119,6 @@ export default function HostedPageKeys() {
                 </CardHeader>
                 <CardContent className="min-w-0 space-y-4">
                   <div className="space-y-3">
-                    <CopyableKey label={hp.publicKey} value={key.pkLive} testId={`${key.id}-public`} />
-                    <CopyableKey label={hp.secretKey} value={key.skLive} testId={`${key.id}-secret`} />
                     <CopyableKey label={hp.checkoutKey} value={key.hpLive} testId={`${key.id}-checkout`} />
                   </div>
                   <div className="flex flex-wrap items-center gap-2 border-t pt-4">

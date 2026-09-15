@@ -2957,8 +2957,8 @@ export class DatabaseStorage implements IStorage {
   private decryptHostedPageKey(key: HostedPageKey): HostedPageKey {
     return {
       ...key,
-      skLive: decryptField(key.skLive) || "",
-      pkLive: decryptField(key.pkLive) || "",
+      skLive: decryptField(key.skLive) || null,
+      pkLive: decryptField(key.pkLive) || null,
       hpLive: decryptField(key.hpLive) || "",
     };
   }
@@ -2979,13 +2979,13 @@ export class DatabaseStorage implements IStorage {
     const keys = rows.map((row) => this.decryptHostedPageKey(row));
     const legacy = await this.getHostedPageConfig(userId);
 
-    if (legacy?.pkLive && legacy.skLive && legacy.hpLive) {
+    if (legacy?.hpLive) {
       const legacyKey = {
         id: "legacy",
         userId,
         name: "default",
-        pkLive: legacy.pkLive,
-        skLive: legacy.skLive,
+        pkLive: legacy.pkLive || null,
+        skLive: legacy.skLive || null,
         hpLive: legacy.hpLive,
         hpLiveHash: hmacField(legacy.hpLive),
         successUrl: legacy.successUrl,
@@ -3013,15 +3013,13 @@ export class DatabaseStorage implements IStorage {
       cancelUrl: config?.cancelUrl || null,
       notifyUrl: config?.notifyUrl || null,
     };
-    const pkLive = `pk_live_${randomUUID().replace(/-/g, "")}`;
-    const skLive = `sk_live_${randomUUID().replace(/-/g, "")}`;
     const hpLive = `hp_live_${randomUUID().replace(/-/g, "")}`;
     const values = {
       id,
       userId,
       name,
-      pkLive: encryptField(pkLive)!,
-      skLive: encryptField(skLive)!,
+      pkLive: null,
+      skLive: null,
       hpLive: encryptField(hpLive)!,
       hpLiveHash: hmacField(hpLive),
       successUrl: linkedUrls.successUrl || null,
@@ -3053,17 +3051,15 @@ export class DatabaseStorage implements IStorage {
         successUrl: config.successUrl,
         cancelUrl: config.cancelUrl,
         notifyUrl: config.notifyUrl,
-        pkLive: `pk_live_${randomUUID().replace(/-/g, "")}`,
-        skLive: `sk_live_${randomUUID().replace(/-/g, "")}`,
         hpLive: `hp_live_${randomUUID().replace(/-/g, "")}`,
       });
-      if (!updated.pkLive || !updated.skLive || !updated.hpLive) return undefined;
+      if (!updated.hpLive) return undefined;
       return {
         id: "legacy",
         userId,
         name: "default",
-        pkLive: updated.pkLive,
-        skLive: updated.skLive,
+        pkLive: updated.pkLive || null,
+        skLive: updated.skLive || null,
         hpLive: updated.hpLive,
         hpLiveHash: hmacField(updated.hpLive),
         createdAt: updated.createdAt,
@@ -3071,12 +3067,8 @@ export class DatabaseStorage implements IStorage {
       } as HostedPageKey;
     }
 
-    const pkLive = `pk_live_${randomUUID().replace(/-/g, "")}`;
-    const skLive = `sk_live_${randomUUID().replace(/-/g, "")}`;
     const hpLive = `hp_live_${randomUUID().replace(/-/g, "")}`;
     const updates = {
-      pkLive: encryptField(pkLive)!,
-      skLive: encryptField(skLive)!,
       hpLive: encryptField(hpLive)!,
       hpLiveHash: hmacField(hpLive),
       updatedAt: new Date(),
@@ -3111,8 +3103,8 @@ export class DatabaseStorage implements IStorage {
         id: "legacy",
         userId,
         name: "default",
-        pkLive: updated.pkLive || "",
-        skLive: updated.skLive || "",
+        pkLive: updated.pkLive || null,
+        skLive: updated.skLive || null,
         hpLive: updated.hpLive || "",
         hpLiveHash: hmacField(updated.hpLive || ""),
         successUrl: updated.successUrl,
@@ -3186,8 +3178,8 @@ export class DatabaseStorage implements IStorage {
           id: "legacy",
           userId: legacy.userId,
           name: "default",
-          pkLive: legacy.pkLive || "",
-          skLive: legacy.skLive || "",
+          pkLive: legacy.pkLive || null,
+          skLive: legacy.skLive || null,
           hpLive: legacy.hpLive || "",
           hpLiveHash: hmacField(legacy.hpLive || ""),
           successUrl: legacy.successUrl,
@@ -3209,8 +3201,8 @@ export class DatabaseStorage implements IStorage {
       id: "legacy",
       userId: legacy.userId,
       name: "default",
-      pkLive: legacy.pkLive || "",
-      skLive: legacy.skLive || "",
+      pkLive: legacy.pkLive || null,
+      skLive: legacy.skLive || null,
       hpLive: legacy.hpLive || "",
       hpLiveHash: hmacField(legacy.hpLive || ""),
       successUrl: legacy.successUrl,

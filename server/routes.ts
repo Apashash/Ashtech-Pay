@@ -17670,8 +17670,6 @@ export async function registerRoutes(
       if (cancelUrl !== undefined) data.cancelUrl = cancelUrl;
       if (notifyUrl !== undefined) data.notifyUrl = notifyUrl || null;
       if (regenerate) {
-        data.pkLive = generateHpKey("pk_live_");
-        data.skLive = generateHpKey("sk_live_");
         data.hpLive = generateHpKey("hp_live_");
       }
       const config = await storage.saveHostedPageConfig(userId, data);
