@@ -352,7 +352,7 @@ export async function initiateAfribaPayin(params: AfribaPayinParams): Promise<Af
       cancel_url: params.cancel_url || "",
     };
 
-    console.log(`[AfribaPay Payin] Initiating ${params.amount} ${params.currency} for ${maskPhone(params.phone_number)} (${params.operator}/${params.country})`);
+    console.log(`[AfribaPay Payin] Initiating ${params.amount} ${params.currency} (${params.operator}/${params.country})`);
 
     const { res, data } = await fetchAfribaPayJson(`${AFRIBAPAY_PAYIN_URL}/v1/pay/payin`, {
       method: "POST",
@@ -441,7 +441,7 @@ export async function initiateAfribaPayout(params: AfribaPayoutParams): Promise<
       cancel_url: "",
     };
 
-    console.log(`[AfribaPay Payout] Initiating ${params.amount} ${params.currency} to ${maskPhone(params.phone_number)} (${params.operator}/${params.country})`);
+    console.log(`[AfribaPay Payout] Initiating ${params.amount} ${params.currency} (${params.operator}/${params.country})`);
 
     const { res, data } = await fetchAfribaPayJson(`${AFRIBAPAY_PAYOUT_URL}/v1/pay/payout`, {
       method: "POST",
@@ -718,7 +718,7 @@ export async function initiateAfribaPayOtp(params: Omit<AfribaPayinParams, "retu
       otp_code: "",   // Required by AfribaPay even for initiation; empty = "send SMS"
     };
 
-    console.log(`[AfribaPay OTP Init] Sending OTP SMS: ${params.amount} ${params.currency} for ${maskPhone(params.phone_number)} (${params.operator}/${params.country})`);
+    console.log(`[AfribaPay OTP Init] Sending OTP SMS: ${params.amount} ${params.currency} (${params.operator}/${params.country})`);
 
     const { res, data } = await fetchAfribaPayJson(`${AFRIBAPAY_PAYIN_URL}/v1/pay/otp`, {
       method: "POST",

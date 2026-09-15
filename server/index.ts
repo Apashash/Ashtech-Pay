@@ -318,24 +318,12 @@ app.use((_req, res, next) => {
 app.use(compression());
 
 // ── Diagnostic: Public ping endpoint (no auth, no DB) ────────────────────────
-// Used to check if Node.js is running on the production server.
-// Visit https://www.ashtechpay.com/api/ping to verify server health.
+// Keep this endpoint intentionally minimal: detailed bootstrap and migration
+// diagnostics are operational data and must not be exposed publicly.
 app.get("/api/ping", (_req, res) => {
   res.json({
     ok: true,
-    ready: startupReady,
-    migrations_ready: migrationsReady,
-    migration_status: migrationStatus,
-    migration_stage: migrationStage,
-    migration_failure_code: classifyMigrationFailure(migrationFailure),
-    migration_elapsed_ms: migrationStartedAt
-      ? Math.max(0, Date.now() - migrationStartedAt)
-      : null,
-    bootstrap_failed: Boolean(startupFailure),
-    bootstrap_stage: startupFailureStage ?? startupStage,
-    bootstrap_failure_code: classifyStartupFailure(startupFailure),
-    uptime: Math.floor(process.uptime()),
-    env: process.env.NODE_ENV || "development",
+    ready: startupReady && migrationsReady,
   });
 });
 

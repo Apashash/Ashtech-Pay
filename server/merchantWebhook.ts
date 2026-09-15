@@ -5,6 +5,7 @@ import { storage } from "./storage";
 import { decryptField, encryptField, isFieldEncryptionConfigured } from "./fieldEncryption";
 import type { Transaction } from "@shared/schema-runtime";
 import { sql } from "drizzle-orm";
+import { postJsonToSafeWebhook } from "./networkSecurity";
 
 type FinalStatus = "completed" | "failed";
 
@@ -83,7 +84,7 @@ export async function enqueueMerchantWebhook(
   const notifyUrl = notifyUrlOverride || transaction.notifyUrl;
   if (!notifyUrl) return;
   if (!isSafeMerchantWebhookUrl(notifyUrl)) {
-    console.warn(`[MerchantWebhook] Blocked unsafe notify_url: ${notifyUrl}`);
+    console.warn("[MerchantWebhook] Blocked unsafe notify_url");
     return;
   }
 
@@ -182,17 +183,17 @@ async function deliverClaimedMerchantWebhook(delivery: any): Promise<void> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 10_000);
   try {
-    const response = await fetch(delivery.notify_url, {
-      method: "POST",
-      headers: {
+    const response = await postJsonToSafeWebhook(
+      delivery.notify_url,
+      {
         "Content-Type": "application/json",
         "X-Ashtech-Event-Id": delivery.id,
         "X-Ashtech-Timestamp": timestamp,
         "X-Ashtech-Signature": `sha256=${signature}`,
       },
       body,
-      signal: controller.signal,
-    });
+      controller.signal,
+    );
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     if (isMysql) {
       await mysqlQuery(
@@ -206,7 +207,7 @@ async function deliverClaimedMerchantWebhook(delivery: any): Promise<void> {
       SET status = 'delivered', delivered_at = NOW(), last_error = NULL
       WHERE id = ${deliveryId}
     `);
-    console.log(`[MerchantWebhook] → ${delivery.notify_url} | status=${response.status} delivery=${deliveryId}`);
+    console.log(`[MerchantWebhook] delivered status=${response.status} delivery=${deliveryId}`);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     const attempts = Number(delivery.attempts) || 1;
@@ -230,7 +231,7 @@ async function deliverClaimedMerchantWebhook(delivery: any): Promise<void> {
       WHERE id = ${deliveryId}
     `);
     console.warn(
-      `[MerchantWebhook] Failed to reach ${delivery.notify_url}: ${message}` +
+      `[MerchantWebhook] Delivery failed: ${message}` +
       (permanentlyFailed ? ` (permanent failure after ${maxAttempts} attempts)` : ` (retry in ${delaySeconds}s)`),
     );
   } finally {

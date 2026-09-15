@@ -118,6 +118,7 @@ import {
   savePrivateKycUpload,
 } from "./kycPrivateDocuments";
 import { ensureMysqlKycSubmissionSchema } from "./mysqlBootstrap";
+import { isPrivateOrReservedIp } from "./networkSecurity";
 
 const PAWAPAY_PUBLIC_INITIATION_TIMEOUT_MS = 20_000;
 
@@ -1243,7 +1244,7 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
     const normalize = (ip: string) =>
       ip === "::1" || ip === "::ffff:127.0.0.1" ? "127.0.0.1" : ip;
     if (normalize(currentIp) !== normalize(sessionIp)) {
-      console.warn(`[SessionGuard] IP CHANGE — userId=${req.userId} sessionIp=${sessionIp} currentIp=${currentIp} sid=${req.sessionID?.slice(0,8)} — possible cookie theft or mobile switch`);
+      console.warn(`[SessionGuard] IP CHANGE — userId=${req.userId} sid=${req.sessionID?.slice(0,8)} — possible cookie theft or mobile switch`);
     }
   }
 
@@ -1317,7 +1318,7 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
   // Any IP can access by default. Only IPs manually blocked by an admin are denied.
   const panelBlockedIps = await loadAdminPanelBlockedIps();
   if (isIpBannedFromAdmin(adminIpEarly, panelBlockedIps)) {
-    console.warn(`[AdminAccess] BLOCKED — IP ${adminIpEarly} is on admin panel blocklist — user=${req.userId} path=${req.path}`);
+    console.warn(`[AdminAccess] BLOCKED — admin panel blocklist — user=${req.userId} path=${req.path}`);
     notifyAdminPanelAccess({ type: "blocked_ip", ip: adminIpEarly, userId: user.id, userName: user.fullName || user.username, userEmail: user.email || undefined, userRole: user.role, path: req.path }).catch(() => {});
     return res.status(403).json({ message: "Votre adresse IP est bloquée du panneau d'administration.", ipBanned: true });
   }
@@ -1433,7 +1434,7 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
       req.session.save(() => {});
       adminVerifiedSessions.delete(req.sessionID);
       const ipChanged = !!avsIp;
-      console.warn(`[AdminAccess] TOTP session binding rejected — user=${req.userId} avsIp=${avsIp || "missing"} currentIp=${adminIpEarly} — _avs revoked`);
+      console.warn(`[AdminAccess] TOTP session binding rejected — user=${req.userId} — _avs revoked`);
       notifyAdminPanelAccess({ type: "blocked_no_auth", ip: adminIpEarly, userId: user.id, userName: user.fullName || user.username, userEmail: user.email || undefined, userRole: user.role, path: req.path }).catch(() => {});
       return res.status(403).json({
         message: ipChanged
@@ -1447,7 +1448,7 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
       // Mobile carriers may rotate the public IP during the immediate
       // TOTP-to-panel transition. Rebind only this freshly TOTP-verified
       // session; normal panel activity remains IP-bound afterward.
-      console.warn(`[AdminAccess] Fresh TOTP IP handoff — user=${req.userId} previousIp=${avsIp} currentIp=${adminIpEarly}`);
+      console.warn(`[AdminAccess] Fresh TOTP IP handoff — user=${req.userId}`);
       req.session._avsIp = adminIpEarly;
       req.session.save(() => {});
     }
@@ -1754,7 +1755,7 @@ async function revokeSessionsByIp(ip: string, blockedUntil: number): Promise<voi
 
     // Déduplique les userIds
     const userIds = [...new Set(rows.map(r => r.user_id).filter(Boolean))];
-    console.log(`[Auth] IP blocked (${ip}) — révocation de ${rows.length} session(s) pour ${userIds.length} utilisateur(s)`);
+    console.log(`[Auth] IP block — révocation de ${rows.length} session(s) pour ${userIds.length} utilisateur(s)`);
 
     // Marque chaque session comme révoquée (réponse sessionRevoked:true au prochain appel)
     for (const row of rows) {
@@ -1774,7 +1775,7 @@ async function revokeSessionsByIp(ip: string, blockedUntil: number): Promise<voi
     } else {
       await db.execute(sql`DELETE FROM session WHERE sess->>'clientIp' = ${ip}`);
     }
-    console.log(`[Auth] IP block — sessions supprimées pour IP=${ip}`);
+    console.log("[Auth] IP block — sessions supprimées");
   } catch (err: any) {
     console.error("[Auth] revokeSessionsByIp failed:", err?.message);
   }
@@ -1851,23 +1852,10 @@ setInterval(() => {
 }, 5 * 60 * 1000);
 
 function getClientIp(req: Request): string {
-  // CF-Connecting-IP is the real client IP set by Cloudflare (overrides proxy IPs)
-  const cfIp = req.headers["cf-connecting-ip"];
-  if (cfIp) return Array.isArray(cfIp) ? cfIp[0].trim() : cfIp.trim();
-
-  // True-Client-IP is also set by Cloudflare Enterprise plans
-  const trueIp = req.headers["true-client-ip"];
-  if (trueIp) return Array.isArray(trueIp) ? trueIp[0].trim() : trueIp.trim();
-
-  const realIp = req.headers["x-real-ip"];
-  if (realIp) return Array.isArray(realIp) ? realIp[0].trim() : realIp.trim();
-
-  const forwarded = req.headers["x-forwarded-for"];
-  if (forwarded) {
-    const raw = Array.isArray(forwarded) ? forwarded[0] : forwarded;
-    return raw.split(",")[0].trim();
-  }
-  return req.ip || "unknown";
+  // Express resolves req.ip using the configured trusted proxy hop. Do not
+  // parse client-controlled forwarding headers here: doing so would let a
+  // caller choose the IP used by auth blocks, geolocation and audit records.
+  return (req.ip || req.socket?.remoteAddress || "unknown").trim();
 }
 
 
@@ -1881,17 +1869,7 @@ const AFRICAN_COUNTRY_CODES = new Set([
 ]);
 
 function isPrivateIp(ip: string): boolean {
-  return (
-    ip === "127.0.0.1" ||
-    ip === "::1" ||
-    ip.startsWith("10.") ||
-    ip.startsWith("172.") ||
-    ip.startsWith("192.168.") ||
-    ip.startsWith("::ffff:10.") ||
-    ip.startsWith("::ffff:127.") ||
-    ip.startsWith("::ffff:172.") ||
-    ip.startsWith("::ffff:192.168.")
-  );
+  return isPrivateOrReservedIp(ip);
 }
 
 // ─── VPN / Proxy detection cache ──────────────────────────────────────────────
@@ -2168,8 +2146,9 @@ export async function registerRoutes(
 </html>`);
   });
 
-  // Trust proxy (Replit uses reverse proxy in all environments)
-  app.set("trust proxy", 1);
+  // Trust only the configured deployment proxy. In a direct/local process,
+  // forwarded headers remain untrusted.
+  app.set("trust proxy", process.env.TRUST_PROXY === "true" || !!process.env.REPL_ID ? 1 : false);
 
   // CORS middleware — restrict to known origins in production
   const appUrl = process.env.APP_URL ? process.env.APP_URL.replace(/\/$/, "") : null;
@@ -2393,7 +2372,7 @@ export async function registerRoutes(
         const ip = getClientIp(req);
         const isVpn = await checkVpnOrProxy(ip);
         if (isVpn) {
-          console.log(`[VPN] Disconnecting user ${userId} — VPN/proxy detected from ${ip}`);
+          console.log(`[VPN] Disconnecting user ${userId} — VPN/proxy detected`);
           if (req.session) req.session.userId = undefined;
           if (authHeader && authHeader.startsWith('Bearer ')) {
             removeAuthToken(authHeader.substring(7));
@@ -3989,7 +3968,7 @@ export async function registerRoutes(
       // the session to the current mobile IP after the PIN succeeds.
       if (typeof adminTotpIp === "string" &&
           normalizeLoopback(adminTotpIp) !== normalizeLoopback(currentIp)) {
-        console.warn(`[AdminPin] Rebinding admin session IP after PIN — userId=${user.id} previousIp=${adminTotpIp} currentIp=${currentIp}`);
+        console.warn(`[AdminPin] Rebinding admin session IP after PIN — userId=${user.id}`);
       }
       req.session._avs = panelAuthExp;
       req.session._avsIp = currentIp;
@@ -6195,8 +6174,7 @@ export async function registerRoutes(
             if (prefix && localPhone.startsWith(prefix)) {
               localPhone = localPhone.slice(prefix.length);
             }
-            // Dev-only: phone numbers must not appear in production logs (GDPR Art. 5(1)(f))
-            if (process.env.NODE_ENV !== "production") console.log(`[Deposit] AfribaPay phone formatted: raw="${data.phoneNumber}" → local="${localPhone}" country=${countryCode}`);
+            console.log(`[Deposit] AfribaPay phone formatted for country=${countryCode}`);
 
             // Build return/cancel URLs for Wave (redirect-based operators)
             const appBaseUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
@@ -6368,9 +6346,7 @@ export async function registerRoutes(
                 }
               });
             } else {
-              // Redact phone in production logs (GDPR Art. 5(1)(f))
-              const _phoneMasked = process.env.NODE_ENV !== "production" ? localPhone : `***${localPhone.slice(-3)}`;
-              console.error(`[AfribaPay Payin FAILED] country=${countryCode} phone=${_phoneMasked} operator=${afribapayOperatorCode} response=`, JSON.stringify(afribaResponse));
+              console.error(`[AfribaPay Payin FAILED] country=${countryCode} operator=${afribapayOperatorCode}`);
               await storage.updateTransactionStatus(transaction.id, "failed");
               res.status(400).json({ message: sanitizeGatewayMessage(afribaResponse.message, "Échec de l'initiation du paiement Mobile Money.") });
             }
@@ -10954,7 +10930,7 @@ export async function registerRoutes(
       const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";
       storage.createAdminLog({ adminId: req.userId!, action: "otp_requested", details: `OTP demandé depuis IP ${ip}` }).catch(() => {});
       if (process.env.NODE_ENV !== "production") {
-        console.log(`[AdminOTP] Code généré pour ${user.email.replace(/(.{2}).+(@.+)/, "$1***$2")} — email=${hasEmail} telegram=${hasTelegram}`);
+        console.log(`[AdminOTP] Code généré pour userId=${user.id} — email=${hasEmail} telegram=${hasTelegram}`);
       }
       res.json({ sent: true, email: user.email.replace(/(.{2}).+(@.+)/, "$1***$2"), noChannel });
     } catch (error: any) {
@@ -11089,7 +11065,7 @@ export async function registerRoutes(
         details: `Vérification OTP réussie depuis IP ${ip} — session valide 24h d'inactivité`,
       }).catch(() => {});
 
-      console.log(`[AdminOTP] Admin ${user.email?.replace(/(.{2}).+(@.+)/, "$1***$2")} vérifié depuis ${ip}`);
+      console.log(`[AdminOTP] Admin userId=${user.id} vérifié`);
       notifyAdminLoginSuccess({ adminName: user.fullName || user.username, adminEmail: user.email || "", ip }).catch(() => {});
 
       res.json({ success: true });
@@ -11247,7 +11223,7 @@ export async function registerRoutes(
         details: "TOTP (Google Authenticator) activé",
         ipAddress: req.ip || null,
       }).catch(() => {});
-      console.log(`[AdminTOTP] TOTP activé pour ${user.email}`);
+      console.log(`[AdminTOTP] TOTP activé pour userId=${user.id}`);
       res.json({ success: true, requiresRelogin: true });
       // Changing the authenticator invalidates every previous admin session and
       // bearer token. The next login must prove possession of the new secret.
@@ -11326,7 +11302,7 @@ export async function registerRoutes(
         ipAddress: req.ip || null,
       }).catch(() => {});
       notifyAdminLoginSuccess({ adminName: user.fullName || user.username, adminEmail: user.email || "", ip }).catch(() => {});
-      console.log(`[AdminTOTP] Admin ${user.email?.replace(/(.{2}).+(@.+)/, "$1***$2")} vérifié (TOTP) depuis ${ip}`);
+      console.log(`[AdminTOTP] Admin userId=${user.id} vérifié (TOTP)`);
       res.json({ success: true });
     } catch (err: any) {
       console.error("[AdminTOTP] Verify error:", err?.message);
@@ -11933,7 +11909,7 @@ export async function registerRoutes(
         const requestingAdmin = await storage.getUser(req.userId!).catch(() => null);
         const SUPER_ADMIN_EMAIL = "ashtechpay@gmail.com";
         if (!requestingAdmin || requestingAdmin.email?.toLowerCase() !== SUPER_ADMIN_EMAIL) {
-          console.warn(`[AdminAccess] ROLE PROMOTION BLOCKED — ${requestingAdmin?.email} tried to promote user ${id} to admin`);
+          console.warn(`[AdminAccess] ROLE PROMOTION BLOCKED — adminId=${req.userId} targetUserId=${id}`);
           await storage.createAdminLog({
             adminId: req.userId!,
             action: "role_promotion_blocked",
@@ -12212,7 +12188,7 @@ export async function registerRoutes(
         ipAddress: req.ip || null,
       });
 
-      console.log(`[Security] Admin ${adminId} a forcé la déconnexion de l'utilisateur ${id} (${targetUser.email || targetUser.username})`);
+      console.log(`[Security] Admin ${adminId} a forcé la déconnexion de l'utilisateur ${id}`);
 
       res.json({ ok: true, message: `${targetUser.fullName || targetUser.username} a été déconnecté de tous ses appareils.` });
     } catch (error) {
@@ -12626,7 +12602,7 @@ export async function registerRoutes(
             return res.status(400).json({ message: "Aucun fournisseur de paiement valide n'est configuré pour cet opérateur." });
           }
 
-          console.log(`[Admin] Payout params: country=${countryCode}, operatorId=${operatorId}, operatorName=${operatorName}, provider=${adminPaymentProvider}, txPaymentMethod=${transaction.paymentMethod}`);
+      console.log(`[Admin] Payout parameters resolved for transaction=${transaction.id}`);
 
           let payoutResult: { success: boolean; transaction_id?: string; message?: string } = {
             success: false,
@@ -18457,7 +18433,7 @@ export async function registerRoutes(
             });
             sent++;
           } catch (err) {
-            console.error(`[Campaign] Failed for ${user.email?.replace(/(.{2}).+(@.+)/, "$1***$2")}:`, err);
+            console.error(`[Campaign] Failed for userId=${user.id}:`, err);
             failed++;
           }
         }));

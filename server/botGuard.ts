@@ -328,7 +328,7 @@ const EXEMPT_IPS = ["127.0.0.1", "::1", "::ffff:127.0.0.1"];
 export function banIp(ip: string, durationMs = 24 * 60 * 60 * 1000): void {
   const until = Date.now() + durationMs;
   bannedIPs.set(ip, until);
-  console.warn(`[BotGuard] 🔴 IP bannie: ${ip} pour ${Math.round(durationMs / 3600000)}h`);
+  console.warn(`[BotGuard] 🔴 IP bannie pour ${Math.round(durationMs / 3600000)}h`);
 }
 
 export function isIpBanned(ip: string): boolean {
@@ -374,7 +374,7 @@ export function botGuard(req: Request, res: Response, next: NextFunction): void 
     (p) => pathLower === p.toLowerCase() || pathLower.startsWith(p.toLowerCase() + "/")
   );
   if (isHoneypot) {
-    console.warn(`[BotGuard] 🍯 Honeypot touché: ${ip} → ${rawPath}`);
+    console.warn(`[BotGuard] 🍯 Honeypot touché: ${rawPath}`);
     if (!isLoopback) {
       const durationMs = 48 * 60 * 60 * 1000;
       const until = Date.now() + durationMs;
@@ -401,7 +401,7 @@ export function botGuard(req: Request, res: Response, next: NextFunction): void 
   // 3. Patterns de chemins suspects (injection / traversal) → ban 24h + persist + alerte
   const isSuspiciousPath = SUSPICIOUS_PATH_PATTERNS.some((p) => p.test(rawPath));
   if (isSuspiciousPath) {
-    console.warn(`[BotGuard] ⚠️ Chemin suspect: ${ip} → ${rawPath}`);
+    console.warn(`[BotGuard] ⚠️ Chemin suspect: ${rawPath}`);
     if (!isLoopback) {
       const durationMs = 24 * 60 * 60 * 1000;
       const until = Date.now() + durationMs;
@@ -432,7 +432,7 @@ export function botGuard(req: Request, res: Response, next: NextFunction): void 
       // donc un vrai bot reste bloqué à chaque tentative sans punir les autres.
       if (BAD_UA_PATTERNS.some((p) => p.test(uaLower))) {
         sendBotAlert(ip, rawPath, `User-Agent malveillant: ${ua.slice(0, 60)}`, 0);
-        console.warn(`[BotGuard] 🤖 Requête bot rejetée (sans ban IP): ${ip} UA="${ua.slice(0, 80)}"`);
+        console.warn(`[BotGuard] 🤖 Requête bot rejetée (sans ban IP) UA="${ua.slice(0, 80)}"`);
         res.status(403).json({ message: "Accès refusé." });
         return;
       }

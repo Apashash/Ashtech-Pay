@@ -40,6 +40,7 @@
 - [Admin route cloaking](admin-route-cloaking.md) — unauthenticated and non-admin requests to admin API/panel paths must look like branded 404s before auth/CSRF/PIN layers.
 - [Admin Telegram notification boundary](admin-telegram-notifications.md) — emit successful admin alerts at login only, never from per-request authorization middleware.
 - [Merchant webhook delivery](merchant-webhook-delivery.md) — all merchant events must use one persisted, HMAC-signed, idempotent queue with retry and cross-worker claims.
+- [Merchant webhook SSRF boundary](merchant-webhook-ssrf.md) — merchant callback URLs need DNS/IP validation and pinned outbound requests, not lexical URL checks alone.
 - [Bearer device sessions](bearer-device-sessions.md) — persist the valid current Bearer-token session before listing or deleting other devices, while excluding that SID from bulk logout.
 - [Bearer session deduplication](bearer-session-deduplication.md) — cookie-less Bearer requests must persist by userId + tokenIssuedAt, not by each fresh Express SID.
 - [Provider API error exposure](provider-api-errors.md) — merchant-facing errors preserve the provider’s useful message and diagnostics, but never its raw response or sensitive data.
