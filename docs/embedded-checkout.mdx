@@ -3,7 +3,7 @@ title: "Embedded checkout"
 description: "Lancez un paiement hébergé sans construire tout le formulaire vous-même."
 ---
 
-Embedded checkout est le chemin le plus rapide pour accepter un paiement. Votre serveur crée un lien, puis redirige le client vers la page AshTech Pay.
+Embedded checkout est le chemin le plus rapide pour accepter un paiement. Votre serveur crée un lien, puis votre site ouvre le checkout AshTech Pay dans une fenêtre modale, sans rediriger la page du marchand.
 
 ## Créer un lien de paiement
 
@@ -132,7 +132,41 @@ curl_close($ch);
 }
 ```
 
-Redirigez ensuite le navigateur du client vers `payment_link`. Ne créez pas le lien depuis le navigateur : la clé `hp_live_...` doit rester sur votre serveur.
+## Ouvrir le checkout dans un popup
+
+Ajoutez le script public une seule fois dans la page du marchand :
+
+```html
+<script src="https://www.ashtechpay.com/ashtechpay-checkout.js"></script>
+```
+
+Après avoir créé le lien côté serveur, ouvrez-le depuis un clic utilisateur :
+
+```html
+<button id="pay-button" type="button">Payer</button>
+
+<script>
+  document.getElementById("pay-button").addEventListener("click", function () {
+    AshTechPayCheckout.open({
+      paymentLink: link.payment_link,
+      onSuccess: function (payment) {
+        console.log("Paiement confirmé :", payment.reference);
+        // Mettre à jour la commande côté marchand.
+      },
+      onFailure: function (payment) {
+        console.log("Paiement échoué :", payment.reference);
+      },
+      onCancel: function () {
+        console.log("Checkout fermé par le client");
+      }
+    });
+  });
+</script>
+```
+
+`AshTechPayCheckout.open()` accepte aussi `checkoutUrl`, `url` ou `slug`. Le popup est responsive et se ferme avec le bouton, la touche Échap ou le clic en dehors de la fenêtre. La redirection classique reste possible si le marchand préfère utiliser directement `payment_link`.
+
+Ne créez pas le lien depuis le navigateur : la clé `hp_live_...` doit rester sur votre serveur.
 
 ## Prix fixe ou libre
 

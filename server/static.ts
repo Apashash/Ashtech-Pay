@@ -41,6 +41,13 @@ export function serveStatic(app: Express) {
         res.setHeader("Pragma", "no-cache");
         res.setHeader("Expires", "0");
       }
+      if (path.basename(filePath).toLowerCase() === "ashtechpay-checkout.js") {
+        // This is the only public cross-origin SDK asset. Without this
+        // override Helmet's same-origin CORP header blocks merchant sites
+        // from loading the script.
+        res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+        res.setHeader("Access-Control-Allow-Origin", "*");
+      }
     },
   }));
 
@@ -50,15 +57,38 @@ export function serveStatic(app: Express) {
     const indexPath = path.resolve(distPath, "index.html");
     try {
       let html = await fs.promises.readFile(indexPath, "utf-8");
+      const isEmbeddedCheckout = req.query.embed === "1";
       if (req.path.startsWith("/pay/")) {
         html = await renderPaymentLinkMeta(req, html, req.params.slug);
       }
-      res
+      const response = res
         .set("Content-Type", "text/html")
         .set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
         .set("Pragma", "no-cache")
-        .set("Expires", "0")
-        .send(html);
+        .set("Expires", "0");
+
+      // Direct payment pages remain protected from framing. The explicit
+      // embed=1 mode is used by the public checkout SDK and contains no
+      // authenticated dashboard content.
+      if (isEmbeddedCheckout) {
+        response.removeHeader("X-Frame-Options");
+        response.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+        const currentCsp = response.getHeader("Content-Security-Policy");
+        if (typeof currentCsp === "string" && currentCsp.trim()) {
+          const withoutFrameAncestors = currentCsp
+            .replace(/(?:^|;)frame-ancestors[^;]*/i, "")
+            .replace(/;;+/g, ";")
+            .replace(/^;|;$/g, "");
+          response.setHeader(
+            "Content-Security-Policy",
+            `${withoutFrameAncestors};frame-ancestors *`,
+          );
+        } else {
+          response.setHeader("Content-Security-Policy", "frame-ancestors *");
+        }
+      }
+
+      response.send(html);
     } catch (error) {
       next(error);
     }
