@@ -48,6 +48,12 @@
         ]
       },
       {
+        "group": "Integration",
+        "pages": [
+          "docs/integration/ai-skill"
+        ]
+      },
+      {
         "group": "Direct API",
         "pages": [
           "docs/direct-api/overview",
