@@ -5,13 +5,14 @@ description: "Installez le Skill adapté et donnez à votre agent IA des instruc
 
 ## Comment utiliser le Skill ?
 
-Copiez la commande du Skill adapté à votre besoin, puis donnez-la à l'agent de
-code IA de votre choix. L'agent installera le Skill, analysera votre projet et
-s'occupera de l'intégration de l'API AshTech Pay en suivant la documentation
-officielle.
+Vous avez deux possibilités :
 
-Vous pouvez aussi copier le contenu du Skill et le transmettre directement à
-votre agent de code.
+1. **Installer le Skill vous-même** en copiant la commande correspondant à
+   votre besoin et en l'exécutant dans le terminal de votre projet.
+2. **Donner le Skill à l'agent IA de votre choix**. Copiez la commande ou le
+   contenu du Skill et transmettez-le à votre agent. Il installera le Skill,
+   analysera votre projet et intégrera l'API AshTech Pay en suivant la
+   documentation officielle.
 
 Le Skill ne remplace pas votre clé API et ne crée pas votre compte marchand.
 Gardez vos clés et vos secrets uniquement dans les variables d'environnement de
@@ -30,10 +31,10 @@ Si l'API renvoie `api_not_enabled`, la clé est reconnue mais l'accès API n'est
 pas encore activé sur le compte. L'agent ne peut pas contourner cette
 activation.
 
-## Installer le Skill
+## Installer le Skill ou le donner à un agent IA
 
-Ouvrez un terminal à la racine de votre projet, puis exécutez l'une des
-commandes ci-dessous. L'outil installe les instructions dans l'agent détecté.
+Choisissez le Skill adapté à votre intégration. Vous pouvez exécuter la commande
+dans le terminal de votre projet ou la transmettre à votre agent IA.
 
 <Tabs>
   <Tab title="Tous les Skills">
@@ -97,11 +98,6 @@ fulfillment idempotente.
 
   </Tab>
 </Tabs>
-
-<Note>
-  Les Skills sont chargés depuis le catalogue officiel :
-  [https://doc.ashtechpay.com/.well-known/skills/index.json](https://doc.ashtechpay.com/.well-known/skills/index.json).
-</Note>
 
 ## Quel Skill choisir ?
 
