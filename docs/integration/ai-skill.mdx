@@ -1,13 +1,35 @@
 ---
 title: "AshTech Pay AI Integration Skills"
-description: "Installez tous les Skills AshTech Pay ou choisissez uniquement Direct API, Checkout, crypto, Mobile Money ou Webhooks."
+description: "Installez le Skill adapté et donnez à votre agent IA des instructions fiables pour intégrer AshTech Pay."
 ---
 
-Les Skills complets restent hébergés sur le serveur officiel AshTech Pay. Vous
-ne devez pas copier un long bloc de texte : choisissez un bouton, puis copiez la
-commande courte affichée.
+## Qu'est-ce qu'un Skill ?
 
-## Installer un Skill
+Un Skill est un fichier d'instructions destiné à votre agent de développement
+(par exemple un agent IA dans votre éditeur). Il lui explique comment intégrer
+AshTech Pay sans inventer d'endpoint, de paramètre ou de réponse.
+
+Le Skill ne remplace pas votre clé API et ne crée pas votre compte marchand. Il
+guide l'agent pendant l'intégration et lui demande de consulter la documentation
+officielle à jour.
+
+## Avant de commencer
+
+Pour utiliser la Direct API, vérifiez que vous avez :
+
+1. un compte marchand AshTech Pay ;
+2. un compte vérifié lorsque le dashboard le demande ;
+3. un accès **API activé** par AshTech Pay ;
+4. une clé API conservée uniquement sur votre serveur.
+
+Si l'API renvoie `api_not_enabled`, la clé est reconnue mais l'accès API n'est
+pas encore activé sur le compte. L'agent ne peut pas contourner cette
+activation.
+
+## Installer le Skill
+
+Ouvrez un terminal à la racine de votre projet, puis exécutez l'une des
+commandes ci-dessous. L'outil installe les instructions dans l'agent détecté.
 
 <Tabs>
   <Tab title="Tous les Skills">
@@ -73,10 +95,64 @@ fulfillment idempotente.
 </Tabs>
 
 <Note>
-  L'outil `skills` installe le Skill dans l'agent détecté. Le catalogue distant
-  est publié à
+  Les Skills sont chargés depuis le catalogue officiel :
   [https://doc.ashtechpay.com/.well-known/skills/index.json](https://doc.ashtechpay.com/.well-known/skills/index.json).
 </Note>
+
+## Quel Skill choisir ?
+
+| Votre besoin | Skill à installer |
+| --- | --- |
+| Intégrer AshTech Pay avec plusieurs fonctionnalités | `ashtech` |
+| Construire votre propre formulaire et appeler l'API | `ashtech-direct-api` |
+| Rediriger le client vers une page de paiement hébergée | `ashtech-checkout` |
+| Accepter des paiements crypto | `ashtech-crypto` |
+| Accepter Mobile Money avec pays et opérateurs | `ashtech-mobile-money` |
+| Recevoir et sécuriser les notifications de paiement | `ashtech-webhooks` |
+
+Si vous hésitez, installez tous les Skills avec la commande **Tous les
+Skills**. Pour un seul flux, installez uniquement le Skill correspondant.
+
+## Comment utiliser le Skill après l'installation
+
+Après l'installation, demandez directement à votre agent ce que vous voulez
+construire. Indiquez au minimum :
+
+- le framework et le langage de votre projet ;
+- le type d'intégration souhaité ;
+- l'endroit où votre serveur conserve les variables d'environnement ;
+- le comportement attendu après un paiement.
+
+### Exemple : Direct API Mobile Money
+
+```text
+Intègre AshTech Pay Direct API dans ce projet.
+Commence par inspecter l'architecture existante. Charge les pays et opérateurs
+avec l'API documentée, affiche-les dans le formulaire, puis crée une collecte
+Mobile Money côté serveur. Ne mets pas la clé API dans le frontend. Ajoute la
+vérification du statut et le webhook avant de marquer la commande comme payée.
+```
+
+### Exemple : Hosted Checkout
+
+```text
+Ajoute un paiement AshTech Pay Hosted Checkout à la commande existante.
+Utilise uniquement les endpoints de la documentation officielle, garde les
+clés côté serveur, rends la création idempotente et ne livre la commande
+qu'après confirmation serveur ou webhook.
+```
+
+### Exemple : ajouter les webhooks
+
+```text
+Ajoute un endpoint webhook AshTech Pay à ce projet. Vérifie la signature selon
+la documentation officielle, rends le traitement idempotent et relis le statut
+de la transaction avant de confirmer la commande.
+```
+
+L'agent doit d'abord inspecter votre projet, lire la documentation officielle,
+puis expliquer les fichiers modifiés, les variables d'environnement nécessaires,
+les routes créées et les tests exécutés.
 
 ## Flux de transaction inclus
 
@@ -108,7 +184,24 @@ Le Skill crypto applique notamment les règles suivantes :
 - aucune monnaie, réseau, adresse ou règle de confirmation inventée.
 
 <Warning>
-  Les commandes installent uniquement les Skills publiés dans le catalogue
-  officiel AshTech Pay. Les méthodes non documentées ne sont pas devinées par
-  l'agent.
+  N'envoyez jamais une clé API, un secret webhook ou un mot de passe dans le
+  chat. Les clés doivent rester dans les variables d'environnement du serveur.
+  Les méthodes absentes de la documentation officielle ne sont pas devinées
+  par l'agent.
 </Warning>
+
+## Après l'intégration
+
+Demandez à l'agent de vérifier les points suivants :
+
+1. la clé n'est jamais envoyée au navigateur ;
+2. les pays et opérateurs sont chargés depuis le catalogue AshTech Pay, sans
+   liste codée en dur ;
+3. chaque paiement possède une référence unique ;
+4. un paiement `pending` n'est pas traité comme un paiement confirmé ;
+5. les webhooks sont vérifiés et dédupliqués ;
+6. un timeout ne relance pas automatiquement une nouvelle collecte ;
+7. les tests, le build et les erreurs API sont vérifiés.
+
+La documentation complète du Skill reste disponible à
+[https://doc.ashtechpay.com/skill.md](https://doc.ashtechpay.com/skill.md).

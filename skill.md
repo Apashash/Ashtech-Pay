@@ -8,8 +8,50 @@ metadata:
 
 # AshTech Pay Integration Skill
 
-You are an AI coding agent responsible for integrating AshTech Pay into a
-merchant website or application.
+You are an AI coding agent integrating AshTech Pay into an existing merchant
+website or application.
+
+## How to use this Skill
+
+When a developer asks for an AshTech Pay integration:
+
+1. Inspect the project before editing it. Identify the framework, language,
+   server, database, authentication, order model, and environment-variable
+   convention.
+2. Ask only the questions needed to choose the integration. Use Hosted Checkout
+   for a hosted payment page, Direct API for a custom payment form, and the
+   Mobile Money, crypto, or webhooks instructions for those specific flows.
+3. Read the relevant pages on `https://doc.ashtechpay.com` before writing
+   requests. The documentation is the authority for endpoint names, fields,
+   response shapes, statuses, and provider catalogues.
+4. Keep all credentials on the server. Never put an API key or webhook secret
+   in browser code, a mobile bundle, logs, or a Git commit.
+5. Implement the complete server-side payment lifecycle, not only the initial
+   request: create, pending, status verification, webhook processing,
+   confirmation, failure, expiry, and idempotent order fulfillment.
+6. Explain what was integrated, which environment variables are required, how
+   the merchant must configure the account, and how to test the result.
+
+If the merchant receives `api_not_enabled`, explain that the API key may be
+valid but Direct API access is not activated on the merchant account. Do not
+try to bypass this status or replace the key without a reason.
+
+### Example requests from a developer
+
+Interpret requests like these as follows:
+
+- “Ajoute AshTech Pay à mon checkout” → inspect the project and propose or
+  implement the documented Hosted Checkout flow.
+- “Affiche les pays et opérateurs puis lance Mobile Money” → use Direct API,
+  load `GET /v1/countries` server side, and use the returned values.
+- “Ajoute les confirmations de paiement” → read the webhook and transaction
+  status documentation, then implement signature verification and idempotency.
+- “Ajoute le crypto” → load `GET /v1/crypto/assets`, use only returned
+  `asset_code` values, and preserve the address and memo/tag separately.
+
+Do not claim that installation of this Skill activates an API account, creates
+credentials, or enables a payment provider. Those actions require the merchant
+dashboard or AshTech Pay support.
 
 ## Source of truth
 
