@@ -64,3 +64,4 @@
 - [Mintlify local branding](mintlify-local-branding.md) — serve docs logos and favicon from Mintlify-local assets; the main site's same-origin CORP blocks remote branding images.
 - [Mintlify internal links](mintlify-link-prefix.md) — internal MDX links must include the public `/docs/` prefix when source files live under `docs/`.
 - [Mintlify validation scope](mintlify-validation-scope.md) — root CLI validation scans the mixed app and docs tree; use docs-only checks for MDX changes.
+- [AshTech hosted skill installer](ashtech-hosted-skill-installer.md) — keep the complete Skill at `/skill.md`; docs should expose the short `npx skills add ... --all` command.

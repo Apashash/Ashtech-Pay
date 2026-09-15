@@ -1,290 +1,65 @@
 ---
 title: "AshTech Pay AI Integration Skill"
-description: "Donnez à votre agent de programmation les instructions officielles pour intégrer AshTech Pay, y compris les paiements crypto."
+description: "Installez la Skill officielle AshTech Pay dans votre agent de programmation en une commande."
 ---
 
-Cette Skill donne à un agent de programmation les règles nécessaires pour
-inspecter un projet, choisir le bon mode d'intégration AshTech Pay, implémenter
-le paiement, configurer les webhooks, vérifier les transactions et expliquer
-les fichiers modifiés.
+Le Skill complet reste hébergé sur le serveur officiel AshTech Pay. Vous ne
+devez pas copier plusieurs pages de texte : copiez simplement la commande
+ci-dessous dans votre agent de programmation.
 
-<Note>
-  La documentation officielle sur [doc.ashtechpay.com](https://doc.ashtechpay.com)
-  reste la source de vérité. Le texte ci-dessous demande explicitement à l'agent
-  de consulter la documentation actuelle plutôt que de deviner un endpoint ou un
-  paramètre.
-</Note>
+## Installer tous les Skills AshTech Pay
 
-## Copy Skill
-
-Pour la plupart des agents capables de lire une URL, copiez uniquement ce
-prompt court. Il leur demande de charger la version officielle et actuelle de
-la Skill depuis AshTech Pay :
-
-```text
-Use the official AshTech Pay AI Integration Skill:
-https://doc.ashtechpay.com/integration/ai-skill
-
-Read it first, then integrate AshTech Pay into this project using only the
-documented payment, webhook, verification, and crypto flows.
+```bash
+npx skills add https://doc.ashtechpay.com --all
 ```
 
+Cette commande demande à l'outil officiel `skills` de télécharger et
+d'installer tous les Skills publiés par `doc.ashtechpay.com` dans l'agent
+détecté.
+
 <Note>
-  Ce prompt court ne peut pas installer une Skill dans un agent qui ne sait pas
-  lire une URL. Dans ce cas, ouvrez le bloc de secours ci-dessous et copiez son
-  contenu complet.
+  Le Skill principal est servi par
+  [https://doc.ashtechpay.com/skill.md](https://doc.ashtechpay.com/skill.md).
+  L'option `--all` permet d'ajouter aussi les nouveaux Skills publiés plus tard
+  sur le même serveur.
 </Note>
 
-<Accordion title="Afficher le Skill complet (solution de secours)">
+## Installer uniquement le Skill AshTech Pay
 
-```text
-ASH TECH PAY — AI INTEGRATION SKILL
+Si vous ne voulez installer que le Skill principal :
 
-You are an AI coding agent responsible for integrating AshTech Pay into a
-merchant website or application.
-
-OFFICIAL DOCUMENTATION
-
-Always use the official AshTech Pay documentation as the primary technical
-source:
-
-https://doc.ashtechpay.com
-
-Do not invent AshTech Pay API endpoints, parameters, authentication methods,
-SDK methods, webhook payloads, or response formats.
-
-If the required information is not available in the documentation, state that
-clearly instead of guessing.
-
-OBJECTIVE
-
-When the developer asks you to integrate AshTech Pay, inspect the existing
-project and implement the appropriate AshTech Pay integration without
-unnecessarily rebuilding the application.
-
-WORKFLOW
-
-1. Inspect the project.
-
-Determine:
-- programming language;
-- framework;
-- frontend;
-- backend;
-- package manager;
-- existing payment system;
-- database;
-- authentication system;
-- environment variable system;
-- existing API structure.
-
-2. Read the relevant AshTech Pay documentation.
-
-Use:
-https://doc.ashtechpay.com
-
-Identify the appropriate integration method, such as:
-- Hosted Checkout;
-- Direct API;
-- Mobile Money;
-- webhooks;
-- crypto / cryptocurrency payments.
-
-Only use methods, endpoints, parameters, currencies, networks, and response
-fields actually documented by AshTech Pay.
-
-3. Determine the correct architecture.
-
-Keep secret credentials on the server side.
-
-Never expose secret API keys, private credentials, webhook secrets, or sensitive
-authentication information in frontend/client-side code.
-
-Use the project's existing environment-variable convention for credentials.
-
-4. Implement the integration.
-
-Modify the existing project instead of unnecessarily rebuilding it.
-
-Follow the project's existing:
-- architecture;
-- naming conventions;
-- coding style;
-- error handling;
-- UI patterns.
-
-5. Payment flow.
-
-Implement the complete payment flow required by the project.
-
-The flow should generally follow:
-
-Merchant website
-→ AshTech Pay
-→ Payment
-→ AshTech Pay callback/webhook
-→ Backend verification
-→ Update transaction/order status
-
-Do not consider a payment successful solely because the customer was redirected
-to a success page.
-
-Always use the official AshTech Pay transaction verification mechanism
-documented at:
-
-https://doc.ashtechpay.com
-
-6. Webhooks.
-
-If the selected AshTech Pay integration requires webhooks:
-- implement the webhook endpoint;
-- validate incoming data according to the official documentation;
-- verify transactions when required;
-- make processing idempotent;
-- prevent duplicate order/payment processing;
-- safely update the order status.
-
-Respond quickly to webhook deliveries, deduplicate by the documented event or
-transaction identifier, and never fulfill an order twice.
-
-7. Security.
-
-Never:
-- hard-code secret API keys;
-- expose secret credentials in frontend code;
-- trust client-side payment status;
-- mark an order as paid without proper server-side verification;
-- invent API endpoints;
-- invent undocumented parameters;
-- log complete credentials, webhook secrets, private keys, or sensitive
-  customer/payment data.
-
-8. Environment variables.
-
-Use the project's existing environment-variable convention.
-
-If new variables are required, add them to the appropriate environment
-configuration and explain what each variable is used for.
-
-Never commit real production credentials.
-
-9. Testing.
-
-After implementing the integration:
-- run the project's tests if available;
-- run the build;
-- check for TypeScript/compiler errors;
-- check API errors;
-- verify the payment flow;
-- verify webhook handling;
-- verify transaction status handling;
-- verify idempotent duplicate delivery handling;
-- verify crypto payment handling when crypto is the selected integration
-  method.
-
-10. Final response.
-
-After implementation, provide a concise summary containing:
-- integration method used;
-- files created;
-- files modified;
-- environment variables required;
-- API endpoints used;
-- webhook endpoint created;
-- tests performed;
-- any configuration the merchant still needs to complete.
-
-IMPORTANT RULES
-
-AshTech Pay documentation is the source of truth.
-
-Never guess AshTech Pay API specifications.
-
-If the documentation changes, use the current documentation.
-
-If multiple integration methods are available, choose the one most appropriate
-for the existing project and explain why.
-
-Do not remove or break existing payment functionality unless explicitly
-requested.
-
-Do not expose secret credentials.
-
-CRYPTO SUPPORT
-
-The Skill must explicitly account for cryptocurrency payments. When crypto is
-requested or is the appropriate payment method:
-
-1. Consult only the currently documented AshTech Pay crypto integration.
-2. Use the documented asset catalogue before allowing an asset or network.
-3. For the current Direct API crypto flow, use `GET /v1/crypto/assets` to load
-   active assets and `POST /v1/crypto/collect` to create the payment.
-4. Collect the required `customer.email`, `customer.firstName`, and
-   `customer.lastName` fields. Do not invent or silently substitute them.
-5. Keep crypto credentials and payment creation on the server.
-6. Preserve the exact asset, network, address, memo/tag, expiry, and status
-   values returned by AshTech Pay.
-7. Use the documented transaction verification and webhook flow.
-8. Make crypto webhook processing idempotent.
-9. Do not deliver goods or credit an account before the server confirms the
-   payment.
-10. Test pending, completed, failed, expired, duplicate-webhook, and invalid
-   input paths when they are supported by the documented integration.
-
-Never invent coins, networks, wallet parameters, addresses, API endpoints,
-exchange-rate logic, confirmation rules, expiry rules, memo/tag formats, or
-crypto webhook payloads that are not documented by AshTech Pay.
-
-HOW TO USE
-
-1. Click "Copy Skill".
-2. Paste the Skill into your AI coding agent.
-3. Open your merchant project.
-4. Ask the AI: "Integrate AshTech Pay into this project."
-5. The AI should inspect the project and follow the official AshTech Pay
-   documentation.
-
-EXAMPLE
-
-"Integrate AshTech Pay Checkout into my existing e-commerce website. Use the
-official AshTech Pay documentation and implement the server-side payment,
-verification, and webhook flow. If crypto is selected, use only the documented
-crypto assets, networks, customer fields, expiry, and confirmation rules."
+```bash
+npx skills add https://doc.ashtechpay.com --skill ashtech
 ```
 
-</Accordion>
+## Ce que le Skill installe
 
-## How to use
+Une fois installé, l'agent dispose des règles officielles AshTech Pay pour :
 
-1. Copiez le prompt court.
-2. Collez-le dans votre agent de programmation.
-3. Ouvrez votre projet marchand ou demandez à l'agent de travailler dans le
-   projet déjà ouvert.
-4. Vérifiez que l'agent consulte la documentation officielle avant de coder.
+- inspecter le langage, le framework et l'architecture du projet ;
+- choisir Hosted Checkout, Direct API, Mobile Money, crypto ou webhooks ;
+- garder les clés et secrets côté serveur ;
+- vérifier une transaction avant de créditer ou livrer une commande ;
+- rendre les webhooks idempotents ;
+- tester les erreurs, les statuts pending/completed/failed et les doublons.
 
 ## Crypto incluse
 
-La Skill demande explicitement à l'agent de traiter les paiements
-cryptocurrency comme un parcours complet, et pas comme une variante implicite
-de Mobile Money :
+Le Skill distant inclut aussi le parcours crypto complet :
 
-- catalogue des actifs et réseaux documentés ;
-- endpoints Direct API documentés : `GET /v1/crypto/assets` et
-  `POST /v1/crypto/collect` ;
-- champs client obligatoires : `customer.email`, `customer.firstName` et
+- chargement de `GET /v1/crypto/assets` ;
+- création avec `POST /v1/crypto/collect` ;
+- champs obligatoires `customer.email`, `customer.firstName` et
   `customer.lastName` ;
-- création côté serveur ;
-- adresse, réseau et memo/tag conservés exactement ;
-- expiration et statut issus du serveur, avec la règle crypto de 15 minutes
-  pour un paiement `pending` lorsque la documentation l'applique ;
-- vérification et webhooks idempotents ;
-- aucun crédit ou envoi de commande avant confirmation ;
-- tests des états `pending`, `completed`, `failed`, `expired` et des doublons
-  lorsque ces états sont documentés.
+- utilisation exacte de l'`asset_code`, du réseau, de l'adresse et du
+  `memo/tag` retournés ;
+- vérification serveur et webhook avant tout crédit ;
+- expiration serveur documentée pour les paiements crypto `pending` ;
+- interdiction d'inventer une monnaie, un réseau ou un endpoint.
 
 <Warning>
-  Un agent ne doit jamais inventer une monnaie, un réseau, un format d'adresse,
-  une règle de confirmation ou un endpoint crypto. Il doit consulter la page
-  [Paiements crypto](/docs/direct-api/crypto) et les pages liées à la méthode
-  retenue.
+  La commande nécessite un agent compatible avec l'outil `skills`. Si votre
+  agent ne le prend pas encore en charge, donnez-lui directement l'URL
+  [https://doc.ashtechpay.com/skill.md](https://doc.ashtechpay.com/skill.md) et
+  demandez-lui de la lire avant d'intégrer AshTech Pay.
 </Warning>
