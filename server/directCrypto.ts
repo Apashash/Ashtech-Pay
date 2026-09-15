@@ -16,8 +16,8 @@ export interface DirectCryptoRequest {
   reference?: string;
   notifyUrl?: string | null;
   refundAddress?: string | null;
-  firstName?: string;
-  lastName?: string;
+  firstName: string;
+  lastName: string;
   email: string;
 }
 
@@ -34,9 +34,9 @@ export interface DirectCryptoAmounts {
 }
 
 export interface DirectCryptoCustomer {
-  firstName?: string;
-  lastName?: string;
-  email?: string;
+  firstName: string;
+  lastName: string;
+  email: string;
   refundAddress?: string;
 }
 
@@ -77,7 +77,7 @@ export function parseDirectCryptoRequest(body: any):
     return {
       ok: false,
       error: "invalid_customer",
-      message: "customer doit être un objet JSON contenant email, firstName ou lastName.",
+      message: "customer doit être un objet JSON contenant email, firstName et lastName.",
     };
   }
 
@@ -98,6 +98,20 @@ export function parseDirectCryptoRequest(body: any):
       ok: false,
       error: "missing_customer_email",
       message: "customer.email est obligatoire pour un paiement crypto.",
+    };
+  }
+  if (!firstName) {
+    return {
+      ok: false,
+      error: "missing_customer_first_name",
+      message: "customer.firstName est obligatoire pour un paiement crypto.",
+    };
+  }
+  if (!lastName) {
+    return {
+      ok: false,
+      error: "missing_customer_last_name",
+      message: "customer.lastName est obligatoire pour un paiement crypto.",
     };
   }
   if (notifyUrl) {

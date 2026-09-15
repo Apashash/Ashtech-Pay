@@ -84,6 +84,8 @@ export default function PaymentPage() {
   
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [cryptoFirstName, setCryptoFirstName] = useState("");
+  const [cryptoLastName, setCryptoLastName] = useState("");
   const [country, setCountry] = useState("");
   const [phone, setPhone] = useState("");
   const [customAmount, setCustomAmount] = useState("");
@@ -347,6 +349,8 @@ export default function PaymentPage() {
   const validatePaymentForm = (): boolean => {
     const newErrors: Record<string, string> = {};
     if (paymentMethod !== "crypto" && !fullName.trim()) newErrors.fullName = p.errName;
+    if (paymentMethod === "crypto" && !cryptoFirstName.trim()) newErrors.cryptoFirstName = "Le prénom est obligatoire.";
+    if (paymentMethod === "crypto" && !cryptoLastName.trim()) newErrors.cryptoLastName = "Le nom est obligatoire.";
     if (paymentMethod === "crypto" && !email.trim()) newErrors.email = p.errEmail;
     if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = p.errEmailInvalid;
     if (!paymentLink?.isFixedAmount && (!customAmount || parseFloat(customAmount) <= 0)) newErrors.amount = p.errAmount;
@@ -384,6 +388,8 @@ export default function PaymentPage() {
     mutationFn: async () => {
       const newErrors: Record<string, string> = {};
       if (paymentMethod !== "crypto" && !fullName.trim()) newErrors.fullName = p.errName;
+      if (paymentMethod === "crypto" && !cryptoFirstName.trim()) newErrors.cryptoFirstName = "Le prénom est obligatoire.";
+      if (paymentMethod === "crypto" && !cryptoLastName.trim()) newErrors.cryptoLastName = "Le nom est obligatoire.";
       if (paymentMethod === "crypto" && !email.trim()) newErrors.email = p.errEmail;
       if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = p.errEmailInvalid;
       if (!paymentLink?.isFixedAmount && (!customAmount || parseFloat(customAmount) <= 0)) newErrors.amount = p.errAmount;
@@ -413,6 +419,10 @@ export default function PaymentPage() {
         paymentMethod,
         operator: paymentMethod === "mobile_money" ? operator : null,
       };
+      if (paymentMethod === "crypto") {
+        body.firstName = cryptoFirstName.trim();
+        body.lastName = cryptoLastName.trim();
+      }
       if (isPixpayOtpOp && pixpayOtpCode) {
         body.pixpayOtp = pixpayOtpCode;
       }
@@ -550,12 +560,18 @@ export default function PaymentPage() {
       const net = payCoinList[payCryptoCoin]?.networks.find(n => n.id === displayedPayCryptoNetwork);
       if (!net) throw new Error("Réseau invalide");
       if (!country) throw new Error(p.errCountry);
+       if (!cryptoFirstName.trim()) throw new Error("Le prénom est obligatoire.");
+       if (!cryptoLastName.trim()) throw new Error("Le nom est obligatoire.");
       if (!email.trim()) throw new Error(p.errEmail);
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
         throw new Error(p.errEmailInvalid);
       }
-      const body: Record<string, string> = { assetCode: net.assetCode };
-      if (email.trim()) body.email = email.trim();
+       const body: Record<string, string> = {
+         assetCode: net.assetCode,
+         firstName: cryptoFirstName.trim(),
+         lastName: cryptoLastName.trim(),
+         email: email.trim(),
+       };
       body.country = country;
       if (!(paymentLink as any)?.isFixedAmount && payCryptoAmount) {
         const usdtEquiv = payCryptoCoinPrice > 0
@@ -667,7 +683,7 @@ export default function PaymentPage() {
     setPaymentStatus("pending");
     setPaymentReference("");
     setFailureReason("");
-    setFullName(""); setEmail(""); setPhone(""); setCustomAmount("");
+    setFullName(""); setEmail(""); setCryptoFirstName(""); setCryptoLastName(""); setPhone(""); setCustomAmount("");
     setCountry(""); setOperator(""); setPaymentMethod("");
     setErrors({});
     setOtpRequired(false);
@@ -1774,6 +1790,34 @@ export default function PaymentPage() {
                   </div>
                 )}
 
+                {/* ── Customer identity ── */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Prénom *</label>
+                    <Input
+                      type="text"
+                      placeholder="Ada"
+                      value={cryptoFirstName}
+                      onChange={(e) => { setCryptoFirstName(e.target.value); setErrors(p => ({...p, cryptoFirstName: undefined as any})); }}
+                      className={errors.cryptoFirstName ? "border-red-500" : ""}
+                      data-testid="input-crypto-first-name"
+                    />
+                    {errors.cryptoFirstName && <p className="text-xs text-red-500">{errors.cryptoFirstName}</p>}
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Nom *</label>
+                    <Input
+                      type="text"
+                      placeholder="Lovelace"
+                      value={cryptoLastName}
+                      onChange={(e) => { setCryptoLastName(e.target.value); setErrors(p => ({...p, cryptoLastName: undefined as any})); }}
+                      className={errors.cryptoLastName ? "border-red-500" : ""}
+                      data-testid="input-crypto-last-name"
+                    />
+                    {errors.cryptoLastName && <p className="text-xs text-red-500">{errors.cryptoLastName}</p>}
+                  </div>
+                </div>
+
                 {/* ── Email ── */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{p.email} *</label>
@@ -1822,6 +1866,8 @@ export default function PaymentPage() {
                   size="lg"
                   onClick={() => {
                     const errs: Record<string, string> = {};
+                     if (!cryptoFirstName.trim()) errs.cryptoFirstName = "Le prénom est obligatoire.";
+                     if (!cryptoLastName.trim()) errs.cryptoLastName = "Le nom est obligatoire.";
                     if (!email.trim()) errs.email = p.errEmail;
                     if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errs.email = p.errEmailInvalid;
                     if (!country) errs.country = p.errCountry;

@@ -18,7 +18,7 @@
 - [Direct crypto SDK](direct-crypto-sdk.md) — crypto pay-ins use dedicated authenticated endpoints so Mobile Money `/v1/collect` remains backward-compatible.
 - [Crypto memo and QR handling](crypto-memo-qr.md) — keep address and memo/tag separate; use chain-specific QR URIs only when their format is known.
 - [GitHub push authentication](github-push-authentication.md) — when shell HTTPS push rejects credentials, use the managed GitHub push integration instead of handling tokens manually.
-- [Crypto customer contract](crypto-sandbox-optional-fields.md) — crypto Hosted and Direct API requests require a valid customer.email object; the sandbox renders QR locally and shows diagnostics.
+- [Crypto customer contract](crypto-sandbox-optional-fields.md) — crypto Hosted and Direct API requests require customer.email, customer.firstName, and customer.lastName; refundAddress and notify_url remain optional.
 - [Mobile crypto tester layout](mobile-crypto-tester-layout.md) — prevent iOS form zoom and flex/grid overflow; keep long crypto responses contained and centered.
 - [Payment link social previews](payment-link-social-previews.md) — upsert OG/Twitter tags in the server HTML shell; the SPA may omit image tags entirely.
 - [Hosted payment idempotency](hosted-payment-idempotency.md) — reuse one link per merchant order with a stable Idempotency-Key; popup opening itself must never create links.

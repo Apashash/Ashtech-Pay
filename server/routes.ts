@@ -9273,6 +9273,20 @@ export async function registerRoutes(
            message: "L'adresse email du client est invalide.",
          });
        }
+       const normalizedFirstName = typeof firstName === "string" ? firstName.trim() : "";
+       if (!normalizedFirstName) {
+         return res.status(400).json({
+           error: "missing_customer_first_name",
+           message: "Le prénom du client est obligatoire pour un paiement crypto.",
+         });
+       }
+       const normalizedLastName = typeof lastName === "string" ? lastName.trim() : "";
+       if (!normalizedLastName) {
+         return res.status(400).json({
+           error: "missing_customer_last_name",
+           message: "Le nom du client est obligatoire pour un paiement crypto.",
+         });
+       }
       const payerCountryRecord = await storage.getCountry(String(payerCountry));
       if (!payerCountryRecord) {
         return res.status(400).json({ message: "Pays invalide" });
@@ -9320,19 +9334,14 @@ export async function registerRoutes(
       const reference = generateTransactionReference("payment_link");
 
       // Call IziChange Direct Charge API — returns unique address immediately
-      // IziChange requires non-empty firstName & lastName — derive from email if absent.
-      const emailPrefix = (email || "").split("@")[0] || "Client";
-      const safeFirst = (firstName as string | undefined)?.trim() || emailPrefix;
-      const safeLast  = (lastName  as string | undefined)?.trim() || "Pay";
-
       let charge: any;
       try {
         charge = await createDirectCharge({
           requestedCoin: assetCode,
           amount: amountUSDT.toFixed(4),
           customer: {
-            firstName: safeFirst,
-            lastName:  safeLast,
+             firstName: normalizedFirstName,
+             lastName:  normalizedLastName,
              email: normalizedPayerEmail,
             refundAddress: refundAddress || undefined,
           },
@@ -9358,7 +9367,7 @@ export async function registerRoutes(
         reference,
         paymentLinkId: link.id,
          payerEmail: normalizedPayerEmail,
-        payerName: firstName && lastName ? `${firstName} ${lastName}` : (email || null),
+        payerName: `${normalizedFirstName} ${normalizedLastName}`,
         externalReference: charge.id || undefined,   // IziChange transaction ID
          metadata: await (async () => {
            const _coin = assetCode.split('.')[0].toUpperCase();

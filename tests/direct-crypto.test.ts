@@ -85,6 +85,26 @@ test("sandbox customer email is required and produces an upstream customer objec
   }
 });
 
+test("sandbox customer firstName and lastName are required", () => {
+  const missingFirstName = parseDirectCryptoRequest({
+    amount: 1,
+    currency: "USDT",
+    asset_code: "USDT.TRC20",
+    customer: { email: "ada@example.com", lastName: "Lovelace" },
+  });
+  assert.equal(missingFirstName.ok, false);
+  assert.equal(missingFirstName.error, "missing_customer_first_name");
+
+  const missingLastName = parseDirectCryptoRequest({
+    amount: 1,
+    currency: "USDT",
+    asset_code: "USDT.TRC20",
+    customer: { email: "ada@example.com", firstName: "Ada" },
+  });
+  assert.equal(missingLastName.ok, false);
+  assert.equal(missingLastName.error, "missing_customer_last_name");
+});
+
 test("sandbox validation rejects missing fields, invalid amount, and invalid currency", () => {
   assert.equal(parseDirectCryptoRequest({ currency: "USDT", asset_code: "BTC" }).error, "invalid_amount");
   assert.equal(parseDirectCryptoRequest({ amount: 1, currency: "USDT" }).error, "missing_fields");
@@ -93,7 +113,7 @@ test("sandbox validation rejects missing fields, invalid amount, and invalid cur
     amount: 1,
     currency: "USDT",
     asset_code: "BTC",
-    customer: { email: "not-an-email" },
+    customer: { email: "not-an-email", firstName: "Ada", lastName: "Lovelace" },
   }).error, "invalid_email");
   assert.equal(parseDirectCryptoRequest({
     amount: 1,
@@ -105,7 +125,7 @@ test("sandbox validation rejects missing fields, invalid amount, and invalid cur
     amount: 1,
     currency: "USDT",
     asset_code: "BTC",
-    customer: { email: "payer@example.com" },
+    customer: { email: "payer@example.com", firstName: "Ada", lastName: "Lovelace" },
     notify_url: "http://merchant.example/webhook",
   }).error, "invalid_notify_url");
 });

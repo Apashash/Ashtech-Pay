@@ -219,6 +219,8 @@ export default function TestCryptoPage() {
     if (!assetCode) return setError("Chargez le catalogue puis sélectionnez un réseau crypto.");
     const numericAmount = Number(amount);
     if (!Number.isFinite(numericAmount) || numericAmount <= 0) return setError("Entrez un montant positif.");
+    if (!firstName.trim()) return setError("Le prénom du client est obligatoire pour un paiement crypto.");
+    if (!lastName.trim()) return setError("Le nom du client est obligatoire pour un paiement crypto.");
     if (!email.trim()) return setError("L'email du client est obligatoire pour un paiement crypto.");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setError("L'email du client est invalide.");
 
@@ -229,13 +231,11 @@ export default function TestCryptoPage() {
     };
     if (reference.trim()) payload.reference = reference.trim();
     if (notifyUrl.trim()) payload.notify_url = notifyUrl.trim();
-    if (email.trim() || firstName.trim() || lastName.trim()) {
-      payload.customer = {
-        ...(email.trim() ? { email: email.trim() } : {}),
-        ...(firstName.trim() ? { firstName: firstName.trim() } : {}),
-        ...(lastName.trim() ? { lastName: lastName.trim() } : {}),
-      };
-    }
+    payload.customer = {
+      email: email.trim(),
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+    };
     if (refundAddress.trim()) payload.refund_address = refundAddress.trim();
 
     setLoading(true);
@@ -397,10 +397,10 @@ export default function TestCryptoPage() {
               </Field>
 
               <div className="border-t border-gray-100 pt-4 space-y-3">
-                <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Client — email obligatoire</p>
+                <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">Client — email, prénom et nom obligatoires</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Field label="Prénom"><Input placeholder="Ada" value={firstName} onChange={e => setFirstName(e.target.value)} className="bg-white border-gray-300 text-gray-900 text-xs" /></Field>
-                  <Field label="Nom"><Input placeholder="Lovelace" value={lastName} onChange={e => setLastName(e.target.value)} className="bg-white border-gray-300 text-gray-900 text-xs" /></Field>
+                  <Field label="Prénom *"><Input placeholder="Ada" value={firstName} onChange={e => setFirstName(e.target.value)} className="bg-white border-gray-300 text-gray-900 text-xs" /></Field>
+                  <Field label="Nom *"><Input placeholder="Lovelace" value={lastName} onChange={e => setLastName(e.target.value)} className="bg-white border-gray-300 text-gray-900 text-xs" /></Field>
                   <Field label="Email *" hint="Envoyé dans customer.email."><Input type="email" placeholder="ada@example.com" value={email} onChange={e => setEmail(e.target.value)} className="bg-white border-gray-300 text-gray-900 text-xs" /></Field>
                   <Field label="Adresse de remboursement"><Input placeholder="Optionnel" value={refundAddress} onChange={e => setRefundAddress(e.target.value)} className="bg-white border-gray-300 text-gray-900 text-xs" /></Field>
                 </div>

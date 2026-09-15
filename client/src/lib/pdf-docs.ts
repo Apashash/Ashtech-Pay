@@ -770,7 +770,7 @@ export function downloadSDKDocs() {
        ["asset_code", "string", "Requis", "Reseau retourne par /v1/crypto/assets"],
       ["reference", "string", "Optionnel", "Reference de commande du marchand, conservee pour l'idempotence"],
        ["notify_url", "string", "Optionnel", "URL HTTPS du webhook marchand"],
-       ["customer", "object", "Optionnel", "firstName, lastName, email"],
+        ["customer", "object", "Requis", "email, firstName et lastName obligatoires"],
        ["refund_address", "string", "Optionnel", "Adresse de remboursement"],
      ],
      y, [33, 22, 24, 89]
@@ -778,6 +778,7 @@ export function downloadSDKDocs() {
    y = codeBlock(doc, `fetch("https://ashtechpay.top/v1/crypto/collect", {\n  method: "POST",\n  headers: {\n    "Authorization": "Bearer YOUR_API_KEY",\n    "Content-Type": "application/json"\n  },\n  body: JSON.stringify({\n    amount: 25,\n    currency: "USDT",\n    asset_code: "USDT.TRC20",\n    reference: "ORDER-CRYPTO-001",\n    notify_url: "https://monsite.com/webhook",\n    customer: { firstName: "Ada", lastName: "Lovelace", email: "ada@example.com" }\n  })\n})`, y, "javascript");
    y = codeBlock(doc, `{\n  "transaction_id": "8f3e1c2d-...",\n  "reference": "ORDER-CRYPTO-001",\n  "status": "pending",\n  "payment_method": "crypto",\n  "asset_code": "USDT.TRC20",\n  "network": "TRC20",\n  "address": "TX…",\n  "memo": null,\n  "memo_type": null,\n  "amount": 25,\n  "currency": "USDT",\n  "amount_usdt": 25,\n  "credited_amount": 24.375,\n  "fee_amount": 0.625,\n  "credited_amount_usdt": 24.375,\n  "fee_amount_usdt": 0.625,\n  "fee_percent": 2.5,\n  "expires_at": "2026-07-31T19:00:00Z"\n}`, y, "json");
     y = paragraph(doc, "L'API accepte un montant en USDT ou dans une devise fiat supportee (XAF, XOF, CDF ou USD). Les devises fiat sont converties en USDT avec le taux USDT/XAF. amount est le montant brut ; credited_amount_usdt est le net apres frais. Les frais Ashtech Pay et fournisseur sont inclus dans fee_amount_usdt.", y);
+     y = paragraph(doc, "Expiration : la reponse de creation peut inclure expiresAt, date ISO 8601 fournie par le fournisseur. Envoyez les fonds avant cette date. Independamment du compte a rebours visuel, une transaction crypto restee pending expire cote serveur apres 15 minutes ; verifiez le statut et attendez le webhook avant de livrer.", y);
     y = banner(doc, "info", "Affichage du paiement : la reponse 202 renvoie address, memo, memo_type et asset_code, mais pas une image QR. Generez le QR cote marchand avec une bibliotheque QR a partir de address, affichez l'adresse en texte copiable et affichez toujours le memo/tag dans un champ separe lorsqu'il existe. Pour USDT.TRC20, le QR contient l'adresse ; n'inventez pas de format URI pour un memo dont le format n'est pas documente.", y);
     y = subHeading(doc, "Exemple — afficher adresse, memo et QR (Node.js / navigateur)", y);
     y = codeBlock(doc, `import QRCode from "qrcode";
