@@ -9144,6 +9144,12 @@ export async function registerRoutes(
           description: "Ce lien de paiement a été bloqué par l'administrateur.",
         });
       }
+      if (link.expiresAt && new Date(link.expiresAt) < new Date()) {
+        return res.status(410).json({
+          code: "PAYMENT_LINK_EXPIRED",
+          message: "Ce lien de paiement a expiré.",
+        });
+      }
       
       const user = await storage.getUser(link.userId);
       if (user?.isBanned) {
