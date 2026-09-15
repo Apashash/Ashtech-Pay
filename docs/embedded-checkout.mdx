@@ -5,6 +5,17 @@ description: "Lancez un paiement hébergé sans construire tout le formulaire vo
 
 Embedded checkout est le chemin le plus rapide pour accepter un paiement. Votre serveur crée un lien, puis votre site ouvre le checkout AshTech Pay dans une fenêtre modale, sans rediriger la page du marchand.
 
+## Clés nécessaires
+
+Pour ce flux :
+
+- `hp_live_...` est la **clé Checkout**. Elle reste sur votre serveur et authentifie `POST /api/v1/hosted-payment/create` ainsi que `GET /api/v1/hosted-payment/{payment_id}`.
+- `pk_live_...` n'est pas nécessaire au popup actuel.
+- `sk_live_...` n'est pas la clé à utiliser pour créer un lien checkout et doit rester uniquement côté serveur.
+- `ak_...` est la **clé Direct API**, séparée du checkout Hosted/Embedded. Elle sert aux endpoints `/v1/*`, comme `/v1/collect`.
+
+Le navigateur du client reçoit uniquement le `payment_link`. Ne mettez jamais `hp_live_...`, `sk_live_...` ou `ak_...` dans le code frontend.
+
 ## Créer un lien de paiement
 
 Endpoint :

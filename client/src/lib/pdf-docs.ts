@@ -446,13 +446,14 @@ export function downloadHostedPagePDF() {
   y = table(doc,
     ["Cle", "Prefixe", "Role", "Ou l'utiliser"],
     [
-      ["Public Key",       "pk_live_", "Identification publique",    "Frontend JS — identifie ton compte cote client"],
-      ["Secret Key",       "sk_live_", "Operations sensibles",       "Backend uniquement — webhooks, remboursements"],
-      ["Hosted Page Key",  "hp_live_", "Liens de paiement heberges", "Backend — creer des liens via API"],
+      ["Public Key",       "pk_live_", "Identification publique",    "Frontend si une integration la demande"],
+      ["Secret Key",       "sk_live_", "Operations sensibles",       "Backend uniquement — jamais dans le navigateur"],
+      ["Hosted Page Key",  "hp_live_", "Liens de paiement heberges", "Backend — creer et suivre les liens checkout"],
     ],
     y, [30, 26, 35, 79]
   );
-  y = banner(doc, "warn", "Securite — sk_live_ et hp_live_ doivent rester dans des variables d'environnement cote serveur. Ne les publie jamais dans du code frontend ni dans un depot Git public.", y);
+  y = paragraph(doc, "La cle Direct API ak_… est distincte des trois cles Hosted Page et sert aux endpoints /v1/*. Le popup Embedded checkout actuel ne demande aucune cle dans le navigateur : le serveur utilise hp_live_… puis transmet seulement le payment_link.", y);
+  y = banner(doc, "warn", "Securite — sk_live_, hp_live_ et ak_… doivent rester dans des variables d'environnement cote serveur. Ne les publie jamais dans du code frontend ni dans un depot Git public.", y);
 
   // ── §2  Créer un lien ─────────────────────────────────────────────────────
   y = sectionTitle(doc, "2. Creer un lien de paiement", y);
