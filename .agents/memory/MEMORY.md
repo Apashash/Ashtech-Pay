@@ -21,6 +21,7 @@
 - [Crypto sandbox optional fields](crypto-sandbox-optional-fields.md) — omit the upstream customer object when email is absent; the sandbox renders QR locally and shows diagnostic API errors.
 - [Mobile crypto tester layout](mobile-crypto-tester-layout.md) — prevent iOS form zoom and flex/grid overflow; keep long crypto responses contained and centered.
 - [Payment link social previews](payment-link-social-previews.md) — upsert OG/Twitter tags in the server HTML shell; the SPA may omit image tags entirely.
+- [Hosted payment idempotency](hosted-payment-idempotency.md) — reuse one link per merchant order with a stable Idempotency-Key; popup opening itself must never create links.
 - [Named checkout keys](named-checkout-keys.md) — store additional user-named Checkout credentials separately while preserving legacy hosted-key integrations.
 - [Crypto network default stability](crypto-network-defaults.md) — dynamic asset lists must not flash or submit Polygon before explicit network selection; preserve the canonical USDT/TRC20 default.
 - [Crypto pending expiry](crypto-pending-expiry.md) — show 35s in crypto screens but enforce a persisted 15min server timeout only for crypto, never Mobile Money.

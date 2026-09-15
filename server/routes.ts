@@ -17701,9 +17701,47 @@ export async function registerRoutes(
         is_fixed_amount,
         allowed_countries,
         notify_url,
+         idempotency_key,
       } = req.body;
 
       const isFixedAmount = is_fixed_amount !== false; // default: true (fixed price)
+       const requestIdempotencyKey = String(
+         req.headers["idempotency-key"] || idempotency_key || "",
+       ).trim();
+       if (requestIdempotencyKey.length > 191) {
+         return res.status(400).json({
+           error: "invalid_idempotency_key",
+           message: "Idempotency-Key must contain at most 191 characters.",
+         });
+       }
+
+       const buildHostedPaymentResponse = (link: any, reused: boolean) => {
+         const host = req.headers.host || "www.ashtechpay.com";
+         const protocol = ((req.headers["x-forwarded-proto"] as string) || "https").split(",")[0].trim();
+         return {
+           status: "success",
+           payment_link: `${protocol}://${host}/pay/${link.slug}`,
+           payment_id: link.id,
+           slug: link.slug,
+           is_fixed_amount: link.isFixedAmount,
+           amount: link.isFixedAmount ? parseFloat(link.amount) : null,
+           currency: link.currency,
+           allowed_countries: link.allowedCountries,
+           expires_at: link.expiresAt,
+           reused,
+           ...(link.idempotencyKey ? { idempotency_key: link.idempotencyKey } : {}),
+         };
+       };
+
+       if (requestIdempotencyKey) {
+         const existingLink = await storage.getPaymentLinkByIdempotencyKey(
+           merchant.id,
+           requestIdempotencyKey,
+         );
+         if (existingLink) {
+           return res.json(buildHostedPaymentResponse(existingLink, true));
+         }
+       }
 
       if (!currency) {
         return res.status(400).json({ error: "missing_fields", message: "currency is required." });
@@ -17783,39 +17821,43 @@ export async function registerRoutes(
       const effectiveNotifyUrl = notify_url || (merchantConfig as any)?.notifyUrl || null;
 
       // Create a real payment link in the existing system → uses the existing /pay/:slug page
-      const paymentLink = await storage.createPaymentLink({
-        userId: merchant.id,
-        title: description || "Paiement Ashtech Pay",
-        description: description || null,
-        amount: String(numAmount),
-        currency,
-        slug,
-        isFixedAmount,
-        imagePath: null,
-        pdfPath: null,
-        hasPdfDelivery: false,
-        redirectUrl: null,
-         hostedPageKeyId: hostedKey && hostedKey.id !== "legacy" ? hostedKey.id : null,
-        expiresAt,
-        allowedCountries: countriesFilter,
-        notifyUrl: effectiveNotifyUrl,
-      });
+       let paymentLink;
+       try {
+         paymentLink = await storage.createPaymentLink({
+           userId: merchant.id,
+           title: description || "Paiement Ashtech Pay",
+           description: description || null,
+           amount: String(numAmount),
+           currency,
+           slug,
+           isFixedAmount,
+           imagePath: null,
+           pdfPath: null,
+           hasPdfDelivery: false,
+           redirectUrl: null,
+           hostedPageKeyId: hostedKey && hostedKey.id !== "legacy" ? hostedKey.id : null,
+           idempotencyKey: requestIdempotencyKey || null,
+           expiresAt,
+           allowedCountries: countriesFilter,
+           notifyUrl: effectiveNotifyUrl,
+         });
+       } catch (error) {
+         // A concurrent request may have inserted the same idempotency key
+         // after the initial lookup. Return that row instead of exposing a
+         // duplicate-key error to the merchant.
+         if (requestIdempotencyKey) {
+           const racedLink = await storage.getPaymentLinkByIdempotencyKey(
+             merchant.id,
+             requestIdempotencyKey,
+           );
+           if (racedLink) {
+             return res.json(buildHostedPaymentResponse(racedLink, true));
+           }
+         }
+         throw error;
+       }
 
-      const host = req.headers.host || "www.ashtechpay.com";
-      const protocol = ((req.headers["x-forwarded-proto"] as string) || "https").split(",")[0].trim();
-      const payUrl = `${protocol}://${host}/pay/${slug}`;
-
-      res.json({
-        status: "success",
-        payment_link: payUrl,
-        payment_id: paymentLink.id,
-        slug,
-        is_fixed_amount: isFixedAmount,
-        amount: isFixedAmount ? numAmount : null,
-        currency,
-        allowed_countries: countriesFilter,
-        expires_at: expiresAt,
-      });
+       res.json(buildHostedPaymentResponse(paymentLink, false));
     } catch (e: any) {
       console.error("[v1/hosted-payment/create]", e);
       res.status(500).json({ error: "server_error" });

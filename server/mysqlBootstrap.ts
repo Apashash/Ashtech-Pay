@@ -116,6 +116,7 @@ export async function ensureMysqlAuxiliarySchema(): Promise<void> {
     `ALTER TABLE hosted_page_keys ADD COLUMN IF NOT EXISTS cancel_url TEXT NULL`,
     `ALTER TABLE hosted_page_keys ADD COLUMN IF NOT EXISTS notify_url TEXT NULL`,
     `ALTER TABLE payment_links ADD COLUMN IF NOT EXISTS hosted_page_key_id VARCHAR(191) NULL`,
+    `ALTER TABLE payment_links ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(191) NULL`,
     `CREATE TABLE IF NOT EXISTS admin_pending_logins (
       token VARCHAR(191) NOT NULL PRIMARY KEY,
       user_id VARCHAR(191) NOT NULL,
@@ -139,6 +140,19 @@ export async function ensureMysqlAuxiliarySchema(): Promise<void> {
     const code = String(error?.code || "");
     const message = String(error?.message || "");
     if (code !== "ER_DUP_FIELDNAME" && !/duplicate column/i.test(message)) {
+      throw error;
+    }
+  }
+  // Keep repeated hosted-payment creation requests idempotent per merchant.
+  // Existing links have a NULL key and remain unaffected.
+  try {
+    await pool.query(
+      "ALTER TABLE payment_links ADD UNIQUE KEY payment_links_user_idempotency_unique (user_id, idempotency_key)",
+    );
+  } catch (error: any) {
+    const code = String(error?.code || "");
+    const message = String(error?.message || "");
+    if (code !== "ER_DUP_KEYNAME" && !/duplicate key name|already exists/i.test(message)) {
       throw error;
     }
   }

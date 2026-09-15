@@ -159,6 +159,7 @@ export interface IStorage {
   getPaymentLinksByUserId(userId: string): Promise<PaymentLink[]>;
   getPaymentLinkById(id: string): Promise<PaymentLink | undefined>;
   getPaymentLinkBySlug(slug: string): Promise<PaymentLink | undefined>;
+  getPaymentLinkByIdempotencyKey(userId: string, idempotencyKey: string): Promise<PaymentLink | undefined>;
   createPaymentLink(paymentLink: InsertPaymentLink & { slug: string }): Promise<PaymentLink>;
   updatePaymentLink(id: string, updates: Partial<InsertPaymentLink>): Promise<PaymentLink | undefined>;
   deletePaymentLink(id: string): Promise<void>;
@@ -924,6 +925,17 @@ export class DatabaseStorage implements IStorage {
 
   async getPaymentLinkBySlug(slug: string): Promise<PaymentLink | undefined> {
     const [link] = await db.select().from(paymentLinks).where(eq(paymentLinks.slug, slug));
+    return link || undefined;
+  }
+
+  async getPaymentLinkByIdempotencyKey(userId: string, idempotencyKey: string): Promise<PaymentLink | undefined> {
+    const [link] = await db
+      .select()
+      .from(paymentLinks)
+      .where(and(
+        eq(paymentLinks.userId, userId),
+        eq(paymentLinks.idempotencyKey, idempotencyKey),
+      ));
     return link || undefined;
   }
 

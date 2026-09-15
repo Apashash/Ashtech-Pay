@@ -19,18 +19,21 @@ Authentifiez cette route avec votre clé `hp_live_...` :
   <Tab title="Node.js">
 
 ```javascript
+const orderId = "12345";
+
 const response = await fetch(
   "https://www.ashtechpay.com/api/v1/hosted-payment/create",
   {
     method: "POST",
     headers: {
       Authorization: `Bearer ${process.env.HP_LIVE_KEY}`,
+      "Idempotency-Key": `order-${orderId}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
       amount: 10000,
       currency: "XAF",
-      description: "Commande #12345",
+      description: `Commande #${orderId}`,
       is_fixed_amount: true,
       allowed_countries: ["CM"],
       notify_url: "https://example.com/webhooks/ashtechpay",
@@ -167,6 +170,33 @@ Après avoir créé le lien côté serveur, ouvrez-le depuis un clic utilisateur
 `AshTechPayCheckout.open()` accepte aussi `checkoutUrl`, `url` ou `slug`. Le popup est responsive et se ferme avec le bouton, la touche Échap ou le clic en dehors de la fenêtre. La redirection classique reste possible si le marchand préfère utiliser directement `payment_link`.
 
 Ne créez pas le lien depuis le navigateur : la clé `hp_live_...` doit rester sur votre serveur.
+
+### Éviter les liens en double
+
+Envoyez une clé `Idempotency-Key` stable pour chaque commande. Le premier appel crée le lien ; les appels suivants avec la même clé et le même marchand renvoient le même `payment_link` et le champ `reused: true`.
+
+```javascript
+const response = await fetch(
+  "https://www.ashtechpay.com/api/v1/hosted-payment/create",
+  {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.HP_LIVE_KEY}`,
+      "Idempotency-Key": `order-${orderId}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      amount: 10000,
+      currency: "XAF",
+      description: `Commande #${orderId}`,
+      is_fixed_amount: true,
+    }),
+  },
+);
+const link = await response.json();
+```
+
+Utilisez une clé différente pour une nouvelle commande ou une nouvelle session de paiement. La clé ne doit pas être générée aléatoirement à chaque requête.
 
 ## Prix fixe ou libre
 

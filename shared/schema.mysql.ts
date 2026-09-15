@@ -74,10 +74,15 @@ export const transactions = mysqlTable("transactions", common([
 export const paymentLinks = mysqlTable("payment_links", common([
   "id","userId","title","description","amount","currency","slug","isActive","isFixedAmount","imagePath","pdfPath",
   "hasPdfDelivery","redirectUrl","hostedPageKeyId","expiresAt","clickCount","allowedCountries","notifyUrl","createdAt",
+  "idempotencyKey",
 ], { id: id(), amount: money("amount").notNull(), isActive: boolean("is_active").default(true),
   isFixedAmount: boolean("is_fixed_amount").default(true), hasPdfDelivery: boolean("has_pdf_delivery").default(false),
   clickCount: int("click_count").default(0).notNull(), allowedCountries: js("allowed_countries"), expiresAt: timestamp("expires_at"), createdAt: dt("created_at"),
-}), (t) => ({ userIdx: index("pl_user_id_idx").on(t.userId), slugUnique: uniqueIndex("payment_links_slug_unique").on(t.slug) }));
+}), (t) => ({
+  userIdx: index("pl_user_id_idx").on(t.userId),
+  slugUnique: uniqueIndex("payment_links_slug_unique").on(t.slug),
+  idempotencyUnique: uniqueIndex("payment_links_user_idempotency_unique").on(t.userId, t.idempotencyKey),
+}));
 
 export const paymentIntents = mysqlTable("payment_intents", common([
   "id","paymentLinkId","merchantId","payerName","payerEmail","payerPhone","payerCountry","amount","feeAmount","currency",

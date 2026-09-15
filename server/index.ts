@@ -67,7 +67,7 @@ const STARTUP_PUBLIC_API_PATHS = new Set([
 // Bump this value whenever the idempotent migration block below gains a new
 // schema change. Completed versions are stored in platform_settings so a
 // normal Passenger restart does not repeat every ALTER TABLE/CREATE INDEX.
-const SCHEMA_MIGRATION_VERSION = "2026-09-12-hosted-page-key-urls-v2";
+const SCHEMA_MIGRATION_VERSION = "2026-09-15-hosted-payment-idempotency-v1";
 
 // ── Gestionnaires d'erreurs globaux ──────────────────────────────────────────
 // unhandledRejection: log + continue — safe, these are async promise failures.
@@ -685,6 +685,11 @@ app.use((req, res, next) => {
     await db.execute(sql`ALTER TABLE hosted_payment_sessions ADD COLUMN IF NOT EXISTS notify_url TEXT`);
     await db.execute(sql`ALTER TABLE payment_links ADD COLUMN IF NOT EXISTS notify_url TEXT`);
     await db.execute(sql`ALTER TABLE payment_links ADD COLUMN IF NOT EXISTS hosted_page_key_id VARCHAR`);
+    await db.execute(sql`ALTER TABLE payment_links ADD COLUMN IF NOT EXISTS idempotency_key VARCHAR(191)`);
+    await db.execute(sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS payment_links_user_idempotency_unique
+      ON payment_links (user_id, idempotency_key)
+    `);
     // 5.3 — field encryption: searchable HMAC hash columns for hosted_page_configs and users
     await db.execute(sql`ALTER TABLE hosted_page_configs ADD COLUMN IF NOT EXISTS hp_live_hash TEXT UNIQUE`);
     await db.execute(sql`ALTER TABLE hosted_page_configs ADD COLUMN IF NOT EXISTS notify_url TEXT`);

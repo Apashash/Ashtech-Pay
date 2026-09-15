@@ -301,6 +301,7 @@ export const paymentLinks = pgTable("payment_links", {
   hasPdfDelivery: boolean("has_pdf_delivery").default(false),
   redirectUrl: text("redirect_url"),
   hostedPageKeyId: varchar("hosted_page_key_id"),
+  idempotencyKey: varchar("idempotency_key", { length: 191 }),
   expiresAt: timestamp("expires_at"),
   clickCount: integer("click_count").default(0).notNull(),
   allowedCountries: text("allowed_countries").array(),
@@ -308,6 +309,8 @@ export const paymentLinks = pgTable("payment_links", {
   createdAt: timestamp("created_at").defaultNow(),
 }, (t) => ({
   plUserIdIdx: index("pl_user_id_idx").on(t.userId),
+  plIdempotencyUnique: uniqueIndex("payment_links_user_idempotency_unique")
+    .on(t.userId, t.idempotencyKey),
 }));
 
 // Payment intents for public payment submissions (pending until verified)
@@ -594,6 +597,7 @@ export const insertPaymentLinkSchema = createInsertSchema(paymentLinks).pick({
   hasPdfDelivery: true,
   redirectUrl: true,
   hostedPageKeyId: true,
+  idempotencyKey: true,
   expiresAt: true,
   notifyUrl: true,
   allowedCountries: true,
