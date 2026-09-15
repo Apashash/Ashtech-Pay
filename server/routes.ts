@@ -16465,7 +16465,7 @@ export async function registerRoutes(
     }
   });
 
-  /** GET /v1/crypto/assets — list crypto assets enabled for Direct SDK */
+  /** GET /v1/crypto/assets — list crypto assets enabled for Direct API */
   app.get("/v1/crypto/assets", apiV1Limiter, requireApiKey, async (_req, res) => {
     try {
       const disabled = parseDisabledCryptoAssets(
@@ -16506,7 +16506,7 @@ export async function registerRoutes(
   });
 
   /**
-   * POST /v1/crypto/collect — initiate a Direct SDK crypto pay-in.
+   * POST /v1/crypto/collect — initiate a Direct API crypto pay-in.
    *
    * This is deliberately separate from /v1/collect: the existing Mobile Money
    * contract and routing are left untouched.

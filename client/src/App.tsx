@@ -38,8 +38,6 @@ const DirectApiPage = React.lazy(() => import("@/pages/dashboard/direct-api"));
 const HostedPageDashboard = React.lazy(() => import("@/pages/dashboard/hosted-page"));
 const HostedPageKeys = React.lazy(() => import("@/pages/dashboard/hosted-page-keys"));
 const HostedPageGenerate = React.lazy(() => import("@/pages/dashboard/hosted-page-generate"));
-const TestPaymentPage = React.lazy(() => import("@/pages/docs/test-payment"));
-const TestCryptoPage = React.lazy(() => import("@/pages/docs/test-crypto"));
 const HPayPage = React.lazy(() => import("@/pages/hpay"));
 const SettingsPage = React.lazy(() => import("@/pages/dashboard/settings"));
 const AutoConversionPage = React.lazy(() => import("@/pages/dashboard/auto-conversion"));
@@ -128,8 +126,6 @@ function Router() {
     <Suspense fallback={<LoadingScreen />}>
     <Switch>
       <Route path="/" component={LandingPage} />
-      <Route path="/docs/test-pay" component={TestPaymentPage} />
-      <Route path="/docs/test-crypto" component={TestCryptoPage} />
       <Route path="/blocked" component={BlockedPage} />
       <Route path="/login">
         <BlockGuard><LoginPage /></BlockGuard>
