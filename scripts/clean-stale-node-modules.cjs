@@ -8,14 +8,20 @@ if (!fs.existsSync(nodeModulesPath)) {
 }
 
 for (const entry of fs.readdirSync(nodeModulesPath, { withFileTypes: true })) {
-  if (
-    entry.name !== "google-auth-library" &&
-    !entry.name.startsWith(".google-auth-library-")
-  ) {
+  const isLegacyGoogleDirectory =
+    entry.name === "google-auth-library" ||
+    entry.name.startsWith(".google-auth-library-");
+  const isNpmInterruptedRename =
+    entry.name.startsWith(".") &&
+    entry.name !== ".bin" &&
+    entry.name !== ".package-lock.json" &&
+    /^\.[a-z0-9@][a-z0-9._-]*-[a-z0-9_-]{5,}$/i.test(entry.name);
+
+  if (!isLegacyGoogleDirectory && !isNpmInterruptedRename) {
     continue;
   }
 
   const entryPath = path.join(nodeModulesPath, entry.name);
   fs.rmSync(entryPath, { recursive: true, force: true });
-  console.log(`[preinstall] Removed stale ${entry.name}`);
+  console.log(`[preinstall] Removed stale npm directory ${entry.name}`);
 }
