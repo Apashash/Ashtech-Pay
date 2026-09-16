@@ -671,11 +671,32 @@ export default function DashboardHome() {
   }, [isAdminAccount, setLocation]);
 
   const localCurrency = user?.preferredCurrency || "XAF";
-  const secondaryWallets = useMemo(() => (
-    wallets
+  const secondaryWallets = useMemo(() => {
+    const localRate = rates[localCurrency] || 1;
+
+    return wallets
       .filter(wallet => wallet.currency !== localCurrency)
-      .sort((a, b) => parseFloat(b.balance || "0") - parseFloat(a.balance || "0"))
-  ), [wallets, localCurrency]);
+      .map(wallet => {
+        const balance = parseFloat(wallet.balance || "0");
+        const walletRate = rates[wallet.currency] || 1;
+        return {
+          wallet,
+          balance,
+          // Compare different currencies in the user's preferred currency,
+          // rather than comparing their raw numeric amounts.
+          preferredValue: balance * (walletRate / localRate),
+        };
+      })
+      .filter(({ balance }) => Number.isFinite(balance) && balance > 0)
+      .sort((a, b) => {
+        if (b.preferredValue !== a.preferredValue) {
+          return b.preferredValue - a.preferredValue;
+        }
+        return b.balance - a.balance;
+      })
+      .slice(0, 2)
+      .map(({ wallet }) => wallet);
+  }, [wallets, rates, localCurrency]);
 
   const totalBalanceInLocalCurrency = useMemo(() => {
     if (wallets.length === 0) return user?.balance || "0.00";
