@@ -468,6 +468,35 @@ const upload = multer({
 const SessionStore = connectPgSimple(session);
 const isMysqlDialect = process.env.DB_DIALECT?.toLowerCase() === "mysql";
 
+const MYSQL_DIAGNOSTIC_TABLES = [
+  "users",
+  "wallets",
+  "transactions",
+  "payment_links",
+  "countries",
+  "operators",
+] as const;
+
+function mysqlDiagnosticRows(result: any): any[] {
+  if (Array.isArray(result)) return Array.isArray(result[0]) ? result[0] : result;
+  return Array.isArray(result?.rows) ? result.rows : [];
+}
+
+function mysqlDiagnosticError(error: unknown): Record<string, string> {
+  const value = error as {
+    code?: unknown;
+    errno?: unknown;
+    sqlState?: unknown;
+    message?: unknown;
+  } | null;
+  return {
+    ...(value?.code ? { code: String(value.code) } : {}),
+    ...(value?.errno !== undefined ? { errno: String(value.errno) } : {}),
+    ...(value?.sqlState ? { sqlState: String(value.sqlState) } : {}),
+    message: formatDebugError(error),
+  };
+}
+
 async function getUserTicketStats(userId: string): Promise<{ unreadCount: number; totalCount: number }> {
   const [totalRows, unreadRows] = await Promise.all([
     db.select({ count: count() })
