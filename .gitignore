@@ -20,6 +20,7 @@ node_modules
 uploads/
 private-documents/
 /exports/
+/backups/
 
 # ─── Logs ─────────────────────────────────────────────────────────────────────
 logs/
