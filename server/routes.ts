@@ -3197,6 +3197,144 @@ export async function registerRoutes(
     res.json({ ip: getClientIp(req) });
   });
 
+  // Admin — read-only MySQL/Plesk compatibility diagnostic.
+  // This exists for deployments where the operator has no Plesk shell access.
+  // It returns schema metadata and query errors only; it never mutates data.
+  app.get("/api/admin/mysql-diagnostics", requireAuth, requireAdmin, async (_req, res) => {
+    if (!isMysqlDialect) {
+      return res.status(400).json({
+        ok: false,
+        message: "Le diagnostic est disponible uniquement lorsque DB_DIALECT=mysql.",
+      });
+    }
+
+    const run = async (label: string, query: string) => {
+      try {
+        const result = await pool.query(query);
+        return { label, ok: true, rows: mysqlDiagnosticRows(result) };
+      } catch (error) {
+        console.error(`[MySQL diagnostic] ${label}:`, mysqlDiagnosticError(error));
+        return { label, ok: false, error: mysqlDiagnosticError(error) };
+      }
+    };
+
+    try {
+      const database = await run(
+        "Connexion et version MySQL",
+        "SELECT DATABASE() AS database_name, VERSION() AS mysql_version",
+      );
+      const inventory = await run(
+        "Tables principales",
+        `SELECT TABLE_NAME, ENGINE, TABLE_COLLATION
+           FROM INFORMATION_SCHEMA.TABLES
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME IN (${MYSQL_DIAGNOSTIC_TABLES.map((table) => `'${table}'`).join(", ")})
+          ORDER BY TABLE_NAME`,
+      );
+
+      const tables = [];
+      for (const table of MYSQL_DIAGNOSTIC_TABLES) {
+        const create = await run(
+          `SHOW CREATE TABLE ${table}`,
+          `SHOW CREATE TABLE \`${table}\``,
+        );
+        const columns = await run(
+          `Colonnes : ${table}`,
+          `SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT, EXTRA
+             FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = '${table}'
+            ORDER BY ORDINAL_POSITION`,
+        );
+        const indexes = await run(
+          `Index : ${table}`,
+          `SELECT INDEX_NAME, NON_UNIQUE, SEQ_IN_INDEX, COLUMN_NAME
+             FROM INFORMATION_SCHEMA.STATISTICS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = '${table}'
+            ORDER BY INDEX_NAME, SEQ_IN_INDEX`,
+        );
+        tables.push({ table, create, columns, indexes });
+      }
+
+      const foreignKeys = await run(
+        "Clés étrangères principales",
+        `SELECT TABLE_NAME, COLUMN_NAME, CONSTRAINT_NAME,
+                REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME
+           FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME IN (${MYSQL_DIAGNOSTIC_TABLES.map((table) => `'${table}'`).join(", ")})
+            AND REFERENCED_TABLE_NAME IS NOT NULL
+          ORDER BY TABLE_NAME, CONSTRAINT_NAME, ORDINAL_POSITION`,
+      );
+
+      const probes = [
+        await run(
+          "Statistiques utilisateurs",
+          `SELECT COUNT(*) AS total_users,
+                  SUM(CASE WHEN is_banned = 1 THEN 1 ELSE 0 END) AS banned_users,
+                  SUM(CASE WHEN api_enabled = 1 THEN 1 ELSE 0 END) AS api_enabled_users
+             FROM users`,
+        ),
+        await run(
+          "Statistiques transactions MySQL",
+          `SELECT type, status, currency,
+                  COALESCE(SUM(CAST(amount AS DECIMAL(30, 10))), 0) AS total_amount,
+                  COALESCE(SUM(CAST(fee_amount AS DECIMAL(30, 10))), 0) AS total_fee,
+                  COUNT(*) AS transaction_count
+             FROM transactions
+            GROUP BY type, status, currency
+            LIMIT 100`,
+        ),
+        await run(
+          "Lecture wallets",
+          "SELECT id, user_id, currency, balance FROM wallets ORDER BY created_at DESC LIMIT 5",
+        ),
+        await run(
+          "Lecture pays et opérateurs",
+          `SELECT c.id AS country_id, c.code AS country_code,
+                  o.id AS operator_id, o.name AS operator_name,
+                  o.is_active, o.is_in_maintenance
+             FROM countries c
+             LEFT JOIN operators o ON o.country_id = c.id
+            ORDER BY c.code, o.name
+            LIMIT 100`,
+        ),
+        await run(
+          "Lecture payment links",
+          "SELECT id, user_id, title, is_active, click_count FROM payment_links ORDER BY created_at DESC LIMIT 5",
+        ),
+      ];
+
+      const allResults = [
+        database,
+        inventory,
+        ...tables.flatMap((entry) => [entry.create, entry.columns, entry.indexes]),
+        foreignKeys,
+        ...probes,
+      ];
+      const failed = allResults.filter((result) => !result.ok);
+      res.json({
+        ok: failed.length === 0,
+        readOnly: true,
+        generatedAt: new Date().toISOString(),
+        failedChecks: failed.map((result) => result.label),
+        database,
+        inventory,
+        tables,
+        foreignKeys,
+        probes,
+      });
+    } catch (error) {
+      console.error("[MySQL diagnostic] unexpected error:", mysqlDiagnosticError(error));
+      res.status(500).json({
+        ok: false,
+        readOnly: true,
+        error: mysqlDiagnosticError(error),
+      });
+    }
+  });
+
   // GET — list panel blocked IPs (returns full objects with expiry info)
   app.get("/api/admin/panel-blocked-ips", requireAuth, requireAdmin, async (_req, res) => {
     try {
