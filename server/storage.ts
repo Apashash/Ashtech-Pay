@@ -1854,13 +1854,23 @@ export class DatabaseStorage implements IStorage {
     // back to a query without that column so the dashboard never goes blank.
     let hasAshtechFeeCol = true;
     try {
-      const colCheck = await db.execute(sql`
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = current_schema()
-          AND table_name = 'transactions'
-          AND column_name = 'ashtech_fee_amount'
-        LIMIT 1
-      `);
+      const colCheck = await db.execute(
+        isMysqlDialect
+          ? sql`
+              SELECT 1 FROM information_schema.columns
+              WHERE table_schema = DATABASE()
+                AND table_name = 'transactions'
+                AND column_name = 'ashtech_fee_amount'
+              LIMIT 1
+            `
+          : sql`
+              SELECT 1 FROM information_schema.columns
+              WHERE table_schema = current_schema()
+                AND table_name = 'transactions'
+                AND column_name = 'ashtech_fee_amount'
+              LIMIT 1
+            `,
+      );
       hasAshtechFeeCol = (colCheck.rows ?? colCheck).length > 0;
     } catch { hasAshtechFeeCol = false; }
 
