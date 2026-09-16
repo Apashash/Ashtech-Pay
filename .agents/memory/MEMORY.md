@@ -65,3 +65,4 @@
 - [Mintlify internal links](mintlify-link-prefix.md) — internal MDX links must include the public `/docs/` prefix when source files live under `docs/`.
 - [Mintlify validation scope](mintlify-validation-scope.md) — root CLI validation scans the mixed app and docs tree; use docs-only checks for MDX changes.
 - [AshTech hosted skill installer](ashtech-hosted-skill-installer.md) — keep the complete Skill at `/skill.md`; docs should expose the short `npx skills add ... --all` command.
+- [Plesk browser-only access](plesk-browser-only-access.md) — this deployment has no Plesk terminal; expose diagnostics through authenticated browser routes instead of shell-only instructions.
