@@ -321,6 +321,7 @@ app.use(compression());
 // Keep this endpoint intentionally minimal: detailed bootstrap and migration
 // diagnostics are operational data and must not be exposed publicly.
 app.get("/api/ping", (_req, res) => {
+  const failureMessage = startupFailure || migrationFailure;
   res.json({
     ok: true,
     ready: startupReady && migrationsReady,
@@ -328,7 +329,11 @@ app.get("/api/ping", (_req, res) => {
     // login/register forms use them to distinguish a cold start from a
     // completed database migration. `ready` remains the combined gate.
     migrations_ready: migrationsReady,
-    bootstrap_failed: Boolean(startupFailure || migrationFailure),
+    bootstrap_failed: Boolean(failureMessage),
+    // Expose only a coarse operational category, never the raw startup error,
+    // credentials, hostnames, or filesystem paths.
+    failure_code: failureMessage ? classifyStartupFailure(failureMessage) : null,
+    failure_stage: startupFailureStage || (migrationFailure ? migrationStage : null),
   });
 });
 
