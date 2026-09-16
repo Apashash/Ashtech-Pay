@@ -28,3 +28,17 @@ mtime_ms = 1789009043335
 storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:08d29eda-6470-454d-b16d-f2197667fe92/1de34091-b411-42ac-a4a2-1be57cc0b88c/ed0b7dda-cf5d-4385-b103-6fdb68b9013c"
 storage_version_token = "1789538554896267"
 content_type = "application/octet-stream"
+
+[[outputs]]
+id = "uNEzCgm94j0O0m0NMisn3"
+uri = "file://exports/ashtechpay-supabase-mysql-plesk.zip"
+type = "unspecified"
+title = "AshTech Pay — export complet Supabase vers MySQL Plesk"
+description = "Archive ZIP contenant 28 tables et 16 252 lignes, dont users, wallets, transactions et l’historique, avec rapport, notice d’import et empreintes SHA-256."
+logical_id = "4e96d732-4a10-4b88-aafe-0136b79ef7e9"
+content_hash = "sha256:1dec7c94629babeb3539fcadf0b8b3a8a20f69cec18d18993685444251880441"
+size = 1408680
+mtime_ms = 1789549615565
+storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:08d29eda-6470-454d-b16d-f2197667fe92/4e96d732-4a10-4b88-aafe-0136b79ef7e9/ad643988-0cbc-49da-a3b9-701f9a31dd76"
+storage_version_token = "1789549622263530"
+content_type = "application/octet-stream"
