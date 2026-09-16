@@ -597,9 +597,21 @@ export default function DashboardHome() {
     stats: UserStats;
   }>({ queryKey: ["/api/dashboard"] });
 
+  // Load the small, critical dashboard payload independently so the balance
+  // card does not wait for statistics, notifications, tickets and payment
+  // links. The combined endpoint still hydrates the rest of the page when it
+  // completes.
+  const { data: initialUser } = useQuery<User>({
+    queryKey: ["/api/user"],
+  });
+  const { data: initialWallets = [] } = useQuery<WalletEntry[]>({
+    queryKey: ["/api/wallets"],
+    enabled: !!initialUser,
+  });
+
   const { data: liveWallets } = useQuery<WalletEntry[]>({
     queryKey: ["/api/wallets"],
-    enabled: !!dashboardData?.user,
+    enabled: !!(dashboardData?.user || initialUser),
   });
 
   useEffect(() => {
@@ -614,17 +626,21 @@ export default function DashboardHome() {
     }
   }, [dashboardData]);
 
-  const user = dashboardData?.user;
+  const user = dashboardData?.user ?? initialUser;
   const transactions = dashboardData?.transactions ?? [];
   const paymentLinks = dashboardData?.paymentLinks ?? [];
   const userStats = dashboardData?.stats;
   const wallets = useMemo(() => {
     const merged = new Map<string, WalletEntry>();
-    for (const wallet of [...(dashboardData?.wallets ?? []), ...(liveWallets ?? [])]) {
+    for (const wallet of [
+      ...(dashboardData?.wallets ?? []),
+      ...initialWallets,
+      ...(liveWallets ?? []),
+    ]) {
       merged.set(wallet.currency, wallet);
     }
     return [...merged.values()];
-  }, [dashboardData?.wallets, liveWallets]);
+  }, [dashboardData?.wallets, initialWallets, liveWallets]);
 
   const [, setLocation] = useLocation();
 
@@ -659,7 +675,6 @@ export default function DashboardHome() {
     wallets
       .filter(wallet => wallet.currency !== localCurrency)
       .sort((a, b) => parseFloat(b.balance || "0") - parseFloat(a.balance || "0"))
-      .slice(0, 2)
   ), [wallets, localCurrency]);
 
   const totalBalanceInLocalCurrency = useMemo(() => {
@@ -728,7 +743,7 @@ export default function DashboardHome() {
     return weekData;
   }, [transactions]);
 
-  if (isDashboardLoading) {
+  if (isDashboardLoading && !user) {
     return (
       <DashboardLayout>
         <div className="space-y-6 animate-pulse">
