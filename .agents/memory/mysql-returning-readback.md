@@ -14,3 +14,9 @@ Keep PostgreSQL-only syntax and modules behind explicit dialect branches; placeh
 **Why:** The shared MySQL pool can translate `$1` placeholders, but it cannot translate PostgreSQL SQL grammar or PostgreSQL-specific runtime modules.
 
 **How to apply:** For every runtime path reachable with `DB_DIALECT=mysql`, use MySQL JSON/date/aggregate syntax and load PostgreSQL watchdog/migration helpers only in PostgreSQL mode. Keep export and migration scripts available as explicit PostgreSQL tooling.
+
+For wallet creation on imported Plesk schemas, prefer the existing native MySQL upsert/readback path over a generic Drizzle insert helper.
+
+**Why:** Wallet creation must be atomic under mobile double-clicks and can encounter small schema/readback differences after a PostgreSQL-to-MySQL import.
+
+**How to apply:** Validate the currency and ownership first, then use the MySQL `INSERT ... ON DUPLICATE KEY UPDATE` path with an explicit `updated_at` value and return the selected wallet.

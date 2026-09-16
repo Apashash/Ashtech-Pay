@@ -8064,7 +8064,10 @@ export async function registerRoutes(
       if (existing) {
         return res.status(400).json({ message: `Un compte ${currency} existe déjà` });
       }
-      const wallet = await storage.setWalletBalance(userId, currency, 0);
+      // Use the native MySQL upsert path here. It writes the wallet and reads
+      // it back through the same code path used by payment credits, avoiding
+      // Drizzle insert/readback differences on imported Plesk schemas.
+      const wallet = await storage.upsertWallet(userId, currency, 0);
       res.json({ success: true, wallet });
     } catch (error) {
       console.error("Create wallet error:", error);
