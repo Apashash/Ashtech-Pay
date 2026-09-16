@@ -18,10 +18,13 @@ function reject(res: Response, msg: string, retryAfterSec = 60) {
 // validate: keyGeneratorIpFallback désactivé car on gère déjà l'IPv6 via X-Forwarded-For
 const sharedValidate = { keyGeneratorIpFallback: false };
 
-// ─── 1. Global : 50 requêtes / minute / IP ───────────────────────────────────
+// ─── 1. Global : 180 requêtes / minute / IP ──────────────────────────────────
+// This is a coarse safety net for API floods. Sensitive and expensive routes
+// keep their own stricter limiters below; 50 was too low for the authenticated
+// dashboard, which loads several read endpoints on mobile navigation.
 export const globalLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 50,
+  max: 180,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: getIp,

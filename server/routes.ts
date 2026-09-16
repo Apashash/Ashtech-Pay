@@ -8068,6 +8068,17 @@ export async function registerRoutes(
       res.json({ success: true, wallet });
     } catch (error) {
       console.error("Create wallet error:", error);
+      // A stale mobile page can submit a currency that was opened in another
+      // tab/session after the initial existence check. Return the stable
+      // business error instead of exposing a generic 500 for the duplicate
+      // unique-key failure.
+      const errorCode = String((error as any)?.code || "");
+      if (errorCode === "ER_DUP_ENTRY" || /duplicate entry|unique/i.test(String((error as any)?.message || ""))) {
+        const existingWallet = await storage.getWallet(req.userId!, String(req.body?.currency || ""));
+        if (existingWallet) {
+          return res.status(400).json({ message: `Un compte ${existingWallet.currency} existe déjà` });
+        }
+      }
       res.status(500).json({ message: "Erreur serveur" });
     }
   });

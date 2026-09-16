@@ -240,6 +240,9 @@ export const queryClient = new QueryClient({
       // a permanent failure.
       retry: (failureCount, error: any) => {
         const status = Number(error?.status || 0);
+        // A 429 response already carries a server-side Retry-After window.
+        // Retrying immediately only amplifies the same rate-limit event.
+        if (status === 429) return false;
         const transient = !status || status === 408 || status === 425 || status === 429 || status >= 500;
         return transient && failureCount < 3;
       },

@@ -2858,7 +2858,13 @@ export class DatabaseStorage implements IStorage {
       if (isMysqlDialect) {
         return mysqlInsertAndRead(
           wallets,
-          { id: randomUUID(), userId, currency, balance: newBalance.toFixed(2) } as Record<string, unknown>,
+          {
+            id: randomUUID(),
+            userId,
+            currency,
+            balance: newBalance.toFixed(2),
+            updatedAt: new Date(),
+          } as Record<string, unknown>,
           (id) => db.select().from(wallets).where(eq(wallets.id, id)).then(([wallet]) => wallet),
         );
       }
