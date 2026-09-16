@@ -563,12 +563,10 @@ app.use((req, res, next) => {
   const { startDailyReportScheduler } = await import("./dailyReport");
   const { hydrateIpBlocker } = await import("./ipBlocker");
   const { ensureMysqlAuxiliarySchema } = await import("./mysqlBootstrap");
-  const {
-    createDbAuditTriggers,
-    installGuardTrigger,
-    startDbWatchdog,
-    purgeOldAdminOtpSessions,
-  } = await import("./dbWatchdog");
+  // dbWatchdog contains PostgreSQL-only triggers, JSONB and LISTEN/NOTIFY code.
+  // Do not even load it in MySQL mode; the MySQL startup path must not depend on
+  // PostgreSQL modules or attempt to inspect PostgreSQL metadata.
+  const postgresWatchdog = !isMysqlDialect ? await import("./dbWatchdog") : null;
   runtimeBotGuard = botGuard;
 
   // ── Startup migration: ensure new columns exist in production DB ──────────
@@ -1145,15 +1143,15 @@ app.use((req, res, next) => {
     console.log("[Migration] Performance indexes ready");
 
     // ── SIEM: Install PostgreSQL-level audit triggers (VII) ───────────────────
-    await createDbAuditTriggers();
+    if (postgresWatchdog) await postgresWatchdog.createDbAuditTriggers();
 
     // ── Security: Block direct DB modifications to sensitive columns ──────────
     // installGuardTrigger() is also called automatically by the watchdog every
     // 5 min — if someone drops the trigger via SQL, it is detected and reinstalled.
-    await installGuardTrigger();
+    if (postgresWatchdog) await postgresWatchdog.installGuardTrigger();
 
     // ── Purge legacy sessions with old adminOtpVerified flag (stops false SIEM alerts)
-    await purgeOldAdminOtpSessions();
+    if (postgresWatchdog) await postgresWatchdog.purgeOldAdminOtpSessions();
 
     try {
       // Each country currency keeps its own distinct wallet (XAFG for Gabon, XOFT for Togo, etc.)
@@ -1275,7 +1273,7 @@ app.use((req, res, next) => {
     hydrateBotBans().catch(err =>
       console.error("[BotGuard] Hydration error:", err)
     );
-    if (!isMysqlDialect) startDbWatchdog();
+    if (postgresWatchdog) postgresWatchdog.startDbWatchdog();
   };
 
   startupReady = true;

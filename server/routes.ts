@@ -756,6 +756,15 @@ async function claimPendingAdminLogin(token: string, claimId: string): Promise<P
 }
 
 async function releasePendingAdminLogin(token: string, claimId: string): Promise<void> {
+  if (isMysqlDialect) {
+    await pool.query(
+      `UPDATE admin_pending_logins
+          SET claimed_by = NULL, claimed_until = NULL
+        WHERE token = ? AND claimed_by = ? AND consumed_at IS NULL`,
+      [token, claimId],
+    );
+    return;
+  }
   await pool.query(
     `UPDATE admin_pending_logins
         SET claimed_by = NULL, claimed_until = NULL
@@ -785,12 +794,19 @@ async function consumePendingAdminLogin(token: string, claimId: string): Promise
 }
 
 async function deletePendingAdminLogin(token: string): Promise<void> {
+  if (isMysqlDialect) {
+    await pool.query(`DELETE FROM admin_pending_logins WHERE token = ?`, [token]);
+    return;
+  }
   await pool.query(`DELETE FROM admin_pending_logins WHERE token = $1`, [token]);
 }
 
 // Cleanup expired entries every 2 min (all workers run this, but DELETE is idempotent)
 setInterval(() => {
-  pool.query(`DELETE FROM admin_pending_logins WHERE expires_at <= $1`, [Date.now()]).catch(() => {});
+  const query = isMysqlDialect
+    ? `DELETE FROM admin_pending_logins WHERE expires_at <= ?`
+    : `DELETE FROM admin_pending_logins WHERE expires_at <= $1`;
+  pool.query(query, [Date.now()]).catch(() => {});
 }, 2 * 60 * 1000);
 
 // ─── Admin IP Whitelist ────────────────────────────────────────────────────────
@@ -10415,7 +10431,9 @@ export async function registerRoutes(
         for (let attempt = 0; attempt < 2; attempt++) {
           try {
             const dbRow = await queryPool.query(
-              `SELECT sess FROM session WHERE sid = $1 AND expire > NOW()`,
+              isMysqlDialect
+                ? `SELECT sess FROM session WHERE sid = ? AND expire > NOW()`
+                : `SELECT sess FROM session WHERE sid = $1 AND expire > NOW()`,
               [req.sessionID]
             );
             if (dbRow.rows.length > 0) {
@@ -10489,7 +10507,9 @@ export async function registerRoutes(
       // In that case we still need _pav from DB if not in req.session.
       try {
         const dbRow = await pool.query(
-          `SELECT sess FROM session WHERE sid = $1 AND expire > NOW()`,
+          isMysqlDialect
+            ? `SELECT sess FROM session WHERE sid = ? AND expire > NOW()`
+            : `SELECT sess FROM session WHERE sid = $1 AND expire > NOW()`,
           [req.sessionID]
         );
         if (dbRow.rows.length > 0) {
@@ -10716,20 +10736,35 @@ export async function registerRoutes(
       // Toutes les sessions actives (non expirées) avec infos utilisateur
       try {
         const allRes = await pool.query(
-          `SELECT s.sid,
-                  s.sess->>'userId'        AS user_id,
-                  u.email,
-                  u.full_name,
-                  s.sess->>'loginAt'       AS login_at,
-                  s.sess->>'clientIp'      AS client_ip,
-                  s.sess->>'userAgent'     AS user_agent,
-                  s.sess->>'tokenIssuedAt' AS token_ts,
-                  s.expire
-           FROM session s
-           LEFT JOIN users u ON u.id::text = s.sess->>'userId'
-           WHERE s.expire > NOW()
-           ORDER BY s.expire ASC
-           LIMIT 200`
+          isMysqlDialect
+            ? `SELECT s.sid,
+                      JSON_UNQUOTE(JSON_EXTRACT(s.sess, '$.userId')) AS user_id,
+                      u.email,
+                      u.full_name,
+                      JSON_UNQUOTE(JSON_EXTRACT(s.sess, '$.loginAt')) AS login_at,
+                      JSON_UNQUOTE(JSON_EXTRACT(s.sess, '$.clientIp')) AS client_ip,
+                      JSON_UNQUOTE(JSON_EXTRACT(s.sess, '$.userAgent')) AS user_agent,
+                      JSON_UNQUOTE(JSON_EXTRACT(s.sess, '$.tokenIssuedAt')) AS token_ts,
+                      s.expire
+               FROM session s
+               LEFT JOIN users u ON u.id = JSON_UNQUOTE(JSON_EXTRACT(s.sess, '$.userId'))
+               WHERE s.expire > NOW()
+               ORDER BY s.expire ASC
+               LIMIT 200`
+            : `SELECT s.sid,
+                      s.sess->>'userId'        AS user_id,
+                      u.email,
+                      u.full_name,
+                      s.sess->>'loginAt'       AS login_at,
+                      s.sess->>'clientIp'      AS client_ip,
+                      s.sess->>'userAgent'     AS user_agent,
+                      s.sess->>'tokenIssuedAt' AS token_ts,
+                      s.expire
+               FROM session s
+               LEFT JOIN users u ON u.id::text = s.sess->>'userId'
+               WHERE s.expire > NOW()
+               ORDER BY s.expire ASC
+               LIMIT 200`
         );
         allActiveSessions = allRes.rows;
       } catch (e: any) {
@@ -10739,20 +10774,35 @@ export async function registerRoutes(
       if (targetUserId) {
         // Sessions brutes pour un userId donné (pour debug ciblé)
         const rawRes = await pool.query(
-          `SELECT s.sid,
-                  s.sess->>'userId'        AS user_id,
-                  u.email,
-                  u.full_name,
-                  s.sess->>'loginAt'       AS login_at,
-                  s.sess->>'clientIp'      AS client_ip,
-                  s.sess->>'userAgent'     AS user_agent,
-                  s.sess->>'tokenIssuedAt' AS token_ts,
-                  s.expire
-           FROM session s
-           LEFT JOIN users u ON u.id::text = s.sess->>'userId'
-           WHERE s.sess->>'userId' = $1
-           ORDER BY s.expire DESC
-           LIMIT 20`,
+          isMysqlDialect
+            ? `SELECT s.sid,
+                      JSON_UNQUOTE(JSON_EXTRACT(s.sess, '$.userId')) AS user_id,
+                      u.email,
+                      u.full_name,
+                      JSON_UNQUOTE(JSON_EXTRACT(s.sess, '$.loginAt')) AS login_at,
+                      JSON_UNQUOTE(JSON_EXTRACT(s.sess, '$.clientIp')) AS client_ip,
+                      JSON_UNQUOTE(JSON_EXTRACT(s.sess, '$.userAgent')) AS user_agent,
+                      JSON_UNQUOTE(JSON_EXTRACT(s.sess, '$.tokenIssuedAt')) AS token_ts,
+                      s.expire
+               FROM session s
+               LEFT JOIN users u ON u.id = JSON_UNQUOTE(JSON_EXTRACT(s.sess, '$.userId'))
+               WHERE JSON_UNQUOTE(JSON_EXTRACT(s.sess, '$.userId')) = ?
+               ORDER BY s.expire DESC
+               LIMIT 20`
+            : `SELECT s.sid,
+                      s.sess->>'userId'        AS user_id,
+                      u.email,
+                      u.full_name,
+                      s.sess->>'loginAt'       AS login_at,
+                      s.sess->>'clientIp'      AS client_ip,
+                      s.sess->>'userAgent'     AS user_agent,
+                      s.sess->>'tokenIssuedAt' AS token_ts,
+                      s.expire
+               FROM session s
+               LEFT JOIN users u ON u.id::text = s.sess->>'userId'
+               WHERE s.sess->>'userId' = $1
+               ORDER BY s.expire DESC
+               LIMIT 20`,
           [targetUserId]
         );
         recentSessionsInDb = rawRes.rows;
@@ -10794,10 +10844,15 @@ export async function registerRoutes(
       let tier3Valid = false;
       try {
         const dbRow = await sessionPool.query(
-          `SELECT sess FROM session WHERE expire > NOW()
-           AND (sess::jsonb->>'userId')::text = $1
-           AND (sess::jsonb->>'_avs') IS NOT NULL
-           ORDER BY expire DESC LIMIT 1`,
+          isMysqlDialect
+            ? `SELECT sess FROM session WHERE expire > NOW()
+               AND JSON_UNQUOTE(JSON_EXTRACT(sess, '$.userId')) = ?
+               AND JSON_EXTRACT(sess, '$._avs') IS NOT NULL
+               ORDER BY expire DESC LIMIT 1`
+            : `SELECT sess FROM session WHERE expire > NOW()
+               AND (sess::jsonb->>'userId')::text = $1
+               AND (sess::jsonb->>'_avs') IS NOT NULL
+               ORDER BY expire DESC LIMIT 1`,
           [String(req.userId)]
         );
         if (dbRow.rows.length > 0) {
@@ -18291,21 +18346,39 @@ export async function registerRoutes(
   // GET /api/admin/api-management — list users with API stats (SQL JOIN — no full table scans)
   app.get("/api/admin/api-management", requireAuth, requireAdmin, async (_req, res) => {
     try {
-      const rows = await db.execute(drizzleSql`
-        SELECT
-          u.id, u.full_name, u.email, u.username, u.is_verified, u.api_enabled, u.api_key, u.created_at,
-          COUNT(t.id) FILTER (WHERE t.status = 'completed')::int                            AS total_tx,
-          COUNT(t.id) FILTER (WHERE t.status = 'completed' AND t.source = 'api')::int       AS sdk_tx,
-          COUNT(t.id) FILTER (WHERE t.status = 'completed' AND t.source = 'hosted_page')::int AS hp_tx,
-          COALESCE(SUM(t.amount::numeric) FILTER (WHERE t.status = 'completed'), 0)            AS total_amount,
-          COALESCE(SUM(t.amount::numeric) FILTER (WHERE t.status = 'completed' AND t.source = 'api'), 0) AS sdk_amount,
-          COALESCE(SUM(t.amount::numeric) FILTER (WHERE t.status = 'completed' AND t.source = 'hosted_page'), 0) AS hp_amount
-        FROM users u
-        LEFT JOIN transactions t ON t.user_id = u.id
-        WHERE u.role NOT IN ('admin', 'support', 'finance')
-        GROUP BY u.id, u.full_name, u.email, u.username, u.is_verified, u.api_enabled, u.api_key, u.created_at
-        ORDER BY u.created_at DESC
-      `);
+      const rows = await db.execute(
+        isMysqlDialect
+          ? drizzleSql`
+              SELECT
+                u.id, u.full_name, u.email, u.username, u.is_verified, u.api_enabled, u.api_key, u.created_at,
+                SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) AS total_tx,
+                SUM(CASE WHEN t.status = 'completed' AND t.source = 'api' THEN 1 ELSE 0 END) AS sdk_tx,
+                SUM(CASE WHEN t.status = 'completed' AND t.source = 'hosted_page' THEN 1 ELSE 0 END) AS hp_tx,
+                COALESCE(SUM(CASE WHEN t.status = 'completed' THEN CAST(t.amount AS DECIMAL(30, 10)) ELSE 0 END), 0) AS total_amount,
+                COALESCE(SUM(CASE WHEN t.status = 'completed' AND t.source = 'api' THEN CAST(t.amount AS DECIMAL(30, 10)) ELSE 0 END), 0) AS sdk_amount,
+                COALESCE(SUM(CASE WHEN t.status = 'completed' AND t.source = 'hosted_page' THEN CAST(t.amount AS DECIMAL(30, 10)) ELSE 0 END), 0) AS hp_amount
+              FROM users u
+              LEFT JOIN transactions t ON t.user_id = u.id
+              WHERE u.role NOT IN ('admin', 'support', 'finance')
+              GROUP BY u.id, u.full_name, u.email, u.username, u.is_verified, u.api_enabled, u.api_key, u.created_at
+              ORDER BY u.created_at DESC
+            `
+          : drizzleSql`
+              SELECT
+                u.id, u.full_name, u.email, u.username, u.is_verified, u.api_enabled, u.api_key, u.created_at,
+                COUNT(t.id) FILTER (WHERE t.status = 'completed')::int AS total_tx,
+                COUNT(t.id) FILTER (WHERE t.status = 'completed' AND t.source = 'api')::int AS sdk_tx,
+                COUNT(t.id) FILTER (WHERE t.status = 'completed' AND t.source = 'hosted_page')::int AS hp_tx,
+                COALESCE(SUM(t.amount::numeric) FILTER (WHERE t.status = 'completed'), 0) AS total_amount,
+                COALESCE(SUM(t.amount::numeric) FILTER (WHERE t.status = 'completed' AND t.source = 'api'), 0) AS sdk_amount,
+                COALESCE(SUM(t.amount::numeric) FILTER (WHERE t.status = 'completed' AND t.source = 'hosted_page'), 0) AS hp_amount
+              FROM users u
+              LEFT JOIN transactions t ON t.user_id = u.id
+              WHERE u.role NOT IN ('admin', 'support', 'finance')
+              GROUP BY u.id, u.full_name, u.email, u.username, u.is_verified, u.api_enabled, u.api_key, u.created_at
+              ORDER BY u.created_at DESC
+            `,
+      );
 
       const result = (rows.rows as any[]).map(row => ({
         id: row.id,

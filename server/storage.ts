@@ -768,14 +768,23 @@ export class DatabaseStorage implements IStorage {
     }
 
     const reopened = await db.transaction(async (trx) => {
-      const [transaction] = await trx.update(transactions)
-        .set({ status: "pending" })
-        .where(and(
-          eq(transactions.id, id),
-          inArray(transactions.status, allowedFrom),
-          inArray(transactions.type, ["withdrawal", "transfer_out"]),
-        ))
-        .returning();
+      let transaction: Transaction | undefined;
+      const claimWhere = and(
+        eq(transactions.id, id),
+        inArray(transactions.status, allowedFrom),
+        inArray(transactions.type, ["withdrawal", "transfer_out"]),
+      );
+      if (isMysqlDialect) {
+        const [current] = await trx.select().from(transactions).where(claimWhere).limit(1);
+        if (!current) return undefined;
+        await trx.update(transactions).set({ status: "pending" }).where(claimWhere);
+        [transaction] = await trx.select().from(transactions).where(eq(transactions.id, id)).limit(1);
+      } else {
+        [transaction] = await trx.update(transactions)
+          .set({ status: "pending" })
+          .where(claimWhere)
+          .returning();
+      }
       if (!transaction) return undefined;
 
       const [user] = await trx.select({ preferredCurrency: users.preferredCurrency })
@@ -793,26 +802,42 @@ export class DatabaseStorage implements IStorage {
         : sql`${balanceExpression}::numeric >= ${amount}::numeric`;
 
       if (usesPrimaryWallet) {
-        const [debited] = await trx.update(users)
-          .set({ balance: isMysqlDialect ? sql`${users.balance} - ${amount}` : sql`${users.balance}::numeric - ${amount}::numeric` })
-          .where(and(eq(users.id, transaction.userId), debitCondition))
-          .returning({ id: users.id });
-        if (!debited) throw new Error("INSUFFICIENT_WALLET_BALANCE");
+        if (isMysqlDialect) {
+          const debitResult = await trx.update(users)
+            .set({ balance: sql`${users.balance} - ${amount}` })
+            .where(and(eq(users.id, transaction.userId), debitCondition));
+          if ((debitResult as any).rowCount === 0) throw new Error("INSUFFICIENT_WALLET_BALANCE");
+        } else {
+          const [debited] = await trx.update(users)
+            .set({ balance: sql`${users.balance}::numeric - ${amount}::numeric` })
+            .where(and(eq(users.id, transaction.userId), debitCondition))
+            .returning({ id: users.id });
+          if (!debited) throw new Error("INSUFFICIENT_WALLET_BALANCE");
+        }
       } else {
-        const [debited] = await trx.update(wallets)
-          .set({
-            balance: isMysqlDialect
-              ? sql`${wallets.balance} - ${amount}`
-              : sql`${wallets.balance}::numeric - ${amount}::numeric`,
-            updatedAt: new Date(),
-          })
-          .where(and(
-            eq(wallets.userId, transaction.userId),
-            eq(wallets.currency, walletCurrency),
-            debitCondition,
-          ))
-          .returning({ id: wallets.id });
-        if (!debited) throw new Error("INSUFFICIENT_WALLET_BALANCE");
+        if (isMysqlDialect) {
+          const debitResult = await trx.update(wallets)
+            .set({ balance: sql`${wallets.balance} - ${amount}`, updatedAt: new Date() })
+            .where(and(
+              eq(wallets.userId, transaction.userId),
+              eq(wallets.currency, walletCurrency),
+              debitCondition,
+            ));
+          if ((debitResult as any).rowCount === 0) throw new Error("INSUFFICIENT_WALLET_BALANCE");
+        } else {
+          const [debited] = await trx.update(wallets)
+            .set({
+              balance: sql`${wallets.balance}::numeric - ${amount}::numeric`,
+              updatedAt: new Date(),
+            })
+            .where(and(
+              eq(wallets.userId, transaction.userId),
+              eq(wallets.currency, walletCurrency),
+              debitCondition,
+            ))
+            .returning({ id: wallets.id });
+          if (!debited) throw new Error("INSUFFICIENT_WALLET_BALANCE");
+        }
       }
 
       return transaction;
@@ -824,10 +849,19 @@ export class DatabaseStorage implements IStorage {
 
   async claimPawaIncomingAndCredit(id: string, allowedFrom: string[] = ["pending"]): Promise<Transaction | undefined> {
     const claimed = await db.transaction(async (trx) => {
-      const [transaction] = await trx.update(transactions)
-        .set({ status: "completed", confirmedAt: new Date() })
-        .where(and(eq(transactions.id, id), inArray(transactions.status, allowedFrom)))
-        .returning();
+      let transaction: Transaction | undefined;
+      if (isMysqlDialect) {
+        const updateResult = await trx.update(transactions)
+          .set({ status: "completed", confirmedAt: new Date() })
+          .where(and(eq(transactions.id, id), inArray(transactions.status, allowedFrom)));
+        if ((updateResult as any).rowCount === 0) return undefined;
+        [transaction] = await trx.select().from(transactions).where(eq(transactions.id, id)).limit(1);
+      } else {
+        [transaction] = await trx.update(transactions)
+          .set({ status: "completed", confirmedAt: new Date() })
+          .where(and(eq(transactions.id, id), inArray(transactions.status, allowedFrom)))
+          .returning();
+      }
       if (!transaction) return undefined;
       const [user] = await trx.select({ preferredCurrency: users.preferredCurrency })
         .from(users).where(eq(users.id, transaction.userId)).limit(1);
@@ -837,11 +871,19 @@ export class DatabaseStorage implements IStorage {
       if ((user.preferredCurrency || "XAF") === currency) {
         await trx.update(users).set({ balance: sql`${users.balance} + ${amount}` }).where(eq(users.id, transaction.userId));
       } else {
-        await trx.insert(wallets).values({ userId: transaction.userId, currency, balance: amount })
-          .onConflictDoUpdate({
-            target: [wallets.userId, wallets.currency],
-            set: { balance: sql`${wallets.balance} + ${amount}`, updatedAt: new Date() },
-          });
+        if (isMysqlDialect) {
+          await (trx as any).insert(wallets)
+            .values({ id: randomUUID(), userId: transaction.userId, currency, balance: amount })
+            .onDuplicateKeyUpdate({
+              set: { balance: sql`${wallets.balance} + ${amount}`, updatedAt: new Date() },
+            });
+        } else {
+          await trx.insert(wallets).values({ userId: transaction.userId, currency, balance: amount })
+            .onConflictDoUpdate({
+              target: [wallets.userId, wallets.currency],
+              set: { balance: sql`${wallets.balance} + ${amount}`, updatedAt: new Date() },
+            });
+        }
       }
       return transaction;
     });
@@ -854,8 +896,16 @@ export class DatabaseStorage implements IStorage {
     allowedFrom: string[] = ["pending", "processing", "pending_manual"],
   ): Promise<Transaction | undefined> {
     const claimed = await db.transaction(async (trx) => {
-      const [transaction] = await trx.update(transactions).set({ status: "failed" })
-        .where(and(eq(transactions.id, id), inArray(transactions.status, allowedFrom))).returning();
+      let transaction: Transaction | undefined;
+      if (isMysqlDialect) {
+        const updateResult = await trx.update(transactions).set({ status: "failed" })
+          .where(and(eq(transactions.id, id), inArray(transactions.status, allowedFrom)));
+        if ((updateResult as any).rowCount === 0) return undefined;
+        [transaction] = await trx.select().from(transactions).where(eq(transactions.id, id)).limit(1);
+      } else {
+        [transaction] = await trx.update(transactions).set({ status: "failed" })
+          .where(and(eq(transactions.id, id), inArray(transactions.status, allowedFrom))).returning();
+      }
       if (!transaction) return undefined;
       const [user] = await trx.select({ preferredCurrency: users.preferredCurrency })
         .from(users).where(eq(users.id, transaction.userId)).limit(1);
@@ -866,11 +916,19 @@ export class DatabaseStorage implements IStorage {
       if ((user.preferredCurrency || "XAF") === currency) {
         await trx.update(users).set({ balance: sql`${users.balance} + ${amount}` }).where(eq(users.id, transaction.userId));
       } else {
-        await trx.insert(wallets).values({ userId: transaction.userId, currency, balance: amount })
-          .onConflictDoUpdate({
-            target: [wallets.userId, wallets.currency],
-            set: { balance: sql`${wallets.balance} + ${amount}`, updatedAt: new Date() },
-          });
+        if (isMysqlDialect) {
+          await (trx as any).insert(wallets)
+            .values({ id: randomUUID(), userId: transaction.userId, currency, balance: amount })
+            .onDuplicateKeyUpdate({
+              set: { balance: sql`${wallets.balance} + ${amount}`, updatedAt: new Date() },
+            });
+        } else {
+          await trx.insert(wallets).values({ userId: transaction.userId, currency, balance: amount })
+            .onConflictDoUpdate({
+              target: [wallets.userId, wallets.currency],
+              set: { balance: sql`${wallets.balance} + ${amount}`, updatedAt: new Date() },
+            });
+        }
       }
       return transaction;
     });
@@ -1052,7 +1110,7 @@ export class DatabaseStorage implements IStorage {
     return await db
       .select()
       .from(users)
-      .where(ilike(users.email, `%${query}%`))
+      .where(sql<boolean>`LOWER(${users.email}) LIKE LOWER(${`%${query}%`})`)
       .orderBy(desc(users.createdAt))
       .limit(limit);
   }
@@ -1536,6 +1594,16 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createAuditLog(log: InsertAuditLog): Promise<AuditLog> {
+    if (isMysqlDialect) {
+      return mysqlInsertAndRead(
+        auditLogs,
+        { ...log, id: randomUUID() } as Record<string, unknown>,
+        async (id) => {
+          const [created] = await db.select().from(auditLogs).where(eq(auditLogs.id, id));
+          return created;
+        },
+      );
+    }
     const [newLog] = await db.insert(auditLogs).values(log).returning();
     return newLog;
   }
@@ -1725,10 +1793,14 @@ export class DatabaseStorage implements IStorage {
     if (periodEnd)   activityConditions.push(lt(transactions.createdAt, periodEnd));
     if (resetAt && !periodStart) activityConditions.push(gt(transactions.createdAt, resetAt));
 
-    // Use SQL DATE_TRUNC to aggregate by bucket — returns ~30 rows max instead of thousands
-    const truncExpr = useHourly
-      ? sql<string>`TO_CHAR(DATE_TRUNC('hour', ${transactions.createdAt}), 'YYYY-MM-DD"T"HH24')`
-      : sql<string>`TO_CHAR(DATE_TRUNC('day',  ${transactions.createdAt}), 'YYYY-MM-DD')`;
+    // Use dialect-native date formatting to aggregate by bucket.
+    const truncExpr = isMysqlDialect
+      ? useHourly
+        ? sql<string>`DATE_FORMAT(${transactions.createdAt}, '%Y-%m-%dT%H')`
+        : sql<string>`DATE_FORMAT(${transactions.createdAt}, '%Y-%m-%d')`
+      : useHourly
+        ? sql<string>`TO_CHAR(DATE_TRUNC('hour', ${transactions.createdAt}), 'YYYY-MM-DD"T"HH24')`
+        : sql<string>`TO_CHAR(DATE_TRUNC('day',  ${transactions.createdAt}), 'YYYY-MM-DD')`;
 
     const rows = await db
       .select({
@@ -2002,22 +2074,25 @@ export class DatabaseStorage implements IStorage {
     }
     if (status && status !== "all") conditions.push(eq(transactions.status, status));
     if (search) {
+      const searchPattern = `%${search}%`;
+      const contains = (column: unknown) =>
+        sql<boolean>`LOWER(${column}) LIKE LOWER(${searchPattern})`;
       const textSearch = or(
-        ilike(transactions.reference, `%${search}%`),
-        ilike(transactions.externalReference, `%${search}%`),
-        ilike(transactions.description, `%${search}%`),
-        ilike(transactions.recipientName, `%${search}%`),
-        ilike(transactions.recipientPhone, `%${search}%`),
-        ilike(transactions.payerName, `%${search}%`),
-        ilike(transactions.payerEmail, `%${search}%`),
+        contains(transactions.reference),
+        contains(transactions.externalReference),
+        contains(transactions.description),
+        contains(transactions.recipientName),
+        contains(transactions.recipientPhone),
+        contains(transactions.payerName),
+        contains(transactions.payerEmail),
         sql<boolean>`EXISTS (
           SELECT 1
           FROM ${users} AS admin_search_user
           WHERE admin_search_user.id = ${transactions.userId}
             AND (
-              admin_search_user.full_name ILIKE ${`%${search}%`}
-              OR admin_search_user.email ILIKE ${`%${search}%`}
-              OR admin_search_user.username ILIKE ${`%${search}%`}
+              LOWER(admin_search_user.full_name) LIKE LOWER(${searchPattern})
+              OR LOWER(admin_search_user.email) LIKE LOWER(${searchPattern})
+              OR LOWER(admin_search_user.username) LIKE LOWER(${searchPattern})
             )
         )`,
         sql<boolean>`EXISTS (
@@ -2025,8 +2100,8 @@ export class DatabaseStorage implements IStorage {
           FROM ${paymentIntents} AS admin_search_intent
           WHERE admin_search_intent.id = ${transactions.paymentIntentId}
             AND (
-              admin_search_intent.payer_name ILIKE ${`%${search}%`}
-              OR admin_search_intent.payer_email ILIKE ${`%${search}%`}
+              LOWER(admin_search_intent.payer_name) LIKE LOWER(${searchPattern})
+              OR LOWER(admin_search_intent.payer_email) LIKE LOWER(${searchPattern})
             )
         )`,
       );
@@ -2040,20 +2115,38 @@ export class DatabaseStorage implements IStorage {
       const phoneSearch = phoneDigits.length >= 3
         ? or(
             ...phoneSearchDigits.flatMap(digits => [
-              sql<boolean>`regexp_replace(coalesce(${transactions.recipientPhone}, ''), '[^0-9]', '', 'g') LIKE ${`%${digits}%`}`,
-              sql<boolean>`regexp_replace(coalesce(${transactions.description}, ''), '[^0-9]', '', 'g') LIKE ${`%${digits}%`}`,
-              sql<boolean>`EXISTS (
-                SELECT 1
-                FROM ${users} AS admin_phone_user
-                WHERE admin_phone_user.id = ${transactions.userId}
-                  AND regexp_replace(coalesce(admin_phone_user.phone, ''), '[^0-9]', '', 'g') LIKE ${`%${digits}%`}
-              )`,
-              sql<boolean>`EXISTS (
-                SELECT 1
-                FROM ${paymentIntents} AS admin_phone_intent
-                WHERE admin_phone_intent.id = ${transactions.paymentIntentId}
-                  AND regexp_replace(coalesce(admin_phone_intent.payer_phone, ''), '[^0-9]', '', 'g') LIKE ${`%${digits}%`}
-              )`,
+              isMysqlDialect
+                ? sql<boolean>`REGEXP_REPLACE(COALESCE(${transactions.recipientPhone}, ''), '[^0-9]', '') LIKE ${`%${digits}%`}`
+                : sql<boolean>`regexp_replace(coalesce(${transactions.recipientPhone}, ''), '[^0-9]', '', 'g') LIKE ${`%${digits}%`}`,
+              isMysqlDialect
+                ? sql<boolean>`REGEXP_REPLACE(COALESCE(${transactions.description}, ''), '[^0-9]', '') LIKE ${`%${digits}%`}`
+                : sql<boolean>`regexp_replace(coalesce(${transactions.description}, ''), '[^0-9]', '', 'g') LIKE ${`%${digits}%`}`,
+              isMysqlDialect
+                ? sql<boolean>`EXISTS (
+                    SELECT 1
+                    FROM ${users} AS admin_phone_user
+                    WHERE admin_phone_user.id = ${transactions.userId}
+                      AND REGEXP_REPLACE(COALESCE(admin_phone_user.phone, ''), '[^0-9]', '') LIKE ${`%${digits}%`}
+                  )`
+                : sql<boolean>`EXISTS (
+                    SELECT 1
+                    FROM ${users} AS admin_phone_user
+                    WHERE admin_phone_user.id = ${transactions.userId}
+                      AND regexp_replace(coalesce(admin_phone_user.phone, ''), '[^0-9]', '', 'g') LIKE ${`%${digits}%`}
+                  )`,
+              isMysqlDialect
+                ? sql<boolean>`EXISTS (
+                    SELECT 1
+                    FROM ${paymentIntents} AS admin_phone_intent
+                    WHERE admin_phone_intent.id = ${transactions.paymentIntentId}
+                      AND REGEXP_REPLACE(COALESCE(admin_phone_intent.payer_phone, ''), '[^0-9]', '') LIKE ${`%${digits}%`}
+                  )`
+                : sql<boolean>`EXISTS (
+                    SELECT 1
+                    FROM ${paymentIntents} AS admin_phone_intent
+                    WHERE admin_phone_intent.id = ${transactions.paymentIntentId}
+                      AND regexp_replace(coalesce(admin_phone_intent.payer_phone, ''), '[^0-9]', '', 'g') LIKE ${`%${digits}%`}
+                  )`,
             ]),
           )
         : undefined;
@@ -2734,18 +2827,41 @@ export class DatabaseStorage implements IStorage {
       for (const dup of duplicates) {
         await db.delete(wallets).where(eq(wallets.id, dup.id));
       }
+      if (isMysqlDialect) {
+        await db.update(wallets)
+          .set({ balance: newBalance.toFixed(2), updatedAt: new Date() })
+          .where(eq(wallets.id, keep.id));
+        const updated = await this.getWallet(userId, currency);
+        if (!updated) throw new Error("WALLET_UPDATE_READBACK_FAILED");
+        return updated;
+      }
       const [updated] = await db.update(wallets)
         .set({ balance: newBalance.toFixed(2), updatedAt: new Date() })
         .where(eq(wallets.id, keep.id))
         .returning();
       return updated;
     } else if (all.length === 1) {
+      if (isMysqlDialect) {
+        await db.update(wallets)
+          .set({ balance: newBalance.toFixed(2), updatedAt: new Date() })
+          .where(eq(wallets.id, all[0].id));
+        const updated = await this.getWallet(userId, currency);
+        if (!updated) throw new Error("WALLET_UPDATE_READBACK_FAILED");
+        return updated;
+      }
       const [updated] = await db.update(wallets)
         .set({ balance: newBalance.toFixed(2), updatedAt: new Date() })
         .where(eq(wallets.id, all[0].id))
         .returning();
       return updated;
     } else {
+      if (isMysqlDialect) {
+        return mysqlInsertAndRead(
+          wallets,
+          { id: randomUUID(), userId, currency, balance: newBalance.toFixed(2) } as Record<string, unknown>,
+          (id) => db.select().from(wallets).where(eq(wallets.id, id)).then(([wallet]) => wallet),
+        );
+      }
       const [created] = await db.insert(wallets)
         .values({ userId, currency, balance: newBalance.toFixed(2) })
         .returning();
