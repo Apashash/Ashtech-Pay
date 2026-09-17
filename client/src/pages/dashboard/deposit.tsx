@@ -1527,33 +1527,6 @@ export default function DepositPage() {
                       </div>
                     )}
 
-                    {/* Fee breakdown */}
-                    {feeCalculation && (
-                      <div className="rounded-xl border border-border bg-muted/30 overflow-hidden" data-testid="fee-calculator">
-                        <div className="px-4 py-3 flex items-center justify-between border-b border-border">
-                          <span className="text-sm text-muted-foreground">{t.deposit.amountEntered}</span>
-                          <span className="text-sm font-semibold tabular-nums">
-                            {formatCurrency(feeCalculation.amount.toString(), (selectedCountry?.currency || "XAF") as SupportedCurrency)}
-                          </span>
-                        </div>
-                        <div className="px-4 py-3 flex items-center justify-between border-b border-border">
-                          <span className="text-sm text-muted-foreground flex items-center gap-1.5">
-                            <TrendingDown className="w-3.5 h-3.5" />
-                            {t.deposit.depositFeeLabel} {feeCalculation.feePercentage > 0 ? `(${feeCalculation.feePercentage}%)` : feeCalculation.fixedFee > 0 ? t.deposit.feeFixed : t.deposit.feeFree}
-                          </span>
-                          <span className={`text-sm font-semibold tabular-nums ${feeCalculation.fee > 0 ? "text-red-500" : "text-green-500"}`}>
-                            {feeCalculation.fee > 0 ? `-${formatCurrency(feeCalculation.fee.toString(), (selectedCountry?.currency || "XAF") as SupportedCurrency)}` : "Gratuit"}
-                          </span>
-                        </div>
-                        <div className="px-4 py-3 flex items-center justify-between bg-green-500/5">
-                          <span className="text-sm font-semibold text-foreground">{t.deposit.creditedLabel}</span>
-                          <span className="text-lg font-bold text-green-500 tabular-nums" data-testid="credited-amount">
-                            {formatCurrency(feeCalculation.creditedAmount.toString(), (selectedCountry?.currency || "XAF") as SupportedCurrency)}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-
                     <Button
                       type="submit"
                       className="w-full h-12 rounded-xl font-bold"
