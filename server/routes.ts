@@ -1267,6 +1267,26 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
+async function requireMerchantKyc(req: Request, res: Response, next: NextFunction) {
+  const userId = req.userId || req.session?.userId;
+  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+  try {
+    const user = await storage.getUser(userId);
+    if (!user) return res.status(404).json({ error: "user_not_found" });
+    if (user.role !== "admin" && !user.isVerified) {
+      return res.status(403).json({
+        error: "account_not_verified",
+        message: "Validez votre KYC pour accéder au Checkout Page et à l'API directe.",
+      });
+    }
+    next();
+  } catch (error: any) {
+    console.error("[Merchant KYC guard]", error?.message || error);
+    return res.status(500).json({ error: "server_error" });
+  }
+}
+
 // ── Admin route cloaking ─────────────────────────────────────────────────────
 // Do not reveal the existence of admin API routes to unauthenticated visitors
 // or regular users. This runs before requireAdminPin and before every admin
@@ -4881,7 +4901,7 @@ export async function registerRoutes(
   });
 
   // ─── API Key routes ─────────────────────────────────────────────────────────
-  app.get("/api/user/api-key", requireAuth, async (req, res) => {
+  app.get("/api/user/api-key", requireAuth, requireMerchantKyc, async (req, res) => {
     try {
       const userId = req.userId!;
       let user = await storage.getUser(userId);
@@ -4904,7 +4924,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/user/api-key/regenerate", requireAuth, async (req, res) => {
+  app.post("/api/user/api-key/regenerate", requireAuth, requireMerchantKyc, async (req, res) => {
     try {
       const userId = req.userId!;
       const { randomBytes } = await import("crypto");
@@ -4920,7 +4940,7 @@ export async function registerRoutes(
 
   // Merchant webhook signing secret. It is encrypted at rest and only shown
   // after an authenticated request; webhook deliveries never expose it.
-  app.get("/api/user/webhook-secret", requireAuth, async (req, res) => {
+  app.get("/api/user/webhook-secret", requireAuth, requireMerchantKyc, async (req, res) => {
     try {
       if (!isFieldEncryptionConfigured()) {
         return res.status(503).json({ message: "Le chiffrement des secrets webhook n'est pas configuré." });
@@ -17756,7 +17776,7 @@ export async function registerRoutes(
   }
 
   // GET /api/hosted-page/config — get merchant config
-  app.get("/api/hosted-page/config", async (req: Request, res: Response) => {
+  app.get("/api/hosted-page/config", requireAuth, requireMerchantKyc, async (req: Request, res: Response) => {
     const userId = req.userId || req.session?.userId;
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
     try {
@@ -17768,7 +17788,7 @@ export async function registerRoutes(
   });
 
   // GET /api/hosted-page/keys — list the merchant's named Checkout keys
-  app.get("/api/hosted-page/keys", async (req: Request, res: Response) => {
+  app.get("/api/hosted-page/keys", requireAuth, requireMerchantKyc, async (req: Request, res: Response) => {
     const userId = req.userId || req.session?.userId;
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
     try {
@@ -17781,7 +17801,7 @@ export async function registerRoutes(
   });
 
   // POST /api/hosted-page/keys — create a named Checkout key
-  app.post("/api/hosted-page/keys", async (req: Request, res: Response) => {
+  app.post("/api/hosted-page/keys", requireAuth, requireMerchantKyc, async (req: Request, res: Response) => {
     const userId = req.userId || req.session?.userId;
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
     try {
@@ -17806,7 +17826,7 @@ export async function registerRoutes(
   });
 
   // POST /api/hosted-page/keys/:id/regenerate — rotate one named key
-  app.post("/api/hosted-page/keys/:id/regenerate", async (req: Request, res: Response) => {
+  app.post("/api/hosted-page/keys/:id/regenerate", requireAuth, requireMerchantKyc, async (req: Request, res: Response) => {
     const userId = req.userId || req.session?.userId;
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
     try {
@@ -17820,7 +17840,7 @@ export async function registerRoutes(
   });
 
   // PATCH /api/hosted-page/keys/:id/urls — update URLs linked to one Checkout key
-  app.patch("/api/hosted-page/keys/:id/urls", async (req: Request, res: Response) => {
+  app.patch("/api/hosted-page/keys/:id/urls", requireAuth, requireMerchantKyc, async (req: Request, res: Response) => {
     const userId = req.userId || req.session?.userId;
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
     try {
@@ -17842,7 +17862,7 @@ export async function registerRoutes(
   });
 
   // DELETE /api/hosted-page/keys/:id — remove a Checkout key, including the historical one
-  app.delete("/api/hosted-page/keys/:id", async (req: Request, res: Response) => {
+  app.delete("/api/hosted-page/keys/:id", requireAuth, requireMerchantKyc, async (req: Request, res: Response) => {
     const userId = req.userId || req.session?.userId;
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
     try {
@@ -17856,7 +17876,7 @@ export async function registerRoutes(
   });
 
   // POST /api/hosted-page/config — save URLs and optionally rotate the legacy key
-  app.post("/api/hosted-page/config", async (req: Request, res: Response) => {
+  app.post("/api/hosted-page/config", requireAuth, requireMerchantKyc, async (req: Request, res: Response) => {
     const userId = req.userId || req.session?.userId;
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
     try {

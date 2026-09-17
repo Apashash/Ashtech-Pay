@@ -113,11 +113,13 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const logoClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const menuItems = MENU_URLS.map(item => ({ title: t.sidebar[item.key], url: item.url, icon: item.icon, imageSrc: item.imageSrc, color: item.color }));
-  const settingsItems = SETTINGS_URLS.map(item => ({ title: t.sidebar[item.key], url: item.url, icon: item.icon, imageSrc: item.imageSrc, color: item.color }));
 
   const { data: user, isLoading } = useQuery<User>({
     queryKey: ["/api/user"],
   });
+  const settingsItems = SETTINGS_URLS
+    .filter(item => item.key !== "apiKeys" || !user || user.role === "admin" || user.isVerified)
+    .map(item => ({ title: t.sidebar[item.key], url: item.url, icon: item.icon, imageSrc: item.imageSrc, color: item.color }));
   const isAdminAccount = user?.role === "admin";
 
   const handleLogoClick = useCallback((e: React.MouseEvent) => {

@@ -102,6 +102,7 @@ import AppInstallBanner from "@/components/app-install-banner";
 import { PushNotificationPrompt } from "@/components/push-notification-prompt";
 import { LoadingScreen } from "@/components/loading-indicator";
 import LandingPage from "@/pages/landing";
+import type { User } from "@shared/schema";
 
 // Redirige immédiatement vers /blocked si l'IP est bloquée (vérif. localStorage)
 // useLayoutEffect + return null = aucun flash de la page login/register
@@ -116,6 +117,24 @@ function BlockGuard({ children }: { children: React.ReactNode }) {
   }, [blockedUntil]);
 
   if (blockedUntil !== null) return null;
+  return <>{children}</>;
+}
+
+function MerchantKycGuard({ children }: { children: React.ReactNode }) {
+  const [, setLocation] = useLocation();
+  const { data: user, isLoading } = useQuery<User>({ queryKey: ["/api/user"] });
+
+  useEffect(() => {
+    if (!isLoading && !user) setLocation("/login");
+    if (!isLoading && user && user.role !== "admin" && !user.isVerified) {
+      setLocation("/dashboard/kyc");
+    }
+  }, [isLoading, user, setLocation]);
+
+  if (isLoading || !user || (user.role !== "admin" && !user.isVerified)) {
+    return <LoadingScreen />;
+  }
+
   return <>{children}</>;
 }
 
@@ -156,11 +175,11 @@ function Router() {
       <Route path="/dashboard/kyc" component={KYCPage} />
       <Route path="/dashboard/kyc-verified" component={KYCVerifiedPage} />
       <Route path="/dashboard/support" component={SupportPage} />
-      <Route path="/dashboard/api-keys" component={ApiKeysPage} />
-      <Route path="/dashboard/direct-api" component={DirectApiPage} />
-      <Route path="/dashboard/hosted-page" component={HostedPageDashboard} />
-      <Route path="/dashboard/hosted-page/keys" component={HostedPageKeys} />
-      <Route path="/dashboard/hosted-page/generate" component={HostedPageGenerate} />
+      <Route path="/dashboard/api-keys"><MerchantKycGuard><ApiKeysPage /></MerchantKycGuard></Route>
+      <Route path="/dashboard/direct-api"><MerchantKycGuard><DirectApiPage /></MerchantKycGuard></Route>
+      <Route path="/dashboard/hosted-page"><MerchantKycGuard><HostedPageDashboard /></MerchantKycGuard></Route>
+      <Route path="/dashboard/hosted-page/keys"><MerchantKycGuard><HostedPageKeys /></MerchantKycGuard></Route>
+      <Route path="/dashboard/hosted-page/generate"><MerchantKycGuard><HostedPageGenerate /></MerchantKycGuard></Route>
       <Route path="/hpay/:id" component={HPayPage} />
       <Route path="/dashboard/settings" component={SettingsPage} />
       <Route path="/dashboard/auto-conversion/sources" component={AutoConversionSourcesPage} />
