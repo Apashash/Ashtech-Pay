@@ -16377,6 +16377,11 @@ export async function registerRoutes(
       }
 
       const callbackUrl = buildWebhookUrl("/api/afribapay/webhook");
+      // Passenger/Plesk may not expose APP_URL to the Node process. AfribaPay
+      // rejects malformed return/cancel URLs with an opaque internal error, so
+      // use the current public request origin as the same fallback as the
+      // payment-link OTP flow.
+      const appBaseUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
       const result = await confirmAfribaPayOtp({
         operator: ctx.operator,
         country: ctx.country,
@@ -16387,8 +16392,8 @@ export async function registerRoutes(
         reference_id: ref,
         otp_code: otpCode,
         notify_url: callbackUrl,
-        return_url: `${process.env.APP_URL}/dashboard/deposit?status=success`,
-        cancel_url: `${process.env.APP_URL}/dashboard/deposit?status=cancelled`,
+        return_url: `${appBaseUrl}/dashboard/deposit?ref=${encodeURIComponent(ref)}&status=success`,
+        cancel_url: `${appBaseUrl}/dashboard/deposit?ref=${encodeURIComponent(ref)}&status=cancelled`,
         lang: "fr",
       });
 

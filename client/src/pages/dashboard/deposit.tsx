@@ -68,6 +68,7 @@ import { useIziAssets, coinLogoUrl, networkLogoUrl } from "@/lib/use-crypto-asse
 import { useCoinPrice } from "@/lib/use-coin-price";
 
 const CRYPTO_COUNTDOWN_SECONDS = 5 * 60;
+const DEPOSIT_COUNTDOWN_SECONDS = 8 * 60;
 
 export default function DepositPage() {
   const { toast } = useToast();
@@ -77,9 +78,10 @@ export default function DepositPage() {
   const [depositReference, setDepositReference] = useState("");
   const [paymentStatus, setPaymentStatus] = useState<"pending" | "success" | "failed">("pending");
   const [failureReason, setFailureReason] = useState<string>("");
-  const [countdown, setCountdown] = useState(8 * 60);
+  const [countdown, setCountdown] = useState(DEPOSIT_COUNTDOWN_SECONDS);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
+  const countdownDeadlineRef = useRef<number | null>(null);
   const [otpRequired, setOtpRequired] = useState(false);
   const [otpType, setOtpType] = useState<"api" | "ussd">("api");
   const [otpUssdCode, setOtpUssdCode] = useState("");
@@ -233,20 +235,31 @@ export default function DepositPage() {
     return "";
   };
 
-  const startDepositPolling = (ref: string) => {
-    setCountdown(8 * 60);
+  const startDepositCountdown = (reset = true) => {
+    if (reset || countdownDeadlineRef.current === null) {
+      countdownDeadlineRef.current = Date.now() + DEPOSIT_COUNTDOWN_SECONDS * 1000;
+    }
     if (countdownRef.current) clearInterval(countdownRef.current);
-    countdownRef.current = setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 1) {
-          if (countdownRef.current) clearInterval(countdownRef.current);
-          if (pollingRef.current) clearInterval(pollingRef.current);
-          setPaymentStatus("failed");
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    const updateCountdown = () => {
+      const deadline = countdownDeadlineRef.current;
+      const remaining = deadline === null
+        ? DEPOSIT_COUNTDOWN_SECONDS
+        : Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+      setCountdown(remaining);
+      if (remaining > 0) return;
+      if (countdownRef.current) clearInterval(countdownRef.current);
+      countdownRef.current = null;
+      if (pollingRef.current) clearInterval(pollingRef.current);
+      setOtpRequired(false);
+      setFailureReason("Le délai de confirmation OTP est expiré. Veuillez recommencer.");
+      setPaymentStatus("failed");
+    };
+    updateCountdown();
+    countdownRef.current = setInterval(updateCountdown, 1000);
+  };
+
+  const startDepositPolling = (ref: string, resetCountdown = true) => {
+    startDepositCountdown(resetCountdown);
 
     if (pollingRef.current) clearInterval(pollingRef.current);
     pollingRef.current = setInterval(async () => {
@@ -313,6 +326,7 @@ export default function DepositPage() {
       setShowValidationMessage(true);
       setDepositReference(ref);
       setPaymentStatus("pending");
+      setFailureReason("");
       setOtpCode("");
       setWaveUrl(null);
       setPawaPayAuth(data.pawaPayAuth || null);
@@ -328,6 +342,7 @@ export default function DepositPage() {
         setOtpRequired(true);
         setOtpType(data.otpType || "api");
         setOtpUssdCode(data.ussdCode || "");
+        startDepositCountdown(true);
       } else {
         setOtpRequired(false);
         startDepositPolling(ref);
@@ -364,7 +379,7 @@ export default function DepositPage() {
     onSuccess: () => {
       setOtpRequired(false);
       toast({ title: t.deposit.otpValidated, description: t.deposit.otpProcessing });
-      startDepositPolling(depositReference);
+      startDepositPolling(depositReference, false);
     },
     onError: (error: Error) => {
       toast({ title: t.deposit.otpErrorTitle, description: error.message, variant: "destructive" });
@@ -436,6 +451,7 @@ export default function DepositPage() {
       if (pollingRef.current) clearInterval(pollingRef.current);
       if (cryptoCountdownRef.current) clearInterval(cryptoCountdownRef.current);
       if (cryptoReadyCountdownRef.current) clearInterval(cryptoReadyCountdownRef.current);
+      countdownDeadlineRef.current = null;
     };
   }, []);
 
@@ -461,6 +477,7 @@ export default function DepositPage() {
     setShowValidationMessage(false);
     setPaymentStatus("pending");
     setDepositReference("");
+    setFailureReason("");
     setOtpRequired(false);
     setOtpCode("");
     setWaveUrl(null);
@@ -469,6 +486,7 @@ export default function DepositPage() {
     setIsCancelling(false);
     if (countdownRef.current) clearInterval(countdownRef.current);
     if (pollingRef.current) clearInterval(pollingRef.current);
+    countdownDeadlineRef.current = null;
     form.reset();
   };
 
@@ -1321,7 +1339,7 @@ export default function DepositPage() {
                         <p className="text-sm text-muted-foreground mt-1">{failureReason || t.deposit.failedDesc}</p>
                       </div>
                       <RefBadge ref_={depositReference} onCopy={copyRef} label={t.deposit.txRef} />
-                      <Button size="lg" className="w-full" onClick={() => { setShowValidationMessage(false); setPaymentStatus("pending"); setDepositReference(""); }} data-testid="button-retry-deposit">
+                      <Button size="lg" className="w-full" onClick={() => { setShowValidationMessage(false); setPaymentStatus("pending"); setFailureReason(""); setDepositReference(""); }} data-testid="button-retry-deposit">
                         {t.deposit.retry}
                       </Button>
                     </>
