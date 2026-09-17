@@ -455,6 +455,15 @@ app.use((req, res, next) => {
           bodyJson.error === "payment_initiation_failed" ||
           bodyJson.error === "provider_invalid_response" ||
           bodyJson.error === "provider_unavailable");
+      // The admin payout route emits only fixed, operator-safe diagnostics
+      // for failures that happen before/around provider dispatch. Preserve
+      // those messages in production instead of replacing them with the
+      // generic internal-error text.
+      const isAdminPendingPayoutFailure =
+        /^\/api\/admin\/pending-payouts\/[^/]+\/execute$/.test(req.path) &&
+        (bodyJson.error === "provider_unavailable" ||
+          bodyJson.error === "database_unavailable" ||
+          bodyJson.error === "payout_preparation_failed");
       // This route only emits fixed, user-safe upload/storage messages. Keep
       // those messages visible so Plesk permission/configuration failures are
       // diagnosable instead of becoming the opaque "server_error".
@@ -476,7 +485,7 @@ app.use((req, res, next) => {
             bodyJson.code === "KYC_SUBMISSION_FAILED"
           )
         );
-      const sanitized = isCryptoApi || isSafeProviderFailure
+      const sanitized = isCryptoApi || isSafeProviderFailure || isAdminPendingPayoutFailure
         ? {
             ...(typeof bodyJson.error === "string" ? { error: bodyJson.error } : { error: "server_error" }),
             ...(typeof bodyJson.message === "string" ? { message: bodyJson.message } : {}),

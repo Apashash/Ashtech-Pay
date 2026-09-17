@@ -14343,12 +14343,14 @@ export async function registerRoutes(
     //                    Never revert to pending_manual when this is true.
     let lockAcquired = false;
     let providerSubmitted = false;
+    let requestedProvider: "afribapay" | "pixpay" | "pawapay" | undefined;
 
     try {
       const { provider } = req.body as { provider: "afribapay" | "pixpay" | "pawapay" };
       if (!provider || !["afribapay","pixpay","pawapay"].includes(provider)) {
         return res.status(400).json({ message: "Fournisseur invalide" });
       }
+      requestedProvider = provider;
 
       const tx = await storage.getTransactionById(txId);
       if (!tx) return res.status(404).json({ message: "Transaction non trouvée" });
@@ -14367,13 +14369,17 @@ export async function registerRoutes(
       // A single SQL UPDATE with a WHERE on status ensures only one request
       // can proceed, even across multiple server instances (PM2, etc.).
       // Any concurrent request gets 0 rows back and is rejected immediately.
-      const locked = await db
-        .update(transactionsTable)
-        .set({ status: "processing" })
-        .where(and(eq(transactionsTable.id, txId), eq(transactionsTable.status, "pending_manual")))
-        .returning({ id: transactionsTable.id });
+      // Use the storage claim helper instead of calling `.returning()` here.
+      // The Plesk deployment uses MySQL, where Drizzle's PostgreSQL-style
+      // returning builder is not available and would throw before the provider
+      // request is even reached. The helper has dialect-specific readback logic.
+      const locked = await storage.claimTransactionStatus(
+        txId,
+        "processing",
+        ["pending_manual"],
+      );
 
-      if (locked.length === 0) {
+      if (!locked) {
         return res.status(409).json({ message: "Transaction déjà en cours d'exécution ou statut incorrect" });
       }
       lockAcquired = true; // status is now "processing" — catch must revert on pre-submit errors
@@ -14589,8 +14595,45 @@ export async function registerRoutes(
       } else if (providerSubmitted) {
         console.warn(`[Admin] Post-submit error (payout already dispatched, keeping processing): ${error.message}`);
       }
-      console.error("Admin execute pending-payout error:", error.message);
-      res.status(500).json({ message: "Erreur serveur" });
+      const rawErrorMessage = typeof error?.message === "string" ? error.message : "";
+      const lowerErrorMessage = rawErrorMessage.toLowerCase();
+      const isDatabaseFailure =
+        /^er_[a-z0-9_]+$/i.test(String(error?.code || "")) ||
+        lowerErrorMessage.includes("failed query") ||
+        lowerErrorMessage.includes("database") ||
+        lowerErrorMessage.includes("mysql") ||
+        lowerErrorMessage.includes("postgres") ||
+        lowerErrorMessage.includes("connect econnrefused");
+      const isProviderNetworkFailure =
+        lowerErrorMessage.includes("fetch") ||
+        lowerErrorMessage.includes("network") ||
+        lowerErrorMessage.includes("timeout") ||
+        lowerErrorMessage.includes("enotfound") ||
+        lowerErrorMessage.includes("eai_again") ||
+        lowerErrorMessage.includes("econnreset");
+
+      console.error("Admin execute pending-payout error:", error);
+      if (isDatabaseFailure) {
+        return res.status(503).json({
+          error: "database_unavailable",
+          message: "La base de données est temporairement indisponible. La transaction reste en attente; réessayez plus tard.",
+        });
+      }
+      if (isProviderNetworkFailure && requestedProvider) {
+        const providerLabel = requestedProvider === "afribapay"
+          ? "AfribaPay"
+          : requestedProvider === "pixpay"
+            ? "PixPay"
+            : "PawaPay";
+        return res.status(503).json({
+          error: "provider_unavailable",
+          message: `${providerLabel} est temporairement indisponible. La transaction reste en attente; réessayez plus tard.`,
+        });
+      }
+      return res.status(500).json({
+        error: "payout_preparation_failed",
+        message: "Impossible de préparer cette soumission. La transaction reste en attente; consultez les journaux serveur.",
+      });
     } finally {
       // Always release the in-memory guard, even on error.
       executingPayouts.delete(txId);

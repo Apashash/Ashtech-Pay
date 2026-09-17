@@ -740,13 +740,20 @@ export class DatabaseStorage implements IStorage {
     const updateData: Record<string, any> = { status };
     if (status === "completed") updateData.confirmedAt = new Date();
     if (isMysqlDialect) {
-      const current = await db.select().from(transactions)
-        .where(and(eq(transactions.id, id), inArray(transactions.status, allowedFrom)))
-        .limit(1);
-      if (current.length === 0) return undefined;
-      await db.update(transactions)
+      // UPDATE ... WHERE status=... is the atomic claim. Do not SELECT first:
+      // two workers can otherwise both observe the old status and continue.
+      const updateResult = await db.update(transactions)
         .set(updateData)
         .where(and(eq(transactions.id, id), inArray(transactions.status, allowedFrom)));
+      const resultHeader = Array.isArray(updateResult) ? (updateResult as any)[0] : updateResult as any;
+      const affectedRows = resultHeader?.affectedRows
+        ?? resultHeader?.rowsAffected
+        ?? resultHeader?.rowCount
+        ?? resultHeader?.changes;
+      // MySQL drivers expose affectedRows/rowsAffected. Fail closed if a
+      // dialect adapter returns no row-count metadata rather than risking a
+      // duplicate provider submission.
+      if (affectedRows === undefined || Number(affectedRows) === 0) return undefined;
       return this.getTransactionById(id);
     }
     const [transaction] = await db
