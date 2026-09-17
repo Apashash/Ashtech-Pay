@@ -21,8 +21,8 @@ For wallet creation on imported Plesk schemas, prefer the existing native MySQL 
 
 **How to apply:** Validate the currency and ownership first, then use the MySQL `INSERT ... ON DUPLICATE KEY UPDATE` path with an explicit `updated_at` value and return the selected wallet.
 
-Raw Drizzle MySQL `db.execute()` SELECTs resolve to the rows array directly, while PostgreSQL resolves to an object containing `rows`; normalize the result before mapping it.
+In this project, PostgreSQL `db.execute()` resolves to an object containing `rows`, while Drizzle backed by the raw mysql2 pool can resolve SELECTs as `[rows, fields]`; normalize the result before mapping it.
 
-**Why:** Assuming the PostgreSQL `{ rows }` shape caused the admin merchant API endpoint to throw in MySQL production and the UI to appear empty.
+**Why:** Treating the MySQL2 tuple as the row list made the admin merchant API return exactly two blank pseudo-users instead of the real user rows.
 
-**How to apply:** Keep dialect-specific result normalization beside raw SQL routes, and surface query failures instead of defaulting data to an empty list.
+**How to apply:** Unwrap the first tuple element when it is an array, support a direct rows array for adapter variations, and surface query failures instead of defaulting data to an empty list.

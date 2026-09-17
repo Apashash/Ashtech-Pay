@@ -18454,13 +18454,18 @@ export async function registerRoutes(
             `,
       );
 
-      // Drizzle's PostgreSQL adapter returns { rows }, while its MySQL adapter
-      // returns the selected rows array directly. Normalize both shapes here;
-      // otherwise MySQL production requests fail and the admin UI incorrectly
-      // displays an empty merchant list.
-      const selectedRows = isMysqlDialect
-        ? (Array.isArray(rows) ? rows : (rows as any).rows || [])
-        : ((rows as any).rows || []);
+       // PostgreSQL returns { rows }. With the raw mysql2 pool used by Drizzle,
+       // SELECT execution returns [rows, fields]. Some adapters can return the
+       // rows array directly, so handle both forms without treating the tuple
+       // itself as two merchant records.
+       const mysqlResult = rows as any;
+       const selectedRows = isMysqlDialect
+         ? (
+             Array.isArray(mysqlResult)
+               ? (Array.isArray(mysqlResult[0]) ? mysqlResult[0] : mysqlResult)
+               : (Array.isArray(mysqlResult?.rows) ? mysqlResult.rows : [])
+           )
+         : ((mysqlResult?.rows || []) as any[]);
       const result = (selectedRows as any[]).map(row => ({
         id: row.id,
         fullName: row.full_name || row.username || row.email || "Marchand sans nom",
