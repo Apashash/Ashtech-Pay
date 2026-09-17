@@ -4813,7 +4813,16 @@ export async function registerRoutes(
           .map(w => ({ currency: w.currency, balance: w.balance, symbol: CURRENCY_SYMBOLS[w.currency as SupportedCurrency] || w.currency })),
       ];
 
-      const row = (txStats.rows?.[0] || {}) as Record<string, any>;
+      // PostgreSQL returns a QueryResult with `.rows`; Drizzle's MySQL
+      // execute() returns the selected rows directly as an array. Normalize
+      // both shapes so dashboard counters match the transaction history.
+      const txStatsResult = txStats as any;
+      const txStatsRows = Array.isArray(txStatsResult)
+        ? txStatsResult
+        : Array.isArray(txStatsResult?.rows)
+          ? txStatsResult.rows
+          : [];
+      const row = (txStatsRows[0] || {}) as Record<string, any>;
       const stats = {
         totalReceived: parseFloat(row.total_received || "0").toFixed(2),
         totalSent: parseFloat(row.total_sent || "0").toFixed(2),
