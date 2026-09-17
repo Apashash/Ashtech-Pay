@@ -89,6 +89,59 @@ const SETTINGS_URLS = [
   { key: "fees", url: "/dashboard/fee-details", icon: Receipt, imageSrc: "/sidebar-icons/fees.png", color: "bg-amber-500/10 text-amber-500" },
 ] as const;
 
+const SIDEBAR_ROUTE_LOADERS: Record<string, () => Promise<unknown>> = {
+  "/dashboard": () => import("@/pages/dashboard/index"),
+  "/dashboard/links": () => import("@/pages/dashboard/links"),
+  "/dashboard/transactions": () => import("@/pages/dashboard/transactions"),
+  "/dashboard/deposit": () => import("@/pages/dashboard/deposit"),
+  "/dashboard/withdraw": () => import("@/pages/dashboard/withdraw"),
+  "/dashboard/send": () => import("@/pages/dashboard/send"),
+  "/dashboard/wallets": () => import("@/pages/dashboard/wallets"),
+  "/dashboard/kyc": () => import("@/pages/dashboard/kyc"),
+  "/dashboard/support": () => import("@/pages/dashboard/support"),
+  "/dashboard/api-keys": () => import("@/pages/dashboard/api-keys"),
+  "/dashboard/settings": () => import("@/pages/dashboard/settings"),
+  "/dashboard/fee-details": () => import("@/pages/dashboard/fee-details"),
+  "/dashboard/kyc-verified": () => import("@/pages/dashboard/kyc-verified"),
+};
+
+const SIDEBAR_ROUTE_QUERY_KEYS: Record<string, string[]> = {
+  "/dashboard": ["/api/dashboard"],
+  "/dashboard/links": ["/api/payment-links", "/api/transactions", "/api/payment-intents", "/api/public/deposit-config"],
+  "/dashboard/transactions": ["/api/transactions", "/api/wallets", "/api/public/deposit-config"],
+  "/dashboard/deposit": ["/api/wallets", "/api/transfers/config?type=deposit"],
+  "/dashboard/withdraw": ["/api/wallets", "/api/withdrawal-numbers", "/api/transfers/config?type=withdrawal", "/api/public/otp-email-status"],
+  "/dashboard/send": ["/api/wallets", "/api/transfers/config", "/api/public/limits", "/api/public/otp-email-status"],
+  "/dashboard/wallets": ["/api/wallets", "/api/transactions"],
+  "/dashboard/kyc": ["/api/kyc"],
+  "/dashboard/support": ["/api/public/support-contact", "/api/tickets/stats", "/api/tickets"],
+  "/dashboard/settings": ["/api/user/sessions"],
+  "/dashboard/fee-details": ["/api/public/fees", "/api/public/countries", "/api/public/operators"],
+};
+
+function preloadDashboardRoute(url: string, prefetchData = false) {
+  const loader = SIDEBAR_ROUTE_LOADERS[url];
+  if (loader) void loader().catch(() => {});
+
+  if (!prefetchData) return;
+  for (const queryKey of SIDEBAR_ROUTE_QUERY_KEYS[url] || []) {
+    void queryClient.prefetchQuery({ queryKey: [queryKey] }).catch(() => {});
+  }
+}
+
+function DashboardNavLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      onPointerEnter={() => preloadDashboardRoute(href)}
+      onFocus={() => preloadDashboardRoute(href)}
+      onPointerDown={() => preloadDashboardRoute(href, true)}
+    >
+      {children}
+    </Link>
+  );
+}
+
 function SidebarIconBadge({ icon: Icon, imageSrc, color, className = "" }: { icon: React.ComponentType<{ className?: string }>; imageSrc?: string; color: string; className?: string }) {
   return (
     <span className={`flex items-center justify-center w-7 h-7 rounded-lg shrink-0 ${color} ${className}`}>
@@ -177,6 +230,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const handleKycClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    preloadDashboardRoute("/dashboard/kyc-verified", true);
     setLocation("/dashboard/kyc-verified");
   };
 
@@ -340,10 +394,10 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                   {menuItems.map((item) => (
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton asChild isActive={location === item.url} className="h-11 rounded-xl gap-3 text-sm font-semibold group-data-[collapsible=icon]:h-9!">
-                        <Link href={item.url}>
+                        <DashboardNavLink href={item.url}>
                           <SidebarIconBadge icon={item.icon} imageSrc={item.imageSrc} color={item.color} />
                           <span>{item.title}</span>
-                        </Link>
+                        </DashboardNavLink>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   ))}
@@ -381,13 +435,13 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                       return (
                         <SidebarMenuItem key={item.title}>
                           <SidebarMenuButton asChild isActive={location === item.url} className="h-11 rounded-xl gap-3 text-sm font-semibold group-data-[collapsible=icon]:h-9!">
-                            <Link href={item.url}>
+                            <DashboardNavLink href={item.url}>
                               <SidebarIconBadge icon={item.icon} imageSrc={item.imageSrc} color="bg-amber-500/10 text-amber-600 dark:text-amber-400" />
                               <span className="flex-1">{item.title}</span>
                               <Badge className="ml-auto bg-amber-500 text-white h-5 px-1.5 text-xs">
                                 {t.sidebar.pending}
                               </Badge>
-                            </Link>
+                            </DashboardNavLink>
                           </SidebarMenuButton>
                         </SidebarMenuItem>
                       );
@@ -397,14 +451,14 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                       return (
                         <SidebarMenuItem key={item.title}>
                           <SidebarMenuButton asChild isActive={location === item.url} className="h-11 rounded-xl gap-3 text-sm font-semibold group-data-[collapsible=icon]:h-9!">
-                            <Link href={item.url}>
+                            <DashboardNavLink href={item.url}>
                               <SidebarIconBadge icon={item.icon} imageSrc={item.imageSrc} color="bg-red-500/10 text-red-500" className="animate-bell-ring" />
                               <span className="flex-1 text-red-500 font-semibold">{item.title}</span>
                               <span className="relative ml-auto flex h-2 w-2">
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
                                 <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500" />
                               </span>
-                            </Link>
+                            </DashboardNavLink>
                           </SidebarMenuButton>
                         </SidebarMenuItem>
                       );
@@ -413,7 +467,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                     return (
                       <SidebarMenuItem key={item.title}>
                         <SidebarMenuButton asChild isActive={location === item.url} className="h-11 rounded-xl gap-3 text-sm font-semibold group-data-[collapsible=icon]:h-9!">
-                          <Link href={item.url}>
+                          <DashboardNavLink href={item.url}>
                             <SidebarIconBadge icon={item.icon} imageSrc={item.imageSrc} color={item.color} />
                             <span className="flex-1">{item.title}</span>
                             {badgeCount > 0 && (
@@ -421,7 +475,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                                 {badgeCount > 9 ? "9+" : badgeCount}
                               </Badge>
                             )}
-                          </Link>
+                          </DashboardNavLink>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
                     );
