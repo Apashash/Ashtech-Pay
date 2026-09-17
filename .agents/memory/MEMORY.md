@@ -1,4 +1,5 @@
 - [Admin TOTP mandatory](admin-totp-mandatory.md) — TOTP now enforced server-side in requireAdmin AND at login; no bypass possible; both OTP pages had disabled redirects that were removed.
+- [Operator fee disable priority](operator-fee-disable-priority.md) — inactive operator-specific fees must block listings and payment initiation before country/global fee fallback.
 - [KYC guard trigger pgBouncer bug](kyc-guard-trigger.md) — sensitive-column guard trigger blocked is_verified updates on pgBouncer/Supavisor (application_name reset); fix: removed is_verified from blocked columns.
 - [MySQL mutation readbacks](mysql-returning-readback.md) — Drizzle MySQL mutations need explicit insert/update then SELECT readbacks instead of PostgreSQL-style returning results.
 - [MySQL KYC update readback](kyc-mysql-returning.md) — KYC mutations must use MySQL update-then-readback, never PostgreSQL-only RETURNING.

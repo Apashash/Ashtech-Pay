@@ -5288,6 +5288,14 @@ export async function registerRoutes(
     }
   });
 
+  // An operator-specific inactive fee is the admin's operational disable switch.
+  // It must win over country/global fee fallbacks so the operator disappears
+  // consistently from deposits, withdrawals, transfers, and payment links.
+  const isOperatorDisabledByFee = (
+    allFees: Array<{ operatorId: string | null; isActive: boolean | null }>,
+    operatorId: string,
+  ) => allFees.some(fee => fee.operatorId === operatorId && fee.isActive === false);
+
   // Get transfer configuration (countries, operators, fees)
   app.get("/api/transfers/config", requireAuth, async (req, res) => {
     try {
@@ -5303,7 +5311,12 @@ export async function registerRoutes(
       // Build config with operators per country and their fees
       const config = countries.map(country => {
         const countryOperators = allOperators
-          .filter(op => op.countryId === country.id && op.isActive && !op.isInMaintenance)
+          .filter(op =>
+            op.countryId === country.id &&
+            op.isActive &&
+            !op.isInMaintenance &&
+            !isOperatorDisabledByFee(allFees, op.id)
+          )
           .map(op => {
             // Find operator-specific fee first
             let operatorFee = allFees.find(
@@ -5394,6 +5407,10 @@ export async function registerRoutes(
       const operator = await storage.getOperator(operatorId);
       if (!operator) {
         return res.status(404).json({ message: "Opérateur non trouvé" });
+      }
+      const allFees = await storage.getAllFees();
+      if (isOperatorDisabledByFee(allFees, operator.id)) {
+        return res.status(400).json({ message: "Cet opérateur est actuellement indisponible." });
       }
 
       const provider = (operator as any).paymentProvider;
@@ -5565,6 +5582,10 @@ export async function registerRoutes(
       const operator = await storage.getOperator(operatorId);
       if (!operator) {
         return res.status(404).json({ message: "Opérateur non trouvé" });
+      }
+      const allFees = await storage.getAllFees();
+      if (isOperatorDisabledByFee(allFees, operator.id)) {
+        return res.status(400).json({ message: "Cet opérateur est actuellement indisponible." });
       }
 
       const country = await storage.getCountry(countryId);
@@ -6171,6 +6192,10 @@ export async function registerRoutes(
         if (!operatorRecord || operatorRecord.countryId !== depositCountry.id ||
             !operatorRecord.isActive || operatorRecord.isInMaintenance) {
           return res.status(400).json({ message: "Opérateur invalide pour le pays sélectionné." });
+        }
+        const allFees = await storage.getAllFees();
+        if (isOperatorDisabledByFee(allFees, operatorRecord.id)) {
+          return res.status(400).json({ message: "Cet opérateur est actuellement indisponible." });
         }
         const minDeposit = parseFloat(String(depositCountry.minDeposit ?? 100));
         const maxDeposit = parseFloat(String(depositCountry.maxDeposit ?? 5000000));
@@ -6861,6 +6886,10 @@ export async function registerRoutes(
           !withdrawalOperator.isActive ||
           withdrawalOperator.isInMaintenance) {
         return res.status(400).json({ message: "Opérateur invalide pour le pays sélectionné." });
+      }
+      const allFees = await storage.getAllFees();
+      if (isOperatorDisabledByFee(allFees, withdrawalOperator.id)) {
+        return res.status(400).json({ message: "Cet opérateur est actuellement indisponible." });
       }
       const withdrawalProvider = withdrawalOperator?.paymentProvider;
       if (withdrawalProvider !== "afribapay" && withdrawalProvider !== "pixpay" && withdrawalProvider !== "pawapay") {
@@ -9058,7 +9087,12 @@ export async function registerRoutes(
       
       const config = countries.map(country => {
         const countryOperators = allOperators
-          .filter(op => op.countryId === country.id && op.isActive && !op.isInMaintenance)
+          .filter(op =>
+            op.countryId === country.id &&
+            op.isActive &&
+            !op.isInMaintenance &&
+            !isOperatorDisabledByFee(allFees, op.id)
+          )
           .map(op => {
             let operatorFee = allFees.find(
               f => f.operatorId === op.id && f.transactionType === "deposit" && f.isActive
@@ -9202,7 +9236,12 @@ export async function registerRoutes(
       if (!country) return res.json([]);
 
       const operators = allOperators
-        .filter(op => op.countryId === country.id && op.isActive && !op.isInMaintenance)
+        .filter(op =>
+          op.countryId === country.id &&
+          op.isActive &&
+          !op.isInMaintenance &&
+          !isOperatorDisabledByFee(allFees, op.id)
+        )
         .filter(op => {
           const hasOperatorFee = allFees.some(f => f.operatorId === op.id && f.transactionType === "withdrawal" && f.isActive);
           const hasCountryFee = allFees.some(f => !f.operatorId && f.countryId === country.id && f.transactionType === "withdrawal" && f.isActive);
@@ -9236,7 +9275,12 @@ export async function registerRoutes(
       if (!country) return res.json([]);
 
       const operators = allOperators
-        .filter(op => op.countryId === country.id && op.isActive && !op.isInMaintenance)
+        .filter(op =>
+          op.countryId === country.id &&
+          op.isActive &&
+          !op.isInMaintenance &&
+          !isOperatorDisabledByFee(allFees, op.id)
+        )
         .filter(op => {
           const hasOperatorFee = allFees.some(f => f.operatorId === op.id && f.transactionType === "withdrawal" && f.isActive);
           const hasCountryFee = allFees.some(f => !f.operatorId && f.countryId === country.id && f.transactionType === "withdrawal" && f.isActive);
@@ -9261,7 +9305,12 @@ export async function registerRoutes(
       const config = countries.map(country => {
         // Get operators with withdrawal fees configured
         const countryOperators = allOperators
-          .filter(op => op.countryId === country.id && op.isActive && !op.isInMaintenance)
+          .filter(op =>
+            op.countryId === country.id &&
+            op.isActive &&
+            !op.isInMaintenance &&
+            !isOperatorDisabledByFee(allFees, op.id)
+          )
           .filter(op => {
             // Check if this operator has a withdrawal fee
             const hasOperatorFee = allFees.some(
@@ -17177,16 +17226,22 @@ export async function registerRoutes(
       if (!country) return res.status(422).json({ error: "unprocessable", message: `Pays non supporté : ${country_code}` });
 
       // ── Find operator ──────────────────────────────────────────────────────
-      const countryOps = await storage.getOperatorsByCountry(country.id);
+       const allFees = await storage.getAllFees();
+       const countryOps = await storage.getOperatorsByCountry(country.id);
        const operatorRecord = countryOps.find(
          (o: any) =>
            o.name.toLowerCase() === operatorName.toLowerCase() &&
            o.isActive &&
-           !o.isInMaintenance
+            !o.isInMaintenance &&
+            !isOperatorDisabledByFee(allFees, o.id)
        );
       if (!operatorRecord) {
          const available = countryOps
-           .filter((o: any) => o.isActive && !o.isInMaintenance)
+            .filter((o: any) =>
+              o.isActive &&
+              !o.isInMaintenance &&
+              !isOperatorDisabledByFee(allFees, o.id)
+            )
            .map((o: any) => o.name)
            .join(", ");
         return res.status(422).json({
@@ -18183,6 +18238,7 @@ export async function registerRoutes(
        // canonical ISO country codes. This prevents links from targeting
        // removed countries or countries without a usable provider.
        const activeCountries = await storage.getActiveCountries();
+       const allFees = await storage.getAllFees();
        const countriesWithOperators = await Promise.all(activeCountries.map(async (country) => {
          const operators = await storage.getOperatorsByCountry(country.id);
          return {
@@ -18191,6 +18247,7 @@ export async function registerRoutes(
              const provider = operator.depositPaymentProvider || operator.paymentProvider;
              return operator.isActive &&
                !operator.isInMaintenance &&
+                !isOperatorDisabledByFee(allFees, operator.id) &&
                (provider === "afribapay" || provider === "pixpay" || provider === "pawapay");
            }),
          };
@@ -18375,6 +18432,10 @@ export async function registerRoutes(
       if (!country) return res.status(400).json({ error: "invalid_country" });
       const operator = await storage.getOperator(operatorId);
       if (!operator) return res.status(400).json({ error: "invalid_operator" });
+      const allFees = await storage.getAllFees();
+      if (isOperatorDisabledByFee(allFees, operator.id)) {
+        return res.status(400).json({ error: "invalid_operator", message: "Opérateur actuellement indisponible." });
+      }
         if (!country.isActive || country.isActiveForDeposit === false) {
           return res.status(400).json({ error: "inactive_country" });
         }
