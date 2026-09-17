@@ -321,7 +321,7 @@ export async function notifyNewDeposit(opts: {
   const payerPays = opts.country ? countryDisplay(opts.country) : countryDisplay(opts.currency);
   const beneficiaryPays = opts.userCountry ? countryDisplay(opts.userCountry) : "";
   const hasGross = opts.grossAmount != null && String(opts.grossAmount) !== String(opts.amount);
-  const sourceLabel = opts.source === "api" ? "🔌 <b>Paiement via API</b>\n" : opts.source === "hosted_page" ? "🖥️ <b>Page de paiement hébergée (API)</b>\n" : "";
+  const sourceLabel = opts.source === "api" ? "🔌 <b>Paiement via API</b>\n" : opts.source === "hosted_page" ? "🖥️ <b>Paiement Checkout Hosted Page</b>\n" : "";
   const msg =
     `${isPawaPay(opts.provider) ? "⏳ <b>PAWAPAY — DÉPÔT EN ATTENTE</b>" : "🟡 <b>NOUVEAU DÉPÔT EN ATTENTE</b>"}\n` +
     `──────────────────\n` +
@@ -382,9 +382,9 @@ export async function notifyDepositConfirmed(opts: {
   const beneficiaryPays = opts.userCountry ? countryDisplay(opts.userCountry) : "";
   const hasGross = opts.grossAmount != null && String(opts.grossAmount) !== String(opts.amount);
   const isLink = opts.depositType === "payment_link";
-  const typeLabel = isLink ? "Lien de paiement" : "Dépôt normal";
+  const typeLabel = opts.source === "hosted_page" ? "Checkout Hosted Page" : isLink ? "Lien de paiement" : "Dépôt normal";
   const methodLabel = opts.paymentMethod === "mobile_money" ? "Mobile Money" : opts.paymentMethod || "";
-  const sourceLabel = opts.source === "api" ? "🔌 <b>Paiement via API</b>\n" : opts.source === "hosted_page" ? "🖥️ <b>Page de paiement hébergée (API)</b>\n" : "";
+  const sourceLabel = opts.source === "api" ? "🔌 <b>Paiement via API</b>\n" : opts.source === "hosted_page" ? "🖥️ <b>Paiement Checkout Hosted Page</b>\n" : "";
   const payerPhone = isLink ? (opts.payerPhone || opts.phone) : opts.phone;
   const payerName = isLink ? opts.payerName : undefined;
   const payerEmail = isLink ? opts.payerEmail : undefined;
@@ -454,7 +454,7 @@ export async function notifyDepositFailed(opts: {
   const isLink = opts.depositType === "payment_link";
   const typeLabel = isLink ? "Lien de paiement" : "Dépôt normal";
   const methodLabel = opts.paymentMethod === "mobile_money" ? "Mobile Money" : opts.paymentMethod || "";
-  const sourceLabel = opts.source === "api" ? "🔌 <b>Paiement via API</b>\n" : opts.source === "hosted_page" ? "🖥️ <b>Page de paiement hébergée (API)</b>\n" : "";
+  const sourceLabel = opts.source === "api" ? "🔌 <b>Paiement Checkout Hosted Page</b>\n" : opts.source === "hosted_page" ? "🖥️ <b>Paiement Checkout Hosted Page</b>\n" : "";
   const msg =
     `❌ <b>ÉCHEC DE PAIEMENT (DÉPÔT)</b>\n` +
     `──────────────────\n` +
