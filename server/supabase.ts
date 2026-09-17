@@ -1,7 +1,6 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
 export let supabase: SupabaseClient | null = null;
-let initializationAttempted = false;
 
 export type SupabaseConfigurationIssue =
   | "SUPABASE_URL_MISSING"
@@ -28,8 +27,11 @@ export function getSupabaseConfigurationIssue(): SupabaseConfigurationIssue | nu
 }
 
 export function getSupabaseClient(): SupabaseClient | null {
-  if (supabase || initializationAttempted) return supabase;
-  initializationAttempted = true;
+  // Only cache a successfully initialized client. Passenger/Plesk can expose
+  // environment variables after the first request during a cold bootstrap;
+  // caching a missing/invalid configuration would make that first transient
+  // failure permanent until the process is restarted.
+  if (supabase) return supabase;
 
   const supabaseUrl = process.env.SUPABASE_URL?.trim();
   const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
