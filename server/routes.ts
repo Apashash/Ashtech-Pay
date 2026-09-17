@@ -372,17 +372,18 @@ async function reconcilePawaPayIncomingAttempt(transaction: any): Promise<"compl
   return "unresolved";
 }
 
-// UPLOADS_DIR env var allows a persistent path outside the deployment folder (e.g. on Plesk).
-// On Plesk, the application often runs from httpdocs with a read-only deployment
-// directory, so default to a sibling upload_data directory instead of trying to
-// write inside httpdocs. The route still serves files through /uploads/:name.
+// IMAGEPRO_DIR (or the legacy UPLOADS_DIR) allows a persistent image path outside
+// the deployment folder (e.g. on Plesk). On Plesk, the application often runs
+// from httpdocs with a read-only deployment directory, so default to a sibling
+// imagepro directory. The route still serves files through /uploads/:name.
 const uploadApplicationRoot = appPath();
 const uploadIsHttpdocsRoot = path.basename(uploadApplicationRoot).toLowerCase() === "httpdocs";
-const uploadsDir = process.env.UPLOADS_DIR
-  ? path.resolve(process.env.UPLOADS_DIR)
+const configuredImageDirectory = process.env.IMAGEPRO_DIR?.trim() || process.env.UPLOADS_DIR?.trim();
+const uploadsDir = configuredImageDirectory
+  ? path.resolve(configuredImageDirectory)
   : process.env.NODE_ENV === "production" && uploadIsHttpdocsRoot
-    ? path.resolve(uploadApplicationRoot, "..", "upload_data")
-    : appPath("uploads");
+    ? path.resolve(uploadApplicationRoot, "..", "imagepro")
+    : appPath("imagepro");
 function prepareStorageDirectory(directory: string, label: string): boolean {
   try {
     if (!fs.existsSync(directory)) {
@@ -2966,15 +2967,15 @@ export async function registerRoutes(
       const storageMessage = uploadError.code === "EACCES" || uploadError.code === "EPERM"
         ? isKycUpload
           ? "L'utilisateur Node.js n'a pas les droits d'écriture sur le stockage privé KYC."
-          : "L'utilisateur Node.js n'a pas les droits d'écriture sur le dossier d'images. Configurez UPLOADS_DIR vers un dossier persistant accessible par Node.js."
+          : "L'utilisateur Node.js n'a pas les droits d'écriture sur le dossier imagepro. Vérifiez ses permissions ou configurez IMAGEPRO_DIR vers un dossier persistant accessible par Node.js."
         : uploadError.code === "ENOENT"
           ? isKycUpload
             ? "Le chemin du stockage privé KYC est introuvable. Vérifiez PRIVATE_DOCUMENTS_ROOT."
-            : "Le dossier d'images est introuvable. Vérifiez UPLOADS_DIR et les droits du dossier."
+            : "Le dossier imagepro est introuvable. Vérifiez IMAGEPRO_DIR et les droits du dossier."
           : uploadError.code === "EROFS"
             ? isKycUpload
               ? "Le stockage privé KYC est en lecture seule sur le serveur."
-              : "Le dossier d'images est en lecture seule sur le serveur."
+              : "Le dossier imagepro est en lecture seule sur le serveur."
             : uploadError.code === "KYC_ENCRYPTION_NOT_CONFIGURED"
               ? "La clé de chiffrement des documents KYC n'est pas configurée sur le serveur."
               : isKycDatabaseError
