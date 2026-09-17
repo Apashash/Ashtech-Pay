@@ -25,6 +25,14 @@ let vapidConfig: VapidConfig | null | undefined;
 
 const PUSH_CTA = "Appuyez pour consulter votre compte.";
 
+// These outcomes remain available in the in-app notification center, but do
+// not generate a browser push alert. Failed withdrawals/transfers already
+// restore the balance and are intentionally less disruptive to the user.
+const PUSH_DISABLED_NOTIFICATION_TYPES = new Set([
+  "withdrawal_failed",
+  "transfer_failed",
+]);
+
 function toBase64Url(value: Buffer): string {
   return value.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
@@ -244,6 +252,10 @@ function decryptSubscription(subscription: PushSubscription): PushSubscription |
 }
 
 export async function sendPushNotification(userId: string, payload: BrowserPushPayload): Promise<void> {
+  if (payload.type && PUSH_DISABLED_NOTIFICATION_TYPES.has(payload.type)) {
+    return;
+  }
+
   if (!configureWebPush()) return;
 
   const pushPayload = await hydrateIncomingPaymentPayload(payload);
