@@ -74,4 +74,4 @@
 - [Supabase Storage on Plesk](supabase-plesk-storage.md) — “Storage not configured” happens before bucket access when the Node process cannot see SUPABASE_URL or the service-role key.
 - [Supabase Node WebSocket transport](supabase-node-websocket.md) — Node.js 20 needs the installed `ws` constructor passed as Supabase Realtime transport before the Storage client can initialize.
 - [Local MySQL workflow](local-mysql-workflow.md) — auxiliary MariaDB startup must use a dedicated port variable and preserve Replit's HTTP `PORT`.
-- [MySQL timestamp timezone](mysql-timestamp-timezone.md) — force MySQL sessions to UTC and format user-facing dates in Africa/Douala to avoid future or shifted times.
+- [MySQL timestamp timezone](mysql-timestamp-timezone.md) — force MySQL sessions to UTC and display user-facing dates in the user's real device timezone.

@@ -22,14 +22,29 @@ interface Notification {
   createdAt: string | null;
 }
 
-const NOTIFICATION_TIME_ZONE = "Africa/Douala";
+const DEFAULT_NOTIFICATION_TIME_ZONE = "Africa/Douala";
 
-function formatNotificationDate(value: string, language: string): string {
+function getNotificationTimeZone(country?: string | null): string {
+  try {
+    const browserTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (browserTimeZone) return browserTimeZone;
+  } catch {
+    // Fall back to the country profile below.
+  }
+
+  const normalizedCountry = country?.trim().toLowerCase();
+  if (normalizedCountry === "cameroun" || normalizedCountry === "cameroon") {
+    return "Africa/Douala";
+  }
+  return DEFAULT_NOTIFICATION_TIME_ZONE;
+}
+
+function formatNotificationDate(value: string, language: string, timeZone: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
 
   const parts = new Intl.DateTimeFormat(language === "fr" ? "fr-FR" : "en-US", {
-    timeZone: NOTIFICATION_TIME_ZONE,
+    timeZone,
     day: "2-digit",
     month: "short",
     hour: "2-digit",
@@ -56,6 +71,7 @@ export default function NotificationsPage() {
 
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const preferredCurrency = user?.preferredCurrency || "XAF";
+  const notificationTimeZone = getNotificationTimeZone(user?.country);
 
   const { data: notificationData, isLoading } = useQuery<{
     notifications: Notification[];
@@ -296,7 +312,7 @@ export default function NotificationsPage() {
 
                       {notif.createdAt && (
                         <p className="text-xs text-muted-foreground/70 mt-1.5">
-                          {formatNotificationDate(notif.createdAt, language)}
+                          {formatNotificationDate(notif.createdAt, language, notificationTimeZone)}
                         </p>
                       )}
                     </div>
