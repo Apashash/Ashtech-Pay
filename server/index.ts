@@ -464,7 +464,8 @@ app.use((req, res, next) => {
           (
             bodyJson.code === "KYC_STORAGE_UNAVAILABLE" ||
             bodyJson.code === "KYC_DATABASE_UNAVAILABLE" ||
-            bodyJson.code === "UPLOAD_FAILED"
+              bodyJson.code === "UPLOAD_FAILED" ||
+              bodyJson.code === "UPLOADS_STORAGE_UNAVAILABLE"
           )
         ) ||
         (
