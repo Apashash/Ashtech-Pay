@@ -34,7 +34,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { formatCurrency, formatWalletBalance } from "@/lib/currency";
 import { useUpload } from "@/hooks/use-upload";
 import { useLanguage } from "@/lib/language";
-import { getUploadErrorMessage, preparePaymentLinkImage } from "@/lib/payment-link-image";
+import { uploadPaymentLinkImage } from "@/lib/payment-link-image";
 
 const countryCodeMap: Record<string, string> = {
   "Cameroon": "cm",
@@ -106,20 +106,7 @@ function CreateLinkDialog({ open, onClose }: { open: boolean; onClose: () => voi
   };
 
   const uploadImage = async (file: File): Promise<string> => {
-    const uploadFile = await preparePaymentLinkImage(file);
-    const formData = new FormData();
-    formData.append("file", uploadFile);
-    const response = await fetch("/api/uploads/file", {
-      method: "POST",
-      credentials: "include",
-      headers: getAuthHeaders(),
-      body: formData,
-    });
-    if (!response.ok) {
-      throw new Error(await getUploadErrorMessage(response, "Échec de l'upload"));
-    }
-    const result = await response.json();
-    return result.url || result.objectPath;
+    return uploadPaymentLinkImage(file, getAuthHeaders(), "Échec de l'upload");
   };
 
   const createMutation = useMutation({
@@ -489,20 +476,7 @@ function EditLinkDialog({ link, onClose, userCurrency }: {
   };
 
   const uploadImage = async (file: File): Promise<string> => {
-    const uploadFile = await preparePaymentLinkImage(file);
-    const formData = new FormData();
-    formData.append("file", uploadFile);
-    const response = await fetch("/api/uploads/file", {
-      method: "POST",
-      credentials: "include",
-      headers: getAuthHeaders(),
-      body: formData,
-    });
-    if (!response.ok) {
-      throw new Error(await getUploadErrorMessage(response, "Échec de l'upload"));
-    }
-    const result = await response.json();
-    return result.url || result.objectPath;
+    return uploadPaymentLinkImage(file, getAuthHeaders(), "Échec de l'upload");
   };
 
   const updateMutation = useMutation({

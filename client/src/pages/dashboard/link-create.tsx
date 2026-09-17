@@ -15,7 +15,7 @@ import { createPaymentLinkSchema } from "@shared/schema";
 import type { User } from "@shared/schema";
 import { apiRequest, queryClient, getAuthHeaders } from "@/lib/queryClient";
 import { useLanguage } from "@/lib/language";
-import { getUploadErrorMessage, preparePaymentLinkImage } from "@/lib/payment-link-image";
+import { uploadPaymentLinkImage } from "@/lib/payment-link-image";
 import {
   ArrowLeft, ArrowRight, Loader2, Upload, X, FileText, Link as LinkIcon,
   ExternalLink, Calendar, Image, Globe, Check, Link2,
@@ -154,20 +154,7 @@ export default function LinkCreatePage() {
   };
 
   const uploadImage = async (file: File): Promise<string> => {
-    const uploadFile = await preparePaymentLinkImage(file);
-    const formData = new FormData();
-    formData.append("file", uploadFile);
-    const response = await fetch("/api/uploads/file", {
-      method: "POST",
-      credentials: "include",
-      headers: getAuthHeaders(),
-      body: formData,
-    });
-    if (!response.ok) {
-      throw new Error(await getUploadErrorMessage(response, lk.toastUploadError));
-    }
-    const result = await response.json();
-    return result.url || result.objectPath;
+    return uploadPaymentLinkImage(file, getAuthHeaders(), lk.toastUploadError);
   };
 
   const createMutation = useMutation({
@@ -178,8 +165,15 @@ export default function LinkCreatePage() {
         finalData.imagePath = imageUrl;
       }
       finalData.allowedCountries = selectedCountries.length > 0 ? selectedCountries : [];
-      const res = await apiRequest("POST", "/api/payment-links", finalData);
-      return res.json();
+       try {
+         const res = await apiRequest("POST", "/api/payment-links", finalData);
+         return res.json();
+       } catch (error) {
+         if (error instanceof TypeError && error.message === "Failed to fetch") {
+           throw new Error("Connexion au serveur impossible pendant la création du lien. Vérifiez votre connexion puis réessayez.");
+         }
+         throw error;
+       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/payment-links"] });

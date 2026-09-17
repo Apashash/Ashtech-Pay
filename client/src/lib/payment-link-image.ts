@@ -1,4 +1,5 @@
-const MAX_PROXY_SAFE_IMAGE_BYTES = Math.floor(1.5 * 1024 * 1024);
+// Leave room for multipart headers and proxies configured below 2 MB.
+const MAX_PROXY_SAFE_IMAGE_BYTES = 900 * 1024;
 const SUPPORTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
 
 export async function preparePaymentLinkImage(file: File): Promise<File> {
@@ -65,4 +66,45 @@ export async function getUploadErrorMessage(response: Response, fallback: string
   } catch {
     return fallback;
   }
+}
+
+export async function uploadPaymentLinkImage(
+  file: File,
+  headers: HeadersInit,
+  fallback: string,
+): Promise<string> {
+  const uploadFile = await preparePaymentLinkImage(file);
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await fetch("/api/uploads/file", {
+        method: "POST",
+        credentials: "include",
+        headers,
+        body: (() => {
+          const formData = new FormData();
+          formData.append("file", uploadFile);
+          return formData;
+        })(),
+      });
+
+      if (!response.ok) {
+        throw new Error(await getUploadErrorMessage(response, fallback));
+      }
+
+      const result = await response.json();
+      const imageUrl = result.url || result.objectPath;
+      if (!imageUrl) throw new Error(fallback);
+      return imageUrl;
+    } catch (error) {
+      lastError = error;
+      if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  }
+
+  if (lastError instanceof Error && lastError.message !== "Failed to fetch") {
+    throw lastError;
+  }
+  throw new Error("Connexion au serveur impossible pendant l'envoi de l'image. Vérifiez votre connexion puis réessayez.");
 }
