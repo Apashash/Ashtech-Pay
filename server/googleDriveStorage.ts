@@ -26,7 +26,10 @@ function base64Url(value: string | Buffer): string {
 }
 
 function getServiceAccountCredentials(): ServiceAccountCredentials | null {
-  const rawJson = process.env.GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON?.trim();
+  const encodedJson = process.env.GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON_BASE64?.trim();
+  const rawJson = encodedJson
+    ? Buffer.from(encodedJson, "base64").toString("utf8").trim()
+    : process.env.GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON?.trim();
   if (rawJson) {
     try {
       const parsed = JSON.parse(rawJson) as Partial<ServiceAccountCredentials>;

@@ -2911,6 +2911,17 @@ export async function registerRoutes(
 
       // Payment-link images prefer Google Drive when configured for Plesk.
       // KYC remains private and continues through its dedicated storage path.
+      const paymentImageStorage = process.env.PAYMENT_IMAGE_STORAGE?.trim().toLowerCase();
+      if (
+        safeFolder === "payment-links" &&
+        paymentImageStorage === "google_drive" &&
+        !isGoogleDriveConfigured()
+      ) {
+        throw new GoogleDriveStorageError(
+          "GOOGLE_DRIVE_NOT_CONFIGURED",
+          "Google Drive n'est pas configuré sur ce serveur.",
+        );
+      }
       const googleDriveResult = safeFolder === "payment-links"
         ? await uploadToGoogleDrive(req.file.buffer, req.file.originalname, req.file.mimetype)
         : null;
