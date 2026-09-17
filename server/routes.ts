@@ -12450,7 +12450,7 @@ export async function registerRoutes(
   });
 
   // Admin: Update transaction status
-  app.patch("/api/admin/transactions/:id", requireAuth, requireAdmin, adminActionLimiter, async (req, res) => {
+  const updateAdminTransactionStatus = async (req: any, res: any) => {
     try {
       const { id } = req.params;
       const { status, forceComplete, reason } = req.body;
@@ -12460,6 +12460,9 @@ export async function registerRoutes(
       const existingTx = await storage.getTransactionById(id);
       if (!existingTx) {
         return res.status(404).json({ message: "Transaction non trouvée" });
+      }
+      if (req.body?.bulkPendingOnly === true && existingTx.status !== "pending") {
+        return res.status(409).json({ message: "Seules les transactions encore en attente peuvent être rejetées en groupe." });
       }
       const isPayout = ["withdrawal", "transfer_out"].includes(existingTx.type);
       const isReopeningRejectedPayout = isPayout
@@ -12873,7 +12876,66 @@ export async function registerRoutes(
       console.error("Admin update transaction error:", error);
       res.status(500).json({ message: "Erreur serveur" });
     }
+  };
+
+  // Admin: Reject multiple pending transactions using the same guarded
+  // transition/refund/notification logic as the individual endpoint.
+  // The bulk request is rate-limited once; each item is still re-read and
+  // validated by updateAdminTransactionStatus before it can be changed.
+  app.post("/api/admin/transactions/reject-bulk", requireAuth, requireAdmin, adminActionLimiter, async (req, res) => {
+    try {
+      const ids: string[] = Array.isArray(req.body?.ids)
+        ? [...new Set<string>(req.body.ids.filter((id: unknown): id is string => typeof id === "string" && id.length > 0))]
+        : [];
+      if (ids.length === 0 || ids.length > 100) {
+        return res.status(400).json({ message: "La sélection doit contenir entre 1 et 100 transactions." });
+      }
+
+      const results: Array<{ id: string; success: boolean; message?: string }> = [];
+      for (const id of ids) {
+        let statusCode = 200;
+        let responseBody: any;
+        const itemReq = Object.create(req);
+        itemReq.params = { id };
+        itemReq.body = {
+          status: "failed",
+          reason: "Rejet groupé par l'administration",
+          bulkPendingOnly: true,
+        };
+        const itemRes = {
+          status(code: number) {
+            statusCode = code;
+            return this;
+          },
+          json(body: any) {
+            responseBody = body;
+            return this;
+          },
+        };
+
+        await updateAdminTransactionStatus(itemReq, itemRes);
+        results.push({
+          id,
+          success: statusCode >= 200 && statusCode < 300,
+          ...(statusCode >= 200 && statusCode < 300
+            ? {}
+            : { message: responseBody?.message || "Transaction non rejetée." }),
+        });
+      }
+
+      const succeeded = results.filter((result) => result.success).length;
+      res.json({
+        succeeded,
+        failed: results.length - succeeded,
+        results,
+      });
+    } catch (error) {
+      console.error("Admin bulk reject transactions error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
   });
+
+  app.patch("/api/admin/transactions/:id", requireAuth, requireAdmin, adminActionLimiter, updateAdminTransactionStatus);
 
   // Admin: Countries CRUD
   app.post("/api/admin/pawapay/sync-catalog", requireAuth, requireAdmin, adminActionLimiter, async (req, res) => {

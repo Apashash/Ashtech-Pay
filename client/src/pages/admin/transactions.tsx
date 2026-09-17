@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { 
@@ -79,9 +80,11 @@ export default function AdminTransactions() {
   });
   const [page, setPage] = useState(1);
   const [selectedTxId, setSelectedTxId] = useState<string | null>(null);
+  const [selectedPendingIds, setSelectedPendingIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     setPage(1);
+    setSelectedPendingIds(new Set());
   }, [search, typeFilter, statusFilter]);
 
   const { data: txData, isLoading } = useQuery<{ data: EnrichedTransaction[]; total: number; pages: number }>({
@@ -121,8 +124,71 @@ export default function AdminTransactions() {
     },
   });
 
+  const rejectSelectedMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      const response = await apiRequest("POST", "/api/admin/transactions/reject-bulk", { ids });
+      return response.json() as Promise<{ succeeded: number; failed: number }>;
+    },
+    onSuccess: ({ succeeded, failed }) => {
+      setSelectedPendingIds(new Set());
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/transactions"] });
+      toast({
+        title: `${succeeded} transaction${succeeded > 1 ? "s" : ""} rejetée${succeeded > 1 ? "s" : ""}`,
+        description: failed > 0
+          ? `${failed} transaction${failed > 1 ? "s" : ""} n'a pas pu être rejetée${failed > 1 ? "s" : ""} (déjà modifiée ou erreur).`
+          : undefined,
+        variant: failed > 0 ? "destructive" : undefined,
+      });
+    },
+    onError: (error: any) => {
+      toast({ title: "Erreur", description: error?.message || "Les transactions n'ont pas pu être rejetées.", variant: "destructive" });
+    },
+  });
+
+  const rejectSelected = () => {
+    const ids = [...selectedPendingIds];
+    if (ids.length === 0) return;
+    if (!window.confirm(`Rejeter ${ids.length} transaction${ids.length > 1 ? "s" : ""} en attente ? Cette action peut recréditer les retraits concernés.`)) {
+      return;
+    }
+    rejectSelectedMutation.mutate(ids);
+  };
+
   const transactions = txData?.data || [];
   const filteredTransactions = transactions;
+  const pendingTransactions = filteredTransactions.filter((tx) => tx.status === "pending");
+
+  useEffect(() => {
+    setSelectedPendingIds((current) => {
+      const visiblePendingIds = new Set(pendingTransactions.map((tx) => tx.id));
+      const next = new Set([...current].filter((id) => visiblePendingIds.has(id)));
+      if (next.size === current.size && [...next].every((id) => current.has(id))) return current;
+      return next;
+    });
+  }, [pendingTransactions]);
+
+  const allVisiblePendingSelected = pendingTransactions.length > 0
+    && pendingTransactions.every((tx) => selectedPendingIds.has(tx.id));
+
+  const togglePendingSelection = (id: string, checked: boolean) => {
+    setSelectedPendingIds((current) => {
+      const next = new Set(current);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+
+  const toggleAllVisiblePending = (checked: boolean) => {
+    setSelectedPendingIds((current) => {
+      const next = new Set(current);
+      pendingTransactions.forEach((tx) => {
+        if (checked) next.add(tx.id);
+        else next.delete(tx.id);
+      });
+      return next;
+    });
+  };
 
   const typeLabels: Record<string, string> = {
     deposit: "Recharge",
@@ -253,12 +319,33 @@ export default function AdminTransactions() {
                   <SelectItem value="failed">Échoués</SelectItem>
                 </SelectContent>
               </Select>
+              {selectedPendingIds.size > 0 && (
+                <Button
+                  variant="destructive"
+                  className="gap-2"
+                  onClick={rejectSelected}
+                  disabled={rejectSelectedMutation.isPending}
+                  data-testid="button-reject-selected"
+                >
+                  <XCircle className="w-4 h-4" />
+                  {rejectSelectedMutation.isPending ? "Rejet en cours..." : `Rejeter (${selectedPendingIds.size})`}
+                </Button>
+              )}
             </div>
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-12">
+                    <Checkbox
+                      checked={allVisiblePendingSelected}
+                      onCheckedChange={(checked) => toggleAllVisiblePending(checked === true)}
+                      disabled={pendingTransactions.length === 0 || rejectSelectedMutation.isPending}
+                      aria-label="Sélectionner toutes les transactions en attente visibles"
+                      data-testid="checkbox-select-all-pending"
+                    />
+                  </TableHead>
                   <TableHead>Référence</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Utilisateur</TableHead>
@@ -271,19 +358,30 @@ export default function AdminTransactions() {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8">
+                    <TableCell colSpan={8} className="text-center py-8">
                       Chargement...
                     </TableCell>
                   </TableRow>
                 ) : filteredTransactions.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                       Aucune transaction trouvée
                     </TableCell>
                   </TableRow>
                 ) : (
                   filteredTransactions.map((tx) => (
                     <TableRow key={tx.id} data-testid={`transaction-row-${tx.id}`}>
+                      <TableCell>
+                        {tx.status === "pending" && (
+                          <Checkbox
+                            checked={selectedPendingIds.has(tx.id)}
+                            onCheckedChange={(checked) => togglePendingSelection(tx.id, checked === true)}
+                            disabled={rejectSelectedMutation.isPending}
+                            aria-label={`Sélectionner la transaction ${tx.reference || tx.id}`}
+                            data-testid={`checkbox-select-${tx.id}`}
+                          />
+                        )}
+                      </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <code className="text-xs font-mono bg-muted px-2 py-1 rounded max-w-[150px] truncate">
