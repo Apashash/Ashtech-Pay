@@ -3,6 +3,11 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 export let supabase: SupabaseClient | null = null;
 let initializationAttempted = false;
 
+export type SupabaseConfigurationIssue =
+  | "SUPABASE_URL_MISSING"
+  | "SUPABASE_URL_INVALID"
+  | "SUPABASE_SERVICE_ROLE_KEY_MISSING";
+
 function isValidUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
@@ -12,26 +17,34 @@ function isValidUrl(url: string): boolean {
   }
 }
 
+export function getSupabaseConfigurationIssue(): SupabaseConfigurationIssue | null {
+  const supabaseUrl = process.env.SUPABASE_URL?.trim();
+  if (!supabaseUrl) return "SUPABASE_URL_MISSING";
+  if (!isValidUrl(supabaseUrl)) return "SUPABASE_URL_INVALID";
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()) {
+    return "SUPABASE_SERVICE_ROLE_KEY_MISSING";
+  }
+  return null;
+}
+
 export function getSupabaseClient(): SupabaseClient | null {
   if (supabase || initializationAttempted) return supabase;
   initializationAttempted = true;
 
   const supabaseUrl = process.env.SUPABASE_URL?.trim();
   const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  const configurationIssue = getSupabaseConfigurationIssue();
 
-  if (!supabaseUrl) {
-    console.warn("[Supabase] SUPABASE_URL not set. File uploads will use local storage.");
+  if (configurationIssue === "SUPABASE_URL_MISSING") {
+    console.warn("[Supabase] SUPABASE_URL is missing.");
     return null;
   }
-  if (!isValidUrl(supabaseUrl)) {
-    console.warn(`[Supabase] SUPABASE_URL invalid: "${supabaseUrl}". Must be https://xxx.supabase.co`);
+  if (configurationIssue === "SUPABASE_URL_INVALID") {
+    console.warn(`[Supabase] SUPABASE_URL is invalid: "${supabaseUrl}". Expected https://xxx.supabase.co`);
     return null;
   }
-  if (!supabaseServiceRoleKey) {
-    console.warn(
-      "[Supabase] SUPABASE_SERVICE_ROLE_KEY not set. File uploads will fall back to local storage. " +
-      "Do NOT use the anon key for server-side operations.",
-    );
+  if (configurationIssue === "SUPABASE_SERVICE_ROLE_KEY_MISSING") {
+    console.warn("[Supabase] SUPABASE_SERVICE_ROLE_KEY is missing. Do not use the anon key for server-side uploads.");
     return null;
   }
 
