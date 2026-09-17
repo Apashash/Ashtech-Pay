@@ -1,4 +1,5 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import WebSocket from "ws";
 
 export let supabase: SupabaseClient | null = null;
 
@@ -56,6 +57,12 @@ export function getSupabaseClient(): SupabaseClient | null {
       auth: {
         autoRefreshToken: false,
         persistSession: false,
+      },
+      realtime: {
+        // `ws` is API-compatible with Realtime's constructor at runtime, but
+        // its legacy overloads are narrower than Supabase's browser-oriented
+        // TypeScript interface.
+        transport: WebSocket as any,
       },
     });
     console.log("[Supabase] Client initialized successfully (service role key)");
