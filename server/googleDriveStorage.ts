@@ -55,9 +55,14 @@ function getServiceAccountCredentials(): ServiceAccountCredentials | null {
 }
 
 export function isGoogleDriveConfigured(): boolean {
+  const hasOAuthCredentials = Boolean(
+    process.env.GOOGLE_DRIVE_CLIENT_ID?.trim() &&
+    process.env.GOOGLE_DRIVE_CLIENT_SECRET?.trim() &&
+    process.env.GOOGLE_DRIVE_REFRESH_TOKEN?.trim(),
+  );
   return Boolean(
     process.env.GOOGLE_DRIVE_FOLDER_ID?.trim() &&
-    getServiceAccountCredentials(),
+    (getServiceAccountCredentials() || hasOAuthCredentials),
   );
 }
 
@@ -82,6 +87,43 @@ async function getAccessToken(): Promise<string> {
   }
 
   const credentials = getServiceAccountCredentials();
+  const clientId = process.env.GOOGLE_DRIVE_CLIENT_ID?.trim();
+  const clientSecret = process.env.GOOGLE_DRIVE_CLIENT_SECRET?.trim();
+  const refreshToken = process.env.GOOGLE_DRIVE_REFRESH_TOKEN?.trim();
+
+  if (!credentials && clientId && clientSecret && refreshToken) {
+    const response = await fetch(GOOGLE_TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        refresh_token: refreshToken,
+        grant_type: "refresh_token",
+      }),
+    });
+    if (!response.ok) {
+      const detail = await response.text();
+      console.error("[GoogleDrive] OAuth token refresh failed:", response.status, detail);
+      throw new GoogleDriveStorageError(
+        "GOOGLE_DRIVE_TOKEN_FAILED",
+        "Google Drive n'a pas accepté le renouvellement de l'accès.",
+      );
+    }
+    const token = await response.json() as { access_token?: string; expires_in?: number };
+    if (!token.access_token) {
+      throw new GoogleDriveStorageError(
+        "GOOGLE_DRIVE_TOKEN_FAILED",
+        "Google Drive n'a pas renvoyé de jeton OAuth.",
+      );
+    }
+    tokenCache = {
+      accessToken: token.access_token,
+      expiresAt: now + Math.max(60, Number(token.expires_in || 3600)) * 1000,
+    };
+    return token.access_token;
+  }
+
   if (!credentials) {
     throw new GoogleDriveStorageError(
       "GOOGLE_DRIVE_NOT_CONFIGURED",
