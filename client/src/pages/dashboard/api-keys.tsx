@@ -7,15 +7,13 @@ import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import type { User } from "@shared/schema";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+  BottomSheet,
+  BottomSheetContent,
+  BottomSheetDescription,
+  BottomSheetFooter,
+  BottomSheetHeader,
+  BottomSheetTitle,
+} from "@/components/ui/bottom-sheet";
 import {
   ArrowRight,
   CheckCircle2,
@@ -132,25 +130,34 @@ export default function ApiKeysPage() {
           <p className="text-[15px] leading-6 text-muted-foreground">{copy.footer}</p>
         </div>
       </div>
-      <AlertDialog open={showKycDialog} onOpenChange={setShowKycDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/10">
-              <ShieldCheck className="h-6 w-6 text-amber-600" />
+      <BottomSheet open={showKycDialog} onOpenChange={setShowKycDialog}>
+        <BottomSheetContent>
+          <BottomSheetHeader className="pt-5 pb-3 text-center">
+            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-amber-500/10">
+              <ShieldCheck className="h-7 w-7 text-amber-600" />
             </div>
-            <AlertDialogTitle className="text-center">{copy.kycRequiredTitle}</AlertDialogTitle>
-            <AlertDialogDescription className="text-center">
+            <BottomSheetTitle className="text-xl">{copy.kycRequiredTitle}</BottomSheetTitle>
+            <BottomSheetDescription className="mx-auto max-w-sm text-[15px] leading-6">
               {copy.kycRequiredDescription}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{copy.kycRequiredCancel}</AlertDialogCancel>
-            <AlertDialogAction onClick={() => setLocation("/dashboard/kyc")}>
+            </BottomSheetDescription>
+          </BottomSheetHeader>
+          <BottomSheetFooter className="flex-col gap-2 pb-7 pt-2">
+            <Button
+              className="w-full bg-amber-500 text-white hover:bg-amber-600"
+              onClick={() => setLocation("/dashboard/kyc")}
+            >
               {copy.kycRequiredButton}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => setShowKycDialog(false)}
+            >
+              {copy.kycRequiredCancel}
+            </Button>
+          </BottomSheetFooter>
+        </BottomSheetContent>
+      </BottomSheet>
     </DashboardLayout>
   );
 }
