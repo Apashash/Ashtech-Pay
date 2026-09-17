@@ -28,9 +28,11 @@ interface ApiUser {
     totalTransactions: number;
     sdkTransactions: number;
     hpTransactions: number;
+    linkTransactions: number;
     totalCollected: number;
     sdkCollected: number;
     hpCollected: number;
+    linkCollected: number;
   };
 }
 
@@ -133,21 +135,22 @@ export default function AdminMerchants() {
                     <TableHead>Statut KYC</TableHead>
                     <TableHead className="text-center">Clé générée</TableHead>
                     <TableHead className="text-right">Txn SDK</TableHead>
-                    <TableHead className="text-right">Txn HP</TableHead>
-                    <TableHead className="text-right">Volume API total</TableHead>
+               <TableHead className="text-right">Txn HP</TableHead>
+               <TableHead className="text-right">Txn liens</TableHead>
+               <TableHead className="text-right">Volume total collecté</TableHead>
                     <TableHead className="text-center">API activée</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {isLoading ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                         Chargement…
                       </TableCell>
                     </TableRow>
                   ) : filtered.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                         Aucun résultat
                       </TableCell>
                     </TableRow>
@@ -191,6 +194,10 @@ export default function AdminMerchants() {
                         </TableCell>
                         <TableCell className="text-right text-sm">
                           <span className="font-medium">{user.stats.hpTransactions}</span>
+                          <span className="text-muted-foreground text-xs ml-1">txn</span>
+                        </TableCell>
+                        <TableCell className="text-right text-sm">
+                          <span className="font-medium">{user.stats.linkTransactions}</span>
                           <span className="text-muted-foreground text-xs ml-1">txn</span>
                         </TableCell>
                         <TableCell className="text-right text-sm">

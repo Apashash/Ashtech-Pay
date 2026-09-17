@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  Users, TrendingUp, Globe, Code2, CheckCircle, AlertCircle,
+  Users, TrendingUp, Globe, Code2, Link2, CheckCircle, AlertCircle,
   ChevronRight, Zap, Lock
 } from "lucide-react";
 import { Link } from "wouter";
@@ -19,9 +19,11 @@ interface ApiUser {
     totalTransactions: number;
     sdkTransactions: number;
     hpTransactions: number;
+    linkTransactions: number;
     totalCollected: number;
     sdkCollected: number;
     hpCollected: number;
+    linkCollected: number;
   };
 }
 
@@ -36,13 +38,14 @@ function StatCard({
   label: string;
   value: string | number;
   sub?: string;
-  color?: "primary" | "green" | "sky" | "amber";
+  color?: "primary" | "green" | "sky" | "amber" | "violet";
 }) {
   const colorMap: Record<string, string> = {
     primary: "bg-primary/10 text-primary",
     green: "bg-green-500/10 text-green-600",
     sky: "bg-sky-500/10 text-sky-600",
     amber: "bg-amber-500/10 text-amber-600",
+    violet: "bg-violet-500/10 text-violet-600",
   };
   return (
     <Card>
@@ -74,10 +77,12 @@ export default function AdminApiManagement() {
 
   const totalHp = users.reduce((s, u) => s + u.stats.hpCollected, 0);
   const totalSdk = users.reduce((s, u) => s + u.stats.sdkCollected, 0);
-  const totalApi = totalHp + totalSdk;
+  const totalLinks = users.reduce((s, u) => s + u.stats.linkCollected, 0);
+  const totalCollected = totalHp + totalSdk + totalLinks;
 
   const totalHpTxns = users.reduce((s, u) => s + u.stats.hpTransactions, 0);
   const totalSdkTxns = users.reduce((s, u) => s + u.stats.sdkTransactions, 0);
+  const totalLinkTxns = users.reduce((s, u) => s + u.stats.linkTransactions, 0);
 
   return (
     <AdminLayout>
@@ -112,17 +117,18 @@ export default function AdminApiManagement() {
 
         {/* Stats grid */}
         {isLoading ? (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {[...Array(4)].map((_, i) => (
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-4">
+            {[...Array(5)].map((_, i) => (
               <Card key={i}><CardContent className="pt-6 pb-5"><div className="h-16 animate-pulse bg-muted rounded-lg" /></CardContent></Card>
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-4">
             <StatCard icon={Users} label="Marchands total" value={totalMerchants} color="primary" />
             <StatCard icon={CheckCircle} label="API activées" value={activeApis} sub={`${verifiedCount} vérifiés · ${withKeys} clés générées`} color="green" />
             <StatCard icon={Code2} label="Txn SDK" value={totalSdkTxns} sub={`${totalSdk.toLocaleString("fr-FR", { maximumFractionDigits: 0 })} XAF collectés`} color="sky" />
             <StatCard icon={Globe} label="Txn Hosted Page" value={totalHpTxns} sub={`${totalHp.toLocaleString("fr-FR", { maximumFractionDigits: 0 })} XAF collectés`} color="amber" />
+            <StatCard icon={Link2} label="Txn liens de paiement" value={totalLinkTxns} sub={`${totalLinks.toLocaleString("fr-FR", { maximumFractionDigits: 0 })} XAF collectés`} color="violet" />
           </div>
         )}
 
@@ -135,17 +141,17 @@ export default function AdminApiManagement() {
                   <TrendingUp className="h-6 w-6 text-primary" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Volume API total collecté</p>
+                   <p className="text-sm text-muted-foreground">Volume total collecté</p>
                   <p className="text-3xl font-bold text-foreground">
-                    {isLoading ? "…" : totalApi.toLocaleString("fr-FR", { maximumFractionDigits: 0 }) + " XAF"}
+                     {isLoading ? "…" : totalCollected.toLocaleString("fr-FR", { maximumFractionDigits: 0 }) + " XAF"}
                   </p>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    SDK : {totalSdk.toLocaleString("fr-FR", { maximumFractionDigits: 0 })} XAF · Hosted Page : {totalHp.toLocaleString("fr-FR", { maximumFractionDigits: 0 })} XAF
+                     SDK : {totalSdk.toLocaleString("fr-FR", { maximumFractionDigits: 0 })} XAF · Hosted Page : {totalHp.toLocaleString("fr-FR", { maximumFractionDigits: 0 })} XAF · Liens : {totalLinks.toLocaleString("fr-FR", { maximumFractionDigits: 0 })} XAF
                   </p>
                 </div>
               </div>
               <Badge variant="secondary" className="text-sm px-3 py-1">
-                {totalSdkTxns + totalHpTxns} transactions API au total
+                 {totalSdkTxns + totalHpTxns + totalLinkTxns} encaissements au total
               </Badge>
             </div>
           </CardContent>

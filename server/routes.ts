@@ -18427,12 +18427,14 @@ export async function registerRoutes(
           ? drizzleSql`
               SELECT
                 u.id, u.full_name, u.email, u.username, u.is_verified, u.api_enabled, u.api_key, u.created_at,
-                SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) AS total_tx,
-                SUM(CASE WHEN t.status = 'completed' AND t.source = 'api' THEN 1 ELSE 0 END) AS sdk_tx,
-                SUM(CASE WHEN t.status = 'completed' AND t.source = 'hosted_page' THEN 1 ELSE 0 END) AS hp_tx,
-                COALESCE(SUM(CASE WHEN t.status = 'completed' THEN CAST(t.amount AS DECIMAL(30, 10)) ELSE 0 END), 0) AS total_amount,
-                COALESCE(SUM(CASE WHEN t.status = 'completed' AND t.source = 'api' THEN CAST(t.amount AS DECIMAL(30, 10)) ELSE 0 END), 0) AS sdk_amount,
-                COALESCE(SUM(CASE WHEN t.status = 'completed' AND t.source = 'hosted_page' THEN CAST(t.amount AS DECIMAL(30, 10)) ELSE 0 END), 0) AS hp_amount
+                 SUM(CASE WHEN t.status = 'completed' AND t.type IN ('deposit', 'payment_link') THEN 1 ELSE 0 END) AS total_tx,
+                 SUM(CASE WHEN t.status = 'completed' AND t.type = 'deposit' AND t.source = 'api' THEN 1 ELSE 0 END) AS sdk_tx,
+                 SUM(CASE WHEN t.status = 'completed' AND t.type = 'deposit' AND t.source = 'hosted_page' THEN 1 ELSE 0 END) AS hp_tx,
+                 SUM(CASE WHEN t.status = 'completed' AND t.type = 'payment_link' THEN 1 ELSE 0 END) AS link_tx,
+                 COALESCE(SUM(CASE WHEN t.status = 'completed' AND t.type IN ('deposit', 'payment_link') THEN CAST(t.amount AS DECIMAL(30, 10)) ELSE 0 END), 0) AS total_amount,
+                 COALESCE(SUM(CASE WHEN t.status = 'completed' AND t.type = 'deposit' AND t.source = 'api' THEN CAST(t.amount AS DECIMAL(30, 10)) ELSE 0 END), 0) AS sdk_amount,
+                 COALESCE(SUM(CASE WHEN t.status = 'completed' AND t.type = 'deposit' AND t.source = 'hosted_page' THEN CAST(t.amount AS DECIMAL(30, 10)) ELSE 0 END), 0) AS hp_amount,
+                 COALESCE(SUM(CASE WHEN t.status = 'completed' AND t.type = 'payment_link' THEN CAST(t.amount AS DECIMAL(30, 10)) ELSE 0 END), 0) AS link_amount
               FROM users u
               LEFT JOIN transactions t ON t.user_id = u.id
               GROUP BY u.id, u.full_name, u.email, u.username, u.is_verified, u.api_enabled, u.api_key, u.created_at
@@ -18441,12 +18443,14 @@ export async function registerRoutes(
           : drizzleSql`
               SELECT
                 u.id, u.full_name, u.email, u.username, u.is_verified, u.api_enabled, u.api_key, u.created_at,
-                COUNT(t.id) FILTER (WHERE t.status = 'completed')::int AS total_tx,
-                COUNT(t.id) FILTER (WHERE t.status = 'completed' AND t.source = 'api')::int AS sdk_tx,
-                COUNT(t.id) FILTER (WHERE t.status = 'completed' AND t.source = 'hosted_page')::int AS hp_tx,
-                COALESCE(SUM(t.amount::numeric) FILTER (WHERE t.status = 'completed'), 0) AS total_amount,
-                COALESCE(SUM(t.amount::numeric) FILTER (WHERE t.status = 'completed' AND t.source = 'api'), 0) AS sdk_amount,
-                COALESCE(SUM(t.amount::numeric) FILTER (WHERE t.status = 'completed' AND t.source = 'hosted_page'), 0) AS hp_amount
+                 COUNT(t.id) FILTER (WHERE t.status = 'completed' AND t.type IN ('deposit', 'payment_link'))::int AS total_tx,
+                 COUNT(t.id) FILTER (WHERE t.status = 'completed' AND t.type = 'deposit' AND t.source = 'api')::int AS sdk_tx,
+                 COUNT(t.id) FILTER (WHERE t.status = 'completed' AND t.type = 'deposit' AND t.source = 'hosted_page')::int AS hp_tx,
+                 COUNT(t.id) FILTER (WHERE t.status = 'completed' AND t.type = 'payment_link')::int AS link_tx,
+                 COALESCE(SUM(t.amount::numeric) FILTER (WHERE t.status = 'completed' AND t.type IN ('deposit', 'payment_link')), 0) AS total_amount,
+                 COALESCE(SUM(t.amount::numeric) FILTER (WHERE t.status = 'completed' AND t.type = 'deposit' AND t.source = 'api'), 0) AS sdk_amount,
+                 COALESCE(SUM(t.amount::numeric) FILTER (WHERE t.status = 'completed' AND t.type = 'deposit' AND t.source = 'hosted_page'), 0) AS hp_amount,
+                 COALESCE(SUM(t.amount::numeric) FILTER (WHERE t.status = 'completed' AND t.type = 'payment_link'), 0) AS link_amount
               FROM users u
               LEFT JOIN transactions t ON t.user_id = u.id
               GROUP BY u.id, u.full_name, u.email, u.username, u.is_verified, u.api_enabled, u.api_key, u.created_at
@@ -18479,9 +18483,11 @@ export async function registerRoutes(
           totalTransactions: Number(row.total_tx || 0),
           sdkTransactions: Number(row.sdk_tx || 0),
           hpTransactions: Number(row.hp_tx || 0),
+          linkTransactions: Number(row.link_tx || 0),
           totalCollected: parseFloat(row.total_amount || "0"),
           sdkCollected: parseFloat(row.sdk_amount || "0"),
           hpCollected: parseFloat(row.hp_amount || "0"),
+          linkCollected: parseFloat(row.link_amount || "0"),
         },
       }));
 
