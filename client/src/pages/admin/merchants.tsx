@@ -1,5 +1,5 @@
 import { getAdminPath } from "@/lib/adminPath";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { AdminLayout } from "./layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,7 +10,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
-import { Search, Code2, Globe, CheckCircle, AlertCircle, ArrowLeft } from "lucide-react";
+import { Search, Code2, Globe, CheckCircle, AlertCircle, ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
@@ -34,8 +34,11 @@ interface ApiUser {
   };
 }
 
+const MERCHANTS_PER_PAGE = 50;
+
 export default function AdminMerchants() {
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const { toast } = useToast();
 
   const { data: users = [], isLoading, isError } = useQuery<ApiUser[]>({
@@ -64,6 +67,14 @@ export default function AdminMerchants() {
     [u.fullName, u.email, u.username]
       .some(value => String(value ?? "").toLowerCase().includes(normalizedSearch))
   );
+  const totalPages = Math.max(1, Math.ceil(filtered.length / MERCHANTS_PER_PAGE));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * MERCHANTS_PER_PAGE;
+  const paginatedUsers = filtered.slice(pageStart, pageStart + MERCHANTS_PER_PAGE);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   return (
     <AdminLayout>
@@ -103,7 +114,10 @@ export default function AdminMerchants() {
                 <Input
                   placeholder="Rechercher…"
                   value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                    setPage(1);
+                  }}
                   className="pl-9 h-9 text-sm"
                   data-testid="input-search-merchant"
                 />
@@ -138,7 +152,7 @@ export default function AdminMerchants() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filtered.map((user) => (
+                    paginatedUsers.map((user) => (
                       <TableRow key={user.id} data-testid={`row-merchant-${user.id}`}>
                         <TableCell>
                           <div>
@@ -206,6 +220,41 @@ export default function AdminMerchants() {
                 </TableBody>
               </Table>
             </div>
+            {filtered.length > 0 && (
+              <div className="flex items-center justify-between gap-3 border-t px-4 py-3 flex-wrap">
+                <p className="text-xs text-muted-foreground">
+                  Affichage de {pageStart + 1} à{" "}
+                  {Math.min(pageStart + MERCHANTS_PER_PAGE, filtered.length)} sur {filtered.length} marchands
+                </p>
+                {totalPages > 1 && (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1"
+                      disabled={currentPage === 1}
+                      onClick={() => setPage(currentPage - 1)}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                      Précédent
+                    </Button>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                      Page {currentPage} / {totalPages}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1"
+                      disabled={currentPage === totalPages}
+                      onClick={() => setPage(currentPage + 1)}
+                    >
+                      Suivant
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
 
