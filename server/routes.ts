@@ -4357,7 +4357,10 @@ export async function registerRoutes(
       const now = new Date();
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
       
-      const completedTransactions = transactions.filter(t => isTransactionCompletedStatus(t.status));
+      const userTransactions = transactions.filter(
+        t => t.type !== "admin_debit" && t.type !== "admin_credit",
+      );
+      const completedTransactions = userTransactions.filter(t => isTransactionCompletedStatus(t.status));
       
       const totalReceived = completedTransactions
         .filter(t => t.type === "deposit" || t.type === "transfer_in" || t.type === "payment_link")
@@ -4367,21 +4370,26 @@ export async function registerRoutes(
         .filter(t => t.type === "withdrawal" || t.type === "transfer_out")
         .reduce((sum, t) => sum + parseFloat(t.amount), 0);
       
-      const monthlyTransactions = transactions.filter(t => 
+      const monthlyTransactions = userTransactions.filter(t =>
         t.createdAt && new Date(t.createdAt) >= startOfMonth
       );
       
       const totalClicks = paymentLinks.reduce((sum, link) => sum + (link.clickCount || 0), 0);
       
       const linkPayments = completedTransactions.filter(t => t.type === "payment_link");
-      const totalCollected = linkPayments.reduce((sum, t) => sum + parseFloat(t.amount), 0);
+      // Collection covers every customer payment entry: direct deposits
+      // (including API and Hosted/Checkout sources) plus payment links.
+      const collectedTransactions = completedTransactions.filter(
+        t => t.type === "deposit" || t.type === "payment_link",
+      );
+      const totalCollected = collectedTransactions.reduce((sum, t) => sum + parseFloat(t.amount), 0);
       
       res.json({
         totalReceived: totalReceived.toFixed(2),
         totalSent: totalSent.toFixed(2),
-        totalTransactions: transactions.length,
+        totalTransactions: userTransactions.length,
         monthlyTransactions: monthlyTransactions.length,
-        pendingTransactions: transactions.filter(t => isTransactionOpenStatus(t.status)).length,
+        pendingTransactions: userTransactions.filter(t => isTransactionOpenStatus(t.status)).length,
         totalClicks,
         linkPayments: linkPayments.length,
         totalCollected: totalCollected.toFixed(2),
@@ -4787,7 +4795,7 @@ export async function registerRoutes(
                 SUM(CASE WHEN created_at >= DATE_FORMAT(NOW(), '%Y-%m-01 00:00:00') THEN 1 ELSE 0 END) AS monthly_transactions,
                  SUM(CASE WHEN status IN ('pending', 'pending_manual', 'processing') THEN 1 ELSE 0 END) AS pending_transactions,
                 SUM(CASE WHEN status = 'completed' AND type = 'payment_link' THEN 1 ELSE 0 END) AS link_payments,
-                COALESCE(SUM(CASE WHEN status = 'completed' AND type = 'payment_link' THEN CAST(amount AS DECIMAL(20,2)) ELSE 0 END), 0) AS total_collected
+                 COALESCE(SUM(CASE WHEN status = 'completed' AND type IN ('deposit','payment_link') THEN CAST(amount AS DECIMAL(20,2)) ELSE 0 END), 0) AS total_collected
               FROM transactions
               WHERE user_id = ${userId}
                 AND type NOT IN ('admin_debit', 'admin_credit')
@@ -4800,7 +4808,7 @@ export async function registerRoutes(
                 COUNT(*) FILTER (WHERE created_at >= date_trunc('month', NOW()))::int AS monthly_transactions,
                  COUNT(*) FILTER (WHERE status IN ('pending', 'pending_manual', 'processing'))::int AS pending_transactions,
                 COUNT(*) FILTER (WHERE status='completed' AND type='payment_link')::int AS link_payments,
-                COALESCE(SUM(amount::numeric) FILTER (WHERE status='completed' AND type='payment_link'), 0) AS total_collected
+                 COALESCE(SUM(amount::numeric) FILTER (WHERE status='completed' AND type IN ('deposit','payment_link')), 0) AS total_collected
               FROM transactions
               WHERE user_id = ${userId}
                 AND type NOT IN ('admin_debit', 'admin_credit')
