@@ -6,7 +6,10 @@ export let supabase: SupabaseClient | null = null;
 export type SupabaseConfigurationIssue =
   | "SUPABASE_URL_MISSING"
   | "SUPABASE_URL_INVALID"
-  | "SUPABASE_SERVICE_ROLE_KEY_MISSING";
+  | "SUPABASE_SERVICE_ROLE_KEY_MISSING"
+  | "SUPABASE_CLIENT_INIT_FAILED";
+
+let clientInitializationFailed = false;
 
 function isValidUrl(url: string): boolean {
   try {
@@ -24,6 +27,7 @@ export function getSupabaseConfigurationIssue(): SupabaseConfigurationIssue | nu
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()) {
     return "SUPABASE_SERVICE_ROLE_KEY_MISSING";
   }
+  if (clientInitializationFailed) return "SUPABASE_CLIENT_INIT_FAILED";
   return null;
 }
 
@@ -36,7 +40,13 @@ export function getSupabaseClient(): SupabaseClient | null {
 
   const supabaseUrl = process.env.SUPABASE_URL?.trim();
   const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
-  const configurationIssue = getSupabaseConfigurationIssue();
+  const configurationIssue = !supabaseUrl
+    ? "SUPABASE_URL_MISSING"
+    : !isValidUrl(supabaseUrl)
+      ? "SUPABASE_URL_INVALID"
+      : !supabaseServiceRoleKey
+        ? "SUPABASE_SERVICE_ROLE_KEY_MISSING"
+        : null;
 
   if (configurationIssue === "SUPABASE_URL_MISSING") {
     console.warn("[Supabase] SUPABASE_URL is missing.");
@@ -65,10 +75,12 @@ export function getSupabaseClient(): SupabaseClient | null {
         transport: WebSocket as any,
       },
     });
+    clientInitializationFailed = false;
     console.log("[Supabase] Client initialized successfully (service role key)");
     console.log(`[Supabase] URL: ${supabaseUrl}`);
     console.log(`[Supabase] Storage bucket: ${getStorageBucket()}`);
   } catch (error) {
+    clientInitializationFailed = true;
     console.warn("[Supabase] Failed to initialize client:", error);
   }
   return supabase;

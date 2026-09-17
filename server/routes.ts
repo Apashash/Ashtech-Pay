@@ -3063,6 +3063,8 @@ export async function registerRoutes(
             ? "Configuration Supabase invalide : SUPABASE_URL doit être l'URL du projet, par exemple https://xxxxx.supabase.co."
             : uploadError.code === "SUPABASE_SERVICE_ROLE_KEY_MISSING"
               ? "Configuration Supabase incomplète : SUPABASE_SERVICE_ROLE_KEY manque dans les variables d'environnement du serveur Plesk."
+              : uploadError.code === "SUPABASE_CLIENT_INIT_FAILED"
+                ? "Le serveur n'a pas pu initialiser le client Supabase. Consultez les logs Plesk après le redémarrage de l'application."
         : uploadError.code === "SUPABASE_STORAGE_NOT_CONFIGURED"
           ? "Supabase Storage n'est pas configuré sur ce serveur."
           : uploadError.code === "SUPABASE_STORAGE_UPLOAD_FAILED"
