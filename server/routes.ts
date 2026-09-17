@@ -17930,10 +17930,6 @@ export async function registerRoutes(
       if (!merchant.isVerified) {
         return res.status(403).json({ error: "account_not_verified", message: "Votre compte n'est pas vérifié. Complétez la vérification KYC pour accéder à l'API." });
       }
-      if (!(merchant as any).apiEnabled) {
-        return res.status(403).json({ error: "api_not_enabled", message: "L'accès API n'est pas activé sur votre compte. Contactez l'administrateur pour l'activer." });
-      }
-
       const {
         amount,
         currency,

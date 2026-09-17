@@ -270,7 +270,7 @@ export default function AdminMerchants() {
             <div className="flex items-start gap-3">
               <AlertCircle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
               <p className="text-sm text-muted-foreground">
-                <strong className="text-foreground">Règle</strong> — L'API ne peut être activée que si le marchand est KYC-vérifié. Le switch SDK (<code className="text-xs bg-muted px-1 rounded">ak_</code>) et Hosted Page (<code className="text-xs bg-muted px-1 rounded">hp_live_</code>) sont contrôlés par le même interrupteur.
+                <strong className="text-foreground">Règle</strong> — L'API directe ne peut être activée que si le marchand est KYC-vérifié. Le switch contrôle uniquement le SDK/API directe (<code className="text-xs bg-muted px-1 rounded">ak_</code>) ; le Checkout Page (<code className="text-xs bg-muted px-1 rounded">hp_live_</code>) nécessite seulement un KYC validé.
               </p>
             </div>
           </CardContent>
