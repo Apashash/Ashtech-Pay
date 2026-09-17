@@ -1673,36 +1673,6 @@ export default function PaymentPage() {
                 </div>
                 </div>
                 {errors.operator && <p className="text-xs text-red-500">{errors.operator}</p>}
-                <div className="rounded-lg border border-blue-200 bg-blue-50/70 px-3 py-2.5">
-                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-blue-800">
-                    Instructions selon l’opérateur
-                  </p>
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[420px] text-left text-xs text-blue-950">
-                      <thead>
-                        <tr className="border-b border-blue-200/70 text-[10px] uppercase tracking-wide text-blue-700">
-                          <th className="py-1.5 pr-3 font-semibold">Opérateur</th>
-                          <th className="py-1.5 font-semibold">Action à effectuer</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-blue-200/50">
-                        {operators.map((op) => {
-                          const instruction = op.pixpayOperatorType === "otp"
-                            ? `Composer ${op.otpUssdCode || "le code USSD retourné"} pour obtenir l’OTP`
-                            : op.pixpayOperatorType === "wave"
-                              ? "Ouvrir la redirection Wave"
-                              : "Valider la demande USSD Push sur le téléphone";
-                          return (
-                            <tr key={`instruction-${op.id}`}>
-                              <td className="py-1.5 pr-3 font-medium">{op.name}</td>
-                              <td className="py-1.5">{instruction}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
               </div>
             )}
 
