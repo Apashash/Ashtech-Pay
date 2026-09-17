@@ -68,3 +68,4 @@
 - [Plesk browser-only access](plesk-browser-only-access.md) — this deployment has no Plesk terminal; expose diagnostics through authenticated browser routes instead of shell-only instructions.
 - [Google Drive on Plesk](google-drive-plesk.md) — Replit's Drive connector does not reach the external Plesk runtime; use a Google service account and native API auth there.
 - [Supabase Storage on Plesk](supabase-plesk-storage.md) — “Storage not configured” happens before bucket access when the Node process cannot see SUPABASE_URL or the service-role key.
+- [Supabase Node WebSocket transport](supabase-node-websocket.md) — Node.js 20 needs the installed `ws` constructor passed as Supabase Realtime transport before the Storage client can initialize.
