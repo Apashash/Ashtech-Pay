@@ -56,6 +56,7 @@ let migrationFailure: string | null = null;
 let migrationStartedAt: number | null = null;
 let startupStage = "initializing";
 let startupFailureStage: string | null = null;
+const STARTUP_WAIT_MS = 8_000;
 // These endpoints are safe to serve while MySQL is warming up. Keeping them
 // outside the migration gate lets the public shell initialize immediately
 // without exposing any database-backed or authenticated API prematurely.
@@ -97,15 +98,29 @@ const isMultiWorker = pm2Count > 1;
 // middleware position stable without importing the DB-backed module early.
 let runtimeBotGuard = (_req: Request, _res: Response, next: NextFunction): void => next();
 
-app.use((req, res, next) => {
+const waitForStartupReadiness = async (): Promise<void> => {
+  const deadline = Date.now() + STARTUP_WAIT_MS;
+  while (!startupFailure && !migrationFailure &&
+    (!startupReady || !migrationsReady) && Date.now() < deadline) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+};
+
+app.use(async (req, res, next) => {
   const publicDuringMigration =
     req.path === "/api/ping" ||
     STARTUP_PUBLIC_API_PATHS.has(req.path) ||
     !req.path.startsWith("/api");
+  if (!startupReady || (!migrationsReady && !publicDuringMigration)) {
+    // A normal cold start should be invisible to the customer. Wait briefly
+    // for the DB pool and idempotent schema check before returning 503.
+    await waitForStartupReadiness();
+  }
   if (startupReady && (migrationsReady || publicDuringMigration)) return next();
-  const message = startupFailure
+  const readinessFailure = startupFailure || migrationFailure;
+  const message = readinessFailure
     ? shouldExposeDebugErrors
-      ? `Démarrage impossible : ${formatDebugError(startupFailure)}`
+      ? `Démarrage impossible : ${formatDebugError(readinessFailure)}`
       : "Le service rencontre un problème de démarrage. Veuillez réessayer plus tard."
     : "Le service démarre. Veuillez réessayer dans quelques instants.";
   res.status(503).set("Retry-After", "2");

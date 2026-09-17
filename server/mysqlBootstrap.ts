@@ -1,5 +1,8 @@
 import { pool } from "./db";
 
+const MYSQL_AUXILIARY_SCHEMA_NAME = "mysql-runtime-auxiliary";
+const MYSQL_AUXILIARY_SCHEMA_VERSION = "2026-09-17-v2";
+
 const KYC_DOCUMENTS_TABLE_SQL = `CREATE TABLE IF NOT EXISTS kyc_documents (
   id VARCHAR(191) NOT NULL PRIMARY KEY,
   user_id VARCHAR(191) NOT NULL,
@@ -14,6 +17,7 @@ const KYC_DOCUMENTS_TABLE_SQL = `CREATE TABLE IF NOT EXISTS kyc_documents (
 
 let kycDocumentsSchemaPromise: Promise<void> | null = null;
 let kycSubmissionSchemaPromise: Promise<void> | null = null;
+let auxiliarySchemaPromise: Promise<void> | null = null;
 
 /**
  * KYC uploads can arrive before a delayed Passenger migration finishes.
@@ -133,30 +137,62 @@ export async function ensureMysqlAuxiliarySchema(): Promise<void> {
     `ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS summary_pdf_path TEXT NULL`,
   ];
 
-  for (const statement of statements) {
-    await pool.query(statement);
-  }
-  try {
-    await pool.query("ALTER TABLE users ADD COLUMN profile_image_path TEXT NULL");
-  } catch (error: any) {
-    const code = String(error?.code || "");
-    const message = String(error?.message || "");
-    if (code !== "ER_DUP_FIELDNAME" && !/duplicate column/i.test(message)) {
+  if (!auxiliarySchemaPromise) {
+    auxiliarySchemaPromise = (async () => {
+      // Avoid rerunning every ALTER TABLE on every Passenger restart. The
+      // marker is written only after the complete idempotent block succeeds.
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS runtime_schema_migrations (
+          name VARCHAR(191) NOT NULL PRIMARY KEY,
+          version VARCHAR(191) NOT NULL,
+          applied_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
+        ) ENGINE=InnoDB
+      `);
+      const marker = await pool.query(
+        "SELECT version FROM runtime_schema_migrations WHERE name = ? LIMIT 1",
+        [MYSQL_AUXILIARY_SCHEMA_NAME],
+      );
+      if (marker.rows?.[0]?.version === MYSQL_AUXILIARY_SCHEMA_VERSION) {
+        return;
+      }
+
+      for (const statement of statements) {
+        await pool.query(statement);
+      }
+      try {
+        await pool.query("ALTER TABLE users ADD COLUMN profile_image_path TEXT NULL");
+      } catch (error: any) {
+        const code = String(error?.code || "");
+        const message = String(error?.message || "");
+        if (code !== "ER_DUP_FIELDNAME" && !/duplicate column/i.test(message)) {
+          throw error;
+        }
+      }
+
+      // Keep repeated hosted-payment creation requests idempotent per merchant.
+      // Existing links have a NULL key and remain unaffected.
+      try {
+        await pool.query(
+          "ALTER TABLE payment_links ADD UNIQUE KEY payment_links_user_idempotency_unique (user_id, idempotency_key)",
+        );
+      } catch (error: any) {
+        const code = String(error?.code || "");
+        const message = String(error?.message || "");
+        if (code !== "ER_DUP_KEYNAME" && !/duplicate key name|already exists/i.test(message)) {
+          throw error;
+        }
+      }
+      await ensureMysqlKycDocumentsSchema();
+      await pool.query(
+        `INSERT INTO runtime_schema_migrations (name, version)
+         VALUES (?, ?)
+         ON DUPLICATE KEY UPDATE version = VALUES(version), applied_at = CURRENT_TIMESTAMP(3)`,
+        [MYSQL_AUXILIARY_SCHEMA_NAME, MYSQL_AUXILIARY_SCHEMA_VERSION],
+      );
+    })().catch(error => {
+      auxiliarySchemaPromise = null;
       throw error;
-    }
+    });
   }
-  // Keep repeated hosted-payment creation requests idempotent per merchant.
-  // Existing links have a NULL key and remain unaffected.
-  try {
-    await pool.query(
-      "ALTER TABLE payment_links ADD UNIQUE KEY payment_links_user_idempotency_unique (user_id, idempotency_key)",
-    );
-  } catch (error: any) {
-    const code = String(error?.code || "");
-    const message = String(error?.message || "");
-    if (code !== "ER_DUP_KEYNAME" && !/duplicate key name|already exists/i.test(message)) {
-      throw error;
-    }
-  }
-  await ensureMysqlKycDocumentsSchema();
+  return auxiliarySchemaPromise;
 }

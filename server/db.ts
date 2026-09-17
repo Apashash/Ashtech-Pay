@@ -102,15 +102,7 @@ function normalizeMysqlQuery(query: string, values: any[] = []): { text: string;
   return { text, values: ordered.length ? ordered : values };
 }
 
-function createMysqlCompatiblePool(url: string, connectionLimit: number): CompatiblePool {
-  const rawPool = mysql.createPool({
-    uri: url,
-    connectionLimit,
-    connectTimeout: MYSQL_CONNECT_TIMEOUT_MS,
-    waitForConnections: true,
-    queueLimit: 0,
-    enableKeepAlive: true,
-  });
+function createMysqlCompatiblePool(rawPool: any, connectionLimit: number): CompatiblePool {
   const wrapper: CompatiblePool = {
     async query(queryOrConfig: any, values?: any[]): Promise<CompatibleQueryResult> {
       const query = typeof queryOrConfig === "string" ? queryOrConfig : queryOrConfig.text;
@@ -155,7 +147,7 @@ const mysqlPool = useMysql ? mysql.createPool({
 }) : null;
 
 export const pool: any = useMysql
-  ? createMysqlCompatiblePool(databaseUrl, MAIN_POOL_MAX)
+  ? createMysqlCompatiblePool(mysqlPool, MAIN_POOL_MAX)
   : pgPool;
 
 // ── Error tracking per pool (for /api/admin/pool-status diagnostic) ─────────
@@ -193,7 +185,14 @@ const sessionDatabaseUrl = useMysql
   ? databaseUrl
   : process.env.DIRECT_DATABASE_URL || databaseUrl;
 export const sessionPool: any = useMysql
-  ? createMysqlCompatiblePool(sessionDatabaseUrl, SESSION_POOL_MAX)
+  ? createMysqlCompatiblePool(mysql.createPool({
+      uri: sessionDatabaseUrl,
+      connectionLimit: SESSION_POOL_MAX,
+      connectTimeout: MYSQL_CONNECT_TIMEOUT_MS,
+      waitForConnections: true,
+      queueLimit: 0,
+      enableKeepAlive: true,
+    }), SESSION_POOL_MAX)
   : new Pool({
       connectionString: sessionDatabaseUrl,
       ssl: sslConfig,
