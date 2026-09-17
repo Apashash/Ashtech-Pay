@@ -5295,6 +5295,7 @@ export async function registerRoutes(
     allFees: Array<{ operatorId: string | null; isActive: boolean | null }>,
     operatorId: string,
   ) => allFees.some(fee => fee.operatorId === operatorId && fee.isActive === false);
+  const OPERATOR_DISABLED_BY_ADMIN_MESSAGE = "Cet opérateur a été désactivé par l'administrateur.";
 
   // Get transfer configuration (countries, operators, fees)
   app.get("/api/transfers/config", requireAuth, async (req, res) => {
@@ -5410,7 +5411,7 @@ export async function registerRoutes(
       }
       const allFees = await storage.getAllFees();
       if (isOperatorDisabledByFee(allFees, operator.id)) {
-        return res.status(400).json({ message: "Cet opérateur est actuellement indisponible." });
+        return res.status(400).json({ message: OPERATOR_DISABLED_BY_ADMIN_MESSAGE, code: "OPERATOR_DISABLED_BY_ADMIN" });
       }
 
       const provider = (operator as any).paymentProvider;
@@ -5585,7 +5586,7 @@ export async function registerRoutes(
       }
       const allFees = await storage.getAllFees();
       if (isOperatorDisabledByFee(allFees, operator.id)) {
-        return res.status(400).json({ message: "Cet opérateur est actuellement indisponible." });
+        return res.status(400).json({ message: OPERATOR_DISABLED_BY_ADMIN_MESSAGE, code: "OPERATOR_DISABLED_BY_ADMIN" });
       }
 
       const country = await storage.getCountry(countryId);
@@ -6195,7 +6196,7 @@ export async function registerRoutes(
         }
         const allFees = await storage.getAllFees();
         if (isOperatorDisabledByFee(allFees, operatorRecord.id)) {
-          return res.status(400).json({ message: "Cet opérateur est actuellement indisponible." });
+          return res.status(400).json({ message: OPERATOR_DISABLED_BY_ADMIN_MESSAGE, code: "OPERATOR_DISABLED_BY_ADMIN" });
         }
         const minDeposit = parseFloat(String(depositCountry.minDeposit ?? 100));
         const maxDeposit = parseFloat(String(depositCountry.maxDeposit ?? 5000000));
@@ -6889,7 +6890,7 @@ export async function registerRoutes(
       }
       const allFees = await storage.getAllFees();
       if (isOperatorDisabledByFee(allFees, withdrawalOperator.id)) {
-        return res.status(400).json({ message: "Cet opérateur est actuellement indisponible." });
+        return res.status(400).json({ message: OPERATOR_DISABLED_BY_ADMIN_MESSAGE, code: "OPERATOR_DISABLED_BY_ADMIN" });
       }
       const withdrawalProvider = withdrawalOperator?.paymentProvider;
       if (withdrawalProvider !== "afribapay" && withdrawalProvider !== "pixpay" && withdrawalProvider !== "pawapay") {
@@ -8760,6 +8761,7 @@ export async function registerRoutes(
   app.get("/api/public/countries", publicInfoLimiter, async (_req, res) => {
     try {
       const allCountries = await storage.getAllCountries();
+      const allFees = await storage.getAllFees();
       const activeCountries = await Promise.all(
         allCountries
           .filter(c => c.isActive && c.isActiveForRegistration !== false && c.name && c.code)
@@ -8769,6 +8771,7 @@ export async function registerRoutes(
               .filter(o =>
                 o.isActive &&
                 !o.isInMaintenance &&
+             !isOperatorDisabledByFee(allFees, o.id) &&
                 ((o.depositPaymentProvider || o.paymentProvider) === "afribapay" ||
                  (o.depositPaymentProvider || o.paymentProvider) === "pixpay" ||
                  (o.depositPaymentProvider || o.paymentProvider) === "pawapay")
@@ -8797,8 +8800,9 @@ export async function registerRoutes(
   app.get("/api/public/operators", publicInfoLimiter, async (_req, res) => {
     try {
       const all = await storage.getAllOperators();
+      const allFees = await storage.getAllFees();
       const active = all
-        .filter(op => op.isActive)
+        .filter(op => op.isActive && !isOperatorDisabledByFee(allFees, op.id))
         .map(op => ({
           id: op.id,
           name: op.name,
@@ -9805,6 +9809,7 @@ export async function registerRoutes(
 
       // Get country and operator IDs for fee calculation
        const allCountries = await storage.getAllCountries();
+       const allFees = await storage.getAllFees();
        const countryData = allCountries.find((c: { id: string; code: string; name: string }) =>
          c.id === country ||
          c.code.toUpperCase() === String(country).toUpperCase() ||
@@ -9861,11 +9866,21 @@ export async function registerRoutes(
       let operatorRecord: any = null;
       if (operator && countryId) {
         const operatorsList = await storage.getOperatorsByCountry(countryId);
-         operatorRecord = operatorsList.find((o: any) =>
-           (o.name === operator || o.id === operator) &&
-           o.isActive &&
-           !o.isInMaintenance
+          const requestedOperator = operatorsList.find((o: any) =>
+            o.name === operator || o.id === operator
          );
+          if (requestedOperator && isOperatorDisabledByFee(allFees, requestedOperator.id)) {
+            return res.status(400).json({
+              message: OPERATOR_DISABLED_BY_ADMIN_MESSAGE,
+              code: "OPERATOR_DISABLED_BY_ADMIN",
+            });
+          }
+          operatorRecord = operatorsList.find((o: any) =>
+            (o.name === operator || o.id === operator) &&
+            o.isActive &&
+            !o.isInMaintenance &&
+            !isOperatorDisabledByFee(allFees, o.id)
+          );
         resolvedOperatorId = operatorRecord?.id || undefined;
         operatorName = operatorRecord?.name || operator;
       }
@@ -16822,6 +16837,7 @@ export async function registerRoutes(
   app.get("/v1/countries", apiV1Limiter, requireApiKey, async (_req, res) => {
     try {
        const countries = (await storage.getActiveCountries()).filter((c: any) => c.isActiveForDeposit !== false);
+       const allFees = await storage.getAllFees();
       const result = await Promise.all(
         countries.map(async (c: any) => {
           const ops = await storage.getOperatorsByCountry(c.id);
@@ -16834,6 +16850,7 @@ export async function registerRoutes(
               const provider = o.depositPaymentProvider || o.paymentProvider;
               return o.isActive &&
                 !o.isInMaintenance &&
+                !isOperatorDisabledByFee(allFees, o.id) &&
                 (provider === "afribapay" || provider === "pixpay" || provider === "pawapay");
             })
               .map((o: any) => o.name),
@@ -17228,6 +17245,16 @@ export async function registerRoutes(
       // ── Find operator ──────────────────────────────────────────────────────
        const allFees = await storage.getAllFees();
        const countryOps = await storage.getOperatorsByCountry(country.id);
+       const requestedOperator = countryOps.find(
+         (o: any) => o.name.toLowerCase() === operatorName.toLowerCase()
+       );
+       if (requestedOperator && isOperatorDisabledByFee(allFees, requestedOperator.id)) {
+         return res.status(422).json({
+           error: "operator_disabled_by_admin",
+           code: "OPERATOR_DISABLED_BY_ADMIN",
+           message: OPERATOR_DISABLED_BY_ADMIN_MESSAGE,
+         });
+       }
        const operatorRecord = countryOps.find(
          (o: any) =>
            o.name.toLowerCase() === operatorName.toLowerCase() &&
@@ -17974,12 +18001,16 @@ export async function registerRoutes(
   app.get("/v1/fees", apiV1Limiter, requireApiKey, async (_req, res) => {
     try {
        const countries = (await storage.getActiveCountries()).filter((c: any) => c.isActiveForDeposit !== false);
+       const allFees = await storage.getAllFees();
       const result = await Promise.all(
         countries.map(async (c: any) => {
           const ops = await storage.getOperatorsByCountry(c.id);
          const activeOps = ops.filter((o: any) => {
            const provider = o.depositPaymentProvider || o.paymentProvider;
-           return o.isActive && !o.isInMaintenance && (provider === "afribapay" || provider === "pixpay" || provider === "pawapay");
+            return o.isActive &&
+              !o.isInMaintenance &&
+              !isOperatorDisabledByFee(allFees, o.id) &&
+              (provider === "afribapay" || provider === "pixpay" || provider === "pawapay");
          });
           if (activeOps.length === 0) return null;
 
@@ -18434,7 +18465,11 @@ export async function registerRoutes(
       if (!operator) return res.status(400).json({ error: "invalid_operator" });
       const allFees = await storage.getAllFees();
       if (isOperatorDisabledByFee(allFees, operator.id)) {
-        return res.status(400).json({ error: "invalid_operator", message: "Opérateur actuellement indisponible." });
+         return res.status(400).json({
+           error: "operator_disabled_by_admin",
+           code: "OPERATOR_DISABLED_BY_ADMIN",
+           message: OPERATOR_DISABLED_BY_ADMIN_MESSAGE,
+         });
       }
         if (!country.isActive || country.isActiveForDeposit === false) {
           return res.status(400).json({ error: "inactive_country" });
