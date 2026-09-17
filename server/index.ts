@@ -464,12 +464,19 @@ app.use((req, res, next) => {
       const isUserProviderError =
         req.path === "/api/deposits" ||
         req.path === "/api/withdrawals";
+      const isOtpProviderError =
+        (
+          req.path === "/api/deposits/confirm-otp" ||
+          /^\/api\/payment-links\/[^/]+\/confirm-otp$/.test(req.path)
+        ) &&
+        bodyJson.error === "provider_error";
       const isSafeProviderFailure =
         (isMerchantProviderError || isUserProviderError) &&
         (bodyJson.error === "gateway_error" ||
           bodyJson.error === "payment_initiation_failed" ||
           bodyJson.error === "provider_invalid_response" ||
-          bodyJson.error === "provider_unavailable");
+          bodyJson.error === "provider_unavailable") ||
+        isOtpProviderError;
       // The admin payout route emits only fixed, operator-safe diagnostics
       // for failures that happen before/around provider dispatch. Preserve
       // those messages in production instead of replacing them with the

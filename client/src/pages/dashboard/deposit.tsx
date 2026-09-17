@@ -381,8 +381,18 @@ export default function DepositPage() {
       toast({ title: t.deposit.otpValidated, description: t.deposit.otpProcessing });
       startDepositPolling(depositReference, false);
     },
-    onError: (error: Error) => {
-      toast({ title: t.deposit.otpErrorTitle, description: error.message, variant: "destructive" });
+    onError: (error: Error & { provider_code?: unknown; provider_status?: unknown }) => {
+      const diagnostics = [
+        typeof error.provider_code === "string" ? `Code fournisseur : ${error.provider_code}` : "",
+        error.provider_status !== undefined && Number.isFinite(Number(error.provider_status))
+          ? `Statut fournisseur : ${error.provider_status}`
+          : "",
+      ].filter(Boolean);
+      toast({
+        title: t.deposit.otpErrorTitle,
+        description: [error.message, diagnostics.join(" · ")].filter(Boolean).join("\n"),
+        variant: "destructive",
+      });
     },
   });
 
@@ -1118,7 +1128,7 @@ export default function DepositPage() {
                   {paymentStatus === "pending" && otpRequired && (
                     <>
                       <div className="relative flex items-center justify-center py-2">
-                        <div className="absolute w-20 h-20 rounded-full bg-amber-500/10 animate-pulse" />
+                        <div className="absolute w-20 h-20 rounded-full bg-amber-500/10 otp-logo-halo" />
                         <div className="w-16 h-16 rounded-full overflow-hidden bg-white border-2 border-amber-200 shadow-lg flex items-center justify-center relative z-10">
                           {selectedOperator && getOperatorLogo(selectedOperator.name) ? (
                             <img src={getOperatorLogo(selectedOperator.name)!} alt={selectedOperator.name} className="w-full h-full object-cover" />

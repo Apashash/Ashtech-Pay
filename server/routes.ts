@@ -16357,7 +16357,9 @@ export async function registerRoutes(
   // POST /api/deposits/confirm-otp — validate OTP for an AfribaPay deposit
   app.post("/api/deposits/confirm-otp", requireAuth, otpConfirmLimiter, async (req, res) => {
     try {
-      const user = (req as any).user;
+      // requireAuth establishes req.userId, not req.user. Keep the confirmed
+      // session identity in one form throughout this route.
+      const userId = req.userId!;
       const { ref, otpCode } = req.body;
 
       if (!ref || !otpCode) {
@@ -16368,7 +16370,7 @@ export async function registerRoutes(
       if (!ctx) {
         return res.status(400).json({ message: "Session OTP expirée ou introuvable. Veuillez recommencer." });
       }
-      if (ctx.userId && ctx.userId !== user.id) {
+      if (ctx.userId && ctx.userId !== userId) {
         return res.status(403).json({ message: "Cette session OTP n'appartient pas à votre compte." });
       }
       if (ctx.expiresAt < Date.now()) {
@@ -16398,7 +16400,12 @@ export async function registerRoutes(
       });
 
       if (!result.success) {
-        return res.status(400).json({ message: result.message || "Code OTP invalide ou expiré" });
+        return res.status(400).json({
+          error: "provider_error",
+          message: result.message || "Code OTP invalide ou expiré",
+          ...(result.providerCode ? { provider_code: result.providerCode } : {}),
+          ...(result.providerStatus !== undefined ? { provider_status: result.providerStatus } : {}),
+        });
       }
 
       await deleteOtpContext(ref);
@@ -16414,7 +16421,7 @@ export async function registerRoutes(
           reference: ref,
           externalReference: extRef,
           attempts: 0,
-          userId: user.id,
+          userId,
           type: "deposit",
           amount: ctx.amount.toString(),
           provider: "afribapay",
