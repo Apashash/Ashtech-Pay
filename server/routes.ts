@@ -64,7 +64,13 @@ import bcrypt from "bcryptjs";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { uploadToSupabase, getSignedImageUrl, downloadFromSupabase, STORAGE_BUCKET } from "./supabase";
+import {
+  uploadToSupabase,
+  getSignedImageUrl,
+  downloadFromSupabase,
+  isSupabaseStorageConfigured,
+  STORAGE_BUCKET,
+} from "./supabase";
 import { decryptField, encryptField, isFieldEncryptionConfigured } from "./fieldEncryption";
 import { isAdminPinProtectionEnabled, requireAdminPin, verifyAdminPinCode } from "./adminPin";
 import { createPaymentIntent, createDirectCharge, validateWebhook, getIziPayWebhookSecret, toIziPayCurrency, isIziPayConfigured } from "./izichange";
@@ -2909,7 +2915,7 @@ export async function registerRoutes(
         });
       }
 
-      // Payment-link images prefer Google Drive when configured for Plesk.
+      // Payment-link images use the explicitly selected durable provider.
       // KYC remains private and continues through its dedicated storage path.
       const paymentImageStorage = process.env.PAYMENT_IMAGE_STORAGE?.trim().toLowerCase();
       if (
@@ -2923,6 +2929,7 @@ export async function registerRoutes(
         );
       }
       const googleDriveResult = safeFolder === "payment-links"
+        && paymentImageStorage === "google_drive"
         ? await uploadToGoogleDrive(req.file.buffer, req.file.originalname, req.file.mimetype)
         : null;
       if (googleDriveResult) {
@@ -2938,8 +2945,46 @@ export async function registerRoutes(
         });
       }
 
-      // Supabase remains an optional storage fallback when Google Drive is not
-      // configured. The final fallback is the public imagepro directory.
+      if (safeFolder === "payment-links" && paymentImageStorage === "supabase") {
+        if (!isSupabaseStorageConfigured()) {
+          const storageError = new Error("SUPABASE_STORAGE_NOT_CONFIGURED") as NodeJS.ErrnoException;
+          storageError.code = "SUPABASE_STORAGE_NOT_CONFIGURED";
+          throw storageError;
+        }
+
+        const supabaseResult = await uploadToSupabase(
+          req.file.buffer,
+          req.file.originalname,
+          req.file.mimetype,
+          safeFolder,
+        );
+
+        if (!supabaseResult) {
+          const storageError = new Error("SUPABASE_STORAGE_UPLOAD_FAILED") as NodeJS.ErrnoException;
+          storageError.code = "SUPABASE_STORAGE_UPLOAD_FAILED";
+          throw storageError;
+        }
+
+        return res.json({
+          success: true,
+          objectPath: supabaseResult.path,
+          url: supabaseResult.url,
+          filename: req.file.originalname,
+          originalName: req.file.originalname,
+          size: req.file.size,
+          mimetype: req.file.mimetype,
+          storage: "supabase",
+        });
+      }
+
+      // Legacy automatic fallback for non-payment uploads only. Payment images
+      // must never silently return to the non-persistent imagepro directory.
+      if (safeFolder === "payment-links") {
+        const storageError = new Error("PAYMENT_IMAGE_STORAGE_NOT_CONFIGURED") as NodeJS.ErrnoException;
+        storageError.code = "PAYMENT_IMAGE_STORAGE_NOT_CONFIGURED";
+        throw storageError;
+      }
+
       const supabaseResult = await uploadToSupabase(
         req.file.buffer,
         req.file.originalname,
@@ -2986,8 +3031,11 @@ export async function registerRoutes(
       const uploadError = error as NodeJS.ErrnoException;
       const isGoogleDriveError = uploadError instanceof GoogleDriveStorageError ||
         String(uploadError.code || "").startsWith("GOOGLE_DRIVE_");
+      const isSupabaseStorageError = String(uploadError.code || "").startsWith("SUPABASE_STORAGE_") ||
+        uploadError.code === "PAYMENT_IMAGE_STORAGE_NOT_CONFIGURED";
       const isPrivateStorageUnavailable = ["EACCES", "EPERM", "ENOENT", "EROFS"].includes(uploadError.code || "") ||
-        isGoogleDriveError;
+        isGoogleDriveError ||
+        isSupabaseStorageError;
       const uploadMessage = uploadError.message || String(error);
       const isKycDatabaseError = isKycUpload && (
         uploadError.code === "KYC_ENCRYPTION_NOT_CONFIGURED" ||
@@ -3007,6 +3055,12 @@ export async function registerRoutes(
       });
       const storageMessage = isGoogleDriveError
         ? uploadError.message
+        : uploadError.code === "SUPABASE_STORAGE_NOT_CONFIGURED"
+          ? "Supabase Storage n'est pas configuré sur ce serveur."
+          : uploadError.code === "SUPABASE_STORAGE_UPLOAD_FAILED"
+            ? "Supabase n'a pas pu enregistrer cette image."
+            : uploadError.code === "PAYMENT_IMAGE_STORAGE_NOT_CONFIGURED"
+              ? "Le stockage des images de paiement n'est pas configuré."
         : uploadError.code === "EACCES" || uploadError.code === "EPERM"
         ? isKycUpload
           ? "L'utilisateur Node.js n'a pas les droits d'écriture sur le stockage privé KYC."

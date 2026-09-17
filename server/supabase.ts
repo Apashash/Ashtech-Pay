@@ -48,6 +48,10 @@ export { supabase };
 // Bucket name: override with SUPABASE_STORAGE_BUCKET env var if your bucket has a different name
 export const STORAGE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET || "uploads";
 
+export function isSupabaseStorageConfigured(): boolean {
+  return Boolean(supabase);
+}
+
 export async function uploadToSupabase(
   fileBuffer: Buffer,
   filename: string,
