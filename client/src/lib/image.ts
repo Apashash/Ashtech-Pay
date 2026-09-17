@@ -3,7 +3,7 @@ import { getAuthHeaders } from "./queryClient";
 export function getImageSrc(pathOrUrl: string | null | undefined): string {
   if (!pathOrUrl) return "";
   if (pathOrUrl.startsWith("http")) return pathOrUrl;
-  if (pathOrUrl.startsWith("/uploads/")) return pathOrUrl;
+  if (pathOrUrl.startsWith("/uploads/") || pathOrUrl.startsWith("/imagepro/")) return pathOrUrl;
   if (pathOrUrl.startsWith("private-kyc/") || pathOrUrl.startsWith("kyc/")) {
     return `/api/image-proxy?path=${encodeURIComponent(pathOrUrl)}`;
   }

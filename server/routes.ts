@@ -372,10 +372,9 @@ async function reconcilePawaPayIncomingAttempt(transaction: any): Promise<"compl
   return "unresolved";
 }
 
-// IMAGEPRO_DIR (or the legacy UPLOADS_DIR) allows a persistent image path outside
-// the deployment folder (e.g. on Plesk). On Plesk, the application often runs
-// from httpdocs with a read-only deployment directory, so default to a sibling
-// imagepro directory. The route still serves files through /uploads/:name.
+// IMAGEPRO_DIR (or the legacy UPLOADS_DIR) allows a persistent image path on
+// Plesk. Payment-link images are intentionally public and are exposed through
+// /imagepro/:name; /uploads/:name remains available for existing links.
 const uploadApplicationRoot = appPath();
 const uploadIsHttpdocsRoot = path.basename(uploadApplicationRoot).toLowerCase() === "httpdocs";
 const configuredImageDirectory = process.env.IMAGEPRO_DIR?.trim() || process.env.UPLOADS_DIR?.trim();
@@ -2107,12 +2106,14 @@ export async function registerRoutes(
     return computeDirectCryptoFeeBreakdown(grossUsdt, providerPercent, ashtechPercent);
   }
 
-  // Serve uploaded files statically.
+  // Serve payment-link images publicly without authentication. The physical
+  // directory may be outside the web root on Plesk, but both public URL aliases
+  // are handled by Express. /uploads is retained for existing payment links.
   // H-6 hardening: force download disposition + nosniff so a stray script-like
   // upload can never be interpreted/executed by the browser as HTML/JS, even if
   // the reverse proxy were ever misconfigured to execute files from this folder.
   const express = await import("express");
-  app.use("/uploads", express.default.static(uploadsDir, {
+  const publicUploadedFiles = express.default.static(uploadsDir, {
     setHeaders: (res, filePath) => {
       res.setHeader("X-Content-Type-Options", "nosniff");
       res.setHeader("Content-Security-Policy", "default-src 'none'; sandbox;");
@@ -2122,7 +2123,9 @@ export async function registerRoutes(
         res.setHeader("Content-Disposition", "attachment");
       }
     },
-  }));
+  });
+  app.use("/imagepro", publicUploadedFiles);
+  app.use("/uploads", publicUploadedFiles);
 
   // ── IP block redirect: GET /login, /register → /blocked?until=X ─────────────
   // Works server-side BEFORE React loads — any browser on a blocked IP gets
@@ -2674,7 +2677,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Le contenu du fichier ne correspond pas à son type déclaré" });
       }
 
-      const filePath = `/uploads/${req.file.filename}`;
+      const filePath = `/imagepro/${req.file.filename}`;
       res.json({ 
         success: true,
         objectPath: filePath,
@@ -2933,7 +2936,7 @@ export async function registerRoutes(
         const filename = `${uniqueSuffix}${ext}`;
         const diskPath = path.join(uploadsDir, filename);
         fs.writeFileSync(diskPath, req.file.buffer);
-        const urlPath = `/uploads/${filename}`;
+        const urlPath = `/imagepro/${filename}`;
         res.json({ 
           success: true,
           objectPath: urlPath,
