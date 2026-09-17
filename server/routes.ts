@@ -18435,7 +18435,6 @@ export async function registerRoutes(
                 COALESCE(SUM(CASE WHEN t.status = 'completed' AND t.source = 'hosted_page' THEN CAST(t.amount AS DECIMAL(30, 10)) ELSE 0 END), 0) AS hp_amount
               FROM users u
               LEFT JOIN transactions t ON t.user_id = u.id
-              WHERE COALESCE(u.role, 'user') NOT IN ('admin', 'support', 'finance')
               GROUP BY u.id, u.full_name, u.email, u.username, u.is_verified, u.api_enabled, u.api_key, u.created_at
               ORDER BY u.created_at DESC
             `
@@ -18450,7 +18449,6 @@ export async function registerRoutes(
                 COALESCE(SUM(t.amount::numeric) FILTER (WHERE t.status = 'completed' AND t.source = 'hosted_page'), 0) AS hp_amount
               FROM users u
               LEFT JOIN transactions t ON t.user_id = u.id
-              WHERE COALESCE(u.role, 'user') NOT IN ('admin', 'support', 'finance')
               GROUP BY u.id, u.full_name, u.email, u.username, u.is_verified, u.api_enabled, u.api_key, u.created_at
               ORDER BY u.created_at DESC
             `,
@@ -18465,9 +18463,9 @@ export async function registerRoutes(
         : ((rows as any).rows || []);
       const result = (selectedRows as any[]).map(row => ({
         id: row.id,
-        fullName: row.full_name,
-        email: row.email,
-        username: row.username,
+        fullName: row.full_name || row.username || row.email || "Marchand sans nom",
+        email: row.email || "",
+        username: row.username || "",
         isVerified: row.is_verified,
         apiEnabled: row.api_enabled || false,
         hasApiKey: !!row.api_key,

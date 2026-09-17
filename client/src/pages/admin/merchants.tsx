@@ -17,9 +17,9 @@ import { Link } from "wouter";
 
 interface ApiUser {
   id: string;
-  fullName: string;
-  email: string;
-  username: string;
+  fullName: string | null;
+  email: string | null;
+  username: string | null;
   isVerified: boolean;
   apiEnabled: boolean;
   hasApiKey: boolean;
@@ -59,10 +59,10 @@ export default function AdminMerchants() {
     },
   });
 
+  const normalizedSearch = search.trim().toLowerCase();
   const filtered = users.filter(u =>
-    u.fullName.toLowerCase().includes(search.toLowerCase()) ||
-    u.email.toLowerCase().includes(search.toLowerCase()) ||
-    u.username.toLowerCase().includes(search.toLowerCase())
+    [u.fullName, u.email, u.username]
+      .some(value => String(value ?? "").toLowerCase().includes(normalizedSearch))
   );
 
   return (
@@ -142,9 +142,13 @@ export default function AdminMerchants() {
                       <TableRow key={user.id} data-testid={`row-merchant-${user.id}`}>
                         <TableCell>
                           <div>
-                            <p className="font-medium text-sm text-foreground">{user.fullName}</p>
-                            <p className="text-xs text-muted-foreground">{user.email}</p>
-                            <p className="text-xs text-muted-foreground">@{user.username}</p>
+                            <p className="font-medium text-sm text-foreground">
+                              {user.fullName || user.username || user.email || "Marchand sans nom"}
+                            </p>
+                            <p className="text-xs text-muted-foreground">{user.email || "—"}</p>
+                            {user.username && (
+                              <p className="text-xs text-muted-foreground">@{user.username}</p>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell>
