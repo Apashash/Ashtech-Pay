@@ -3,6 +3,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/lib/language";
 import { useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
+import type { User } from "@shared/schema";
 import {
   ArrowRight,
   CheckCircle2,
@@ -17,6 +19,7 @@ function OptionCard({
   description,
   points,
   buttonLabel,
+  buttonDisabled,
   onClick,
   testId,
 }: {
@@ -27,6 +30,7 @@ function OptionCard({
   description: string;
   points: string[];
   buttonLabel: string;
+  buttonDisabled?: boolean;
   onClick: () => void;
   testId: string;
 }) {
@@ -46,7 +50,7 @@ function OptionCard({
             </li>
           ))}
         </ul>
-        <Button onClick={onClick} className="mt-7 w-full gap-2" data-testid={testId}>
+        <Button onClick={onClick} disabled={buttonDisabled} className="mt-7 w-full gap-2" data-testid={testId}>
           {buttonLabel}
           <ArrowRight className="h-4 w-4" />
         </Button>
@@ -59,6 +63,8 @@ export default function ApiKeysPage() {
   const [, setLocation] = useLocation();
   const { t } = useLanguage();
   const copy = t.apiHub;
+  const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
+  const directApiEnabled = user?.role === "admin" || user?.apiEnabled === true;
 
   return (
     <DashboardLayout>
@@ -86,9 +92,10 @@ export default function ApiKeysPage() {
             iconAlt="Direct API"
             iconClassName="bg-blue-500/10 text-blue-500"
             title={copy.directTitle}
-            description={copy.directDescription}
+            description={directApiEnabled ? copy.directDescription : copy.directDisabledDescription}
             points={[copy.directPoint1, copy.directPoint2, copy.directPoint3]}
-            buttonLabel={copy.directButton}
+            buttonLabel={directApiEnabled ? copy.directButton : copy.directDisabledButton}
+            buttonDisabled={!directApiEnabled}
             onClick={() => setLocation("/dashboard/direct-api")}
             testId="button-api-direct"
           />

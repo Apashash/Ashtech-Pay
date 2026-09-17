@@ -1287,6 +1287,26 @@ async function requireMerchantKyc(req: Request, res: Response, next: NextFunctio
   }
 }
 
+async function requireMerchantApiEnabled(req: Request, res: Response, next: NextFunction) {
+  const userId = req.userId || req.session?.userId;
+  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+  try {
+    const user = await storage.getUser(userId);
+    if (!user) return res.status(404).json({ error: "user_not_found" });
+    if (user.role !== "admin" && !(user as any).apiEnabled) {
+      return res.status(403).json({
+        error: "api_not_enabled",
+        message: "Votre API directe n'est pas encore activée. Contactez le support pour demander l'activation de votre clé API.",
+      });
+    }
+    next();
+  } catch (error: any) {
+    console.error("[Merchant API access guard]", error?.message || error);
+    return res.status(500).json({ error: "server_error" });
+  }
+}
+
 // ── Admin route cloaking ─────────────────────────────────────────────────────
 // Do not reveal the existence of admin API routes to unauthenticated visitors
 // or regular users. This runs before requireAdminPin and before every admin
@@ -4901,7 +4921,7 @@ export async function registerRoutes(
   });
 
   // ─── API Key routes ─────────────────────────────────────────────────────────
-  app.get("/api/user/api-key", requireAuth, requireMerchantKyc, async (req, res) => {
+  app.get("/api/user/api-key", requireAuth, requireMerchantKyc, requireMerchantApiEnabled, async (req, res) => {
     try {
       const userId = req.userId!;
       let user = await storage.getUser(userId);
@@ -4924,7 +4944,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/user/api-key/regenerate", requireAuth, requireMerchantKyc, async (req, res) => {
+  app.post("/api/user/api-key/regenerate", requireAuth, requireMerchantKyc, requireMerchantApiEnabled, async (req, res) => {
     try {
       const userId = req.userId!;
       const { randomBytes } = await import("crypto");
@@ -4940,7 +4960,7 @@ export async function registerRoutes(
 
   // Merchant webhook signing secret. It is encrypted at rest and only shown
   // after an authenticated request; webhook deliveries never expose it.
-  app.get("/api/user/webhook-secret", requireAuth, requireMerchantKyc, async (req, res) => {
+  app.get("/api/user/webhook-secret", requireAuth, requireMerchantKyc, requireMerchantApiEnabled, async (req, res) => {
     try {
       if (!isFieldEncryptionConfigured()) {
         return res.status(503).json({ message: "Le chiffrement des secrets webhook n'est pas configuré." });

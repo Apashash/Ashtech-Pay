@@ -103,6 +103,10 @@ import { PushNotificationPrompt } from "@/components/push-notification-prompt";
 import { LoadingScreen } from "@/components/loading-indicator";
 import LandingPage from "@/pages/landing";
 import type { User } from "@shared/schema";
+import { DashboardLayout } from "@/components/dashboard-layout";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Headphones, KeyRound } from "lucide-react";
 
 // Redirige immédiatement vers /blocked si l'IP est bloquée (vérif. localStorage)
 // useLayoutEffect + return null = aucun flash de la page login/register
@@ -133,6 +137,51 @@ function MerchantKycGuard({ children }: { children: React.ReactNode }) {
 
   if (isLoading || !user || (user.role !== "admin" && !user.isVerified)) {
     return <LoadingScreen />;
+  }
+
+  return <>{children}</>;
+}
+
+function DirectApiGuard({ children }: { children: React.ReactNode }) {
+  const [, setLocation] = useLocation();
+  const { data: user, isLoading } = useQuery<User>({ queryKey: ["/api/user"] });
+
+  useEffect(() => {
+    if (!isLoading && !user) setLocation("/login");
+    if (!isLoading && user && user.role !== "admin" && !user.isVerified) {
+      setLocation("/dashboard/kyc");
+    }
+  }, [isLoading, user, setLocation]);
+
+  if (isLoading || !user || (user.role !== "admin" && !user.isVerified)) {
+    return <LoadingScreen />;
+  }
+
+  if (user.role !== "admin" && !user.apiEnabled) {
+    return (
+      <DashboardLayout>
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <Card className="w-full max-w-lg text-center">
+            <CardHeader>
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-500/10">
+                <KeyRound className="h-7 w-7 text-amber-600" />
+              </div>
+              <CardTitle className="text-xl">API directe non activée</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <p className="text-sm leading-6 text-muted-foreground">
+                Votre KYC est validé, mais l’accès à l’API directe n’est pas encore activé pour votre compte.
+                Contactez le support pour demander l’activation de votre clé API.
+              </p>
+              <Button className="gap-2" onClick={() => setLocation("/dashboard/support")}>
+                <Headphones className="h-4 w-4" />
+                Contacter le support
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </DashboardLayout>
+    );
   }
 
   return <>{children}</>;
@@ -176,7 +225,7 @@ function Router() {
       <Route path="/dashboard/kyc-verified" component={KYCVerifiedPage} />
       <Route path="/dashboard/support" component={SupportPage} />
       <Route path="/dashboard/api-keys"><MerchantKycGuard><ApiKeysPage /></MerchantKycGuard></Route>
-      <Route path="/dashboard/direct-api"><MerchantKycGuard><DirectApiPage /></MerchantKycGuard></Route>
+      <Route path="/dashboard/direct-api"><DirectApiGuard><DirectApiPage /></DirectApiGuard></Route>
       <Route path="/dashboard/hosted-page"><MerchantKycGuard><HostedPageDashboard /></MerchantKycGuard></Route>
       <Route path="/dashboard/hosted-page/keys"><MerchantKycGuard><HostedPageKeys /></MerchantKycGuard></Route>
       <Route path="/dashboard/hosted-page/generate"><MerchantKycGuard><HostedPageGenerate /></MerchantKycGuard></Route>
