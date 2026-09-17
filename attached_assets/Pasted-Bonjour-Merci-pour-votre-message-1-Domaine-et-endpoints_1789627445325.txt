@@ -1,0 +1,85 @@
+Bonjour,
+
+Merci pour votre message.
+
+1. Domaine et endpoints API
+
+La nouvelle base à utiliser est le domaine ashtechpay.com.
+
+Pour les appels API, utilisez de préférence les URLs canoniques documentées :
+
+POST https://www.ashtechpay.com/v1/collect
+GET  https://www.ashtechpay.com/v1/countries
+L’API Direct utilise une authentification Bearer :
+
+Authorization: Bearer ak_votre_cle_api
+Pour un appel POST, il est préférable d’utiliser directement l’hôte canonique afin d’éviter de dépendre d’une redirection HTTP.
+
+2. Sécurité du webhook notify_url
+
+Oui. AshTech Pay peut signer les notifications webhook lorsqu’un secret webhook est configuré pour le compte.
+
+Les notifications peuvent contenir les headers suivants :
+
+X-Ashtech-Event-Id: id-de-livraison
+X-Ashtech-Timestamp: timestamp_unix
+X-Ashtech-Signature: sha256=...
+La signature est calculée ainsi :
+
+HMAC-SHA256(webhook_secret, timestamp + "." + raw_request_body)
+Le secret webhook est un secret dédié au format whsec_.... Il doit rester uniquement sur votre serveur.
+
+Lors de la réception d’un webhook, nous recommandons de :
+
+vérifier la signature sur le corps brut de la requête, avant le parsing JSON ;
+refuser les timestamps trop anciens ;
+dédupliquer les événements avec X-Ashtech-Event-Id ou transaction_id ;
+répondre rapidement avec un statut HTTP 2xx ;
+vérifier le statut côté serveur avant de confirmer définitivement une commande.
+Nous ne recommandons pas de dépendre uniquement d’une whitelist d’adresses IP. La vérification HMAC et la vérification serveur du statut doivent être les contrôles principaux.
+
+En complément, vous pouvez vérifier le statut réel d’une transaction avec :
+
+GET https://www.ashtechpay.com/v1/transaction/{transaction_id}
+avec votre clé API dans l’en-tête Authorization.
+
+La vérification documentée se fait avec le transaction_id. Votre reference doit surtout servir à faire le rapprochement avec votre propre commande et à garantir l’idempotence.
+
+3. Documentation développeur
+
+La documentation complète est disponible ici :
+
+Vue d’ensemble de l’API :
+https://doc.ashtechpay.com/docs/direct-api/overview
+Collecte Mobile Money :
+https://doc.ashtechpay.com/docs/direct-api/mobile-money
+Webhooks :
+https://doc.ashtechpay.com/docs/direct-api/webhooks
+Pays et opérateurs :
+https://doc.ashtechpay.com/docs/reference/countries
+Codes d’erreur :
+https://doc.ashtechpay.com/docs/errors
+Sandbox et tests :
+https://doc.ashtechpay.com/docs/sandbox
+4. Clé API et environnement de test
+
+Les clés Direct API commencent par :
+
+ak_...
+Les clés Hosted Checkout commencent par :
+
+hp_live_...
+Une clé hp_live_... ne doit pas être utilisée avec les endpoints Direct API comme /v1/collect. Pour ces endpoints, il faut utiliser une clé Direct API ak_....
+
+Nous ne pouvons pas confirmer le statut exact d’une clé particulière sans consulter le compte concerné. Vous pouvez vérifier son type et son activation depuis votre dashboard. Ne transmettez jamais la clé complète par email ou dans un ticket.
+
+Pour tester l’intégration avant la production, utilisez l’environnement de simulation documenté avec les numéros de test. Les requêtes de sandbox renvoient notamment :
+
+{
+  "sandbox": true,
+  "simulation": true
+}
+Elles ne déclenchent aucun paiement réel, aucun appel opérateur et aucune transaction réelle. Les tests sandbox ne doivent donc pas être utilisés pour valider un webhook de production.
+
+Cordialement,
+L’équipe AshTech Pay
