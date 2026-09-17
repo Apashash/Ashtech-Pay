@@ -63,6 +63,19 @@ const MYSQL_CONNECT_TIMEOUT_MS = Math.max(
 
 console.log(`[DB] Pool limits — main: ${MAIN_POOL_MAX}, session: ${SESSION_POOL_MAX} (PM2 instances detected: ${PM2_INSTANCES})`);
 
+// Keep MySQL TIMESTAMP values on one timeline. Without an explicit session
+// timezone, a Plesk/MySQL server configured in local time can make notification
+// and transaction timestamps appear hours ahead of the user's actual time.
+function configureMysqlUtcSession(rawPool: any): void {
+  rawPool?.on?.("connection", (connection: any) => {
+    connection.query("SET time_zone = '+00:00'", (error: any) => {
+      if (error) {
+        console.error("[DB] Could not set MySQL session timezone to UTC:", error?.message || error);
+      }
+    });
+  });
+}
+
 // Append application_name to the connection string so PostgreSQL triggers
 // can distinguish app connections from direct/external DB access.
 function addAppName(url: string, name: string): string {
@@ -144,7 +157,9 @@ const mysqlPool = useMysql ? mysql.createPool({
   waitForConnections: true,
   queueLimit: 0,
   enableKeepAlive: true,
+  timezone: "Z",
 }) : null;
+configureMysqlUtcSession(mysqlPool);
 
 export const pool: any = useMysql
   ? createMysqlCompatiblePool(mysqlPool, MAIN_POOL_MAX)
@@ -184,15 +199,18 @@ export const db: ReturnType<typeof drizzlePg> = (useMysql
 const sessionDatabaseUrl = useMysql
   ? databaseUrl
   : process.env.DIRECT_DATABASE_URL || databaseUrl;
+const mysqlSessionPool = useMysql ? mysql.createPool({
+  uri: sessionDatabaseUrl,
+  connectionLimit: SESSION_POOL_MAX,
+  connectTimeout: MYSQL_CONNECT_TIMEOUT_MS,
+  waitForConnections: true,
+  queueLimit: 0,
+  enableKeepAlive: true,
+  timezone: "Z",
+}) : null;
+configureMysqlUtcSession(mysqlSessionPool);
 export const sessionPool: any = useMysql
-  ? createMysqlCompatiblePool(mysql.createPool({
-      uri: sessionDatabaseUrl,
-      connectionLimit: SESSION_POOL_MAX,
-      connectTimeout: MYSQL_CONNECT_TIMEOUT_MS,
-      waitForConnections: true,
-      queueLimit: 0,
-      enableKeepAlive: true,
-    }), SESSION_POOL_MAX)
+  ? createMysqlCompatiblePool(mysqlSessionPool, SESSION_POOL_MAX)
   : new Pool({
       connectionString: sessionDatabaseUrl,
       ssl: sslConfig,
