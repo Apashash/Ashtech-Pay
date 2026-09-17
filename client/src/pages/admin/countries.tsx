@@ -176,6 +176,23 @@ export default function AdminCountries() {
     onError: (error: Error) => toast({ title: "Erreur", description: error.message, variant: "destructive" }),
   });
 
+  const toggleCountryMutation = useMutation({
+    mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
+      const res = await apiRequest("PATCH", `/api/admin/countries/${id}`, { isActive });
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.message || "Erreur lors de la modification du pays");
+      }
+      return res.json();
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/countries"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/public/countries"] });
+      toast({ title: variables.isActive ? "Pays activé" : "Pays désactivé" });
+    },
+    onError: (error: Error) => toast({ title: "Erreur", description: error.message, variant: "destructive" }),
+  });
+
   const deleteCountryMutation = useMutation({
     mutationFn: async (id: string) => {
       return apiRequest("DELETE", `/api/admin/countries/${id}`);
@@ -335,12 +352,13 @@ export default function AdminCountries() {
                     <TableRow>
                       <TableHead>Pays</TableHead>
                       <TableHead>Devise</TableHead>
+                      <TableHead className="text-center">Global</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {loadingCountries ? (
-                      <TableRow><TableCell colSpan={3} className="text-center">Chargement...</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={4} className="text-center">Chargement...</TableCell></TableRow>
                     ) : countries?.map((country) => (
                       <TableRow key={country.id}>
                         <TableCell>
@@ -349,6 +367,22 @@ export default function AdminCountries() {
                           {!country.isActive && <Badge variant="secondary" className="ml-2">Inactif</Badge>}
                         </TableCell>
                         <TableCell>{country.currency}</TableCell>
+                        <TableCell className="text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <Switch
+                              checked={country.isActive !== false}
+                              disabled={toggleCountryMutation.isPending}
+                              onCheckedChange={(checked) =>
+                                toggleCountryMutation.mutate({ id: country.id, isActive: checked })
+                              }
+                              aria-label={`${country.isActive !== false ? "Désactiver" : "Activer"} ${country.name} globalement`}
+                              data-testid={`switch-country-global-${country.id}`}
+                            />
+                            <span className={`hidden sm:inline text-xs font-medium ${country.isActive !== false ? "text-green-600" : "text-muted-foreground"}`}>
+                              {country.isActive !== false ? "Actif" : "Inactif"}
+                            </span>
+                          </div>
+                        </TableCell>
                         <TableCell className="text-right">
                           <Button size="icon" variant="ghost" onClick={() => openEditCountry(country)}>
                             <Pencil className="w-4 h-4" />
