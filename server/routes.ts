@@ -373,17 +373,22 @@ async function reconcilePawaPayIncomingAttempt(transaction: any): Promise<"compl
 }
 
 // UPLOADS_DIR env var allows a persistent path outside the deployment folder (e.g. on Plesk).
-// Default: <cwd>/uploads — but this is wiped on each deployment!
-// On production (Plesk), set UPLOADS_DIR to a stable absolute path like:
-//   /var/www/vhosts/ashtechpay.top/upload_data
+// On Plesk, the application often runs from httpdocs with a read-only deployment
+// directory, so default to a sibling upload_data directory instead of trying to
+// write inside httpdocs. The route still serves files through /uploads/:name.
+const uploadApplicationRoot = appPath();
+const uploadIsHttpdocsRoot = path.basename(uploadApplicationRoot).toLowerCase() === "httpdocs";
 const uploadsDir = process.env.UPLOADS_DIR
   ? path.resolve(process.env.UPLOADS_DIR)
-  : appPath("uploads");
+  : process.env.NODE_ENV === "production" && uploadIsHttpdocsRoot
+    ? path.resolve(uploadApplicationRoot, "..", "upload_data")
+    : appPath("uploads");
 function prepareStorageDirectory(directory: string, label: string): boolean {
   try {
     if (!fs.existsSync(directory)) {
       fs.mkdirSync(directory, { recursive: true });
     }
+    fs.accessSync(directory, fs.constants.W_OK);
     console.log(`[${label}] Storage directory: ${directory}`);
     return true;
   } catch (error: any) {
@@ -2959,11 +2964,17 @@ export async function registerRoutes(
         message: uploadMessage,
       });
       const storageMessage = uploadError.code === "EACCES" || uploadError.code === "EPERM"
-        ? "L'utilisateur de l'application Node.js n'a pas les droits d'écriture sur le dossier private-documents."
+        ? isKycUpload
+          ? "L'utilisateur Node.js n'a pas les droits d'écriture sur le stockage privé KYC."
+          : "L'utilisateur Node.js n'a pas les droits d'écriture sur le dossier d'images. Configurez UPLOADS_DIR vers un dossier persistant accessible par Node.js."
         : uploadError.code === "ENOENT"
-          ? "Le chemin du stockage privé est introuvable. Vérifiez PRIVATE_DOCUMENTS_ROOT et le dossier private-documents."
+          ? isKycUpload
+            ? "Le chemin du stockage privé KYC est introuvable. Vérifiez PRIVATE_DOCUMENTS_ROOT."
+            : "Le dossier d'images est introuvable. Vérifiez UPLOADS_DIR et les droits du dossier."
           : uploadError.code === "EROFS"
-            ? "Le stockage privé est en lecture seule sur le serveur."
+            ? isKycUpload
+              ? "Le stockage privé KYC est en lecture seule sur le serveur."
+              : "Le dossier d'images est en lecture seule sur le serveur."
             : uploadError.code === "KYC_ENCRYPTION_NOT_CONFIGURED"
               ? "La clé de chiffrement des documents KYC n'est pas configurée sur le serveur."
               : isKycDatabaseError
@@ -2976,7 +2987,7 @@ export async function registerRoutes(
             ? storageMessage
             : "Erreur lors de l'upload",
         code: isPrivateStorageUnavailable
-          ? "KYC_STORAGE_UNAVAILABLE"
+          ? isKycUpload ? "KYC_STORAGE_UNAVAILABLE" : "UPLOADS_STORAGE_UNAVAILABLE"
           : isKycDatabaseError
             ? "KYC_DATABASE_UNAVAILABLE"
             : "UPLOAD_FAILED",
