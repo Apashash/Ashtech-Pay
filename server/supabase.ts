@@ -47,6 +47,7 @@ export function getSupabaseClient(): SupabaseClient | null {
     console.warn("[Supabase] SUPABASE_SERVICE_ROLE_KEY is missing. Do not use the anon key for server-side uploads.");
     return null;
   }
+  if (!supabaseUrl || !supabaseServiceRoleKey) return null;
 
   try {
     supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {

@@ -69,6 +69,7 @@ import {
   getSignedImageUrl,
   downloadFromSupabase,
   getStorageBucket,
+  getSupabaseConfigurationIssue,
   isSupabaseStorageConfigured,
 } from "./supabase";
 import { decryptField, encryptField, isFieldEncryptionConfigured } from "./fieldEncryption";
@@ -2947,8 +2948,9 @@ export async function registerRoutes(
 
       if (safeFolder === "payment-links" && paymentImageStorage === "supabase") {
         if (!isSupabaseStorageConfigured()) {
-          const storageError = new Error("SUPABASE_STORAGE_NOT_CONFIGURED") as NodeJS.ErrnoException;
-          storageError.code = "SUPABASE_STORAGE_NOT_CONFIGURED";
+          const configurationIssue = getSupabaseConfigurationIssue() || "SUPABASE_STORAGE_NOT_CONFIGURED";
+          const storageError = new Error(configurationIssue) as NodeJS.ErrnoException;
+          storageError.code = configurationIssue;
           throw storageError;
         }
 
@@ -3031,7 +3033,7 @@ export async function registerRoutes(
       const uploadError = error as NodeJS.ErrnoException;
       const isGoogleDriveError = uploadError instanceof GoogleDriveStorageError ||
         String(uploadError.code || "").startsWith("GOOGLE_DRIVE_");
-      const isSupabaseStorageError = String(uploadError.code || "").startsWith("SUPABASE_STORAGE_") ||
+      const isSupabaseStorageError = String(uploadError.code || "").startsWith("SUPABASE_") ||
         uploadError.code === "PAYMENT_IMAGE_STORAGE_NOT_CONFIGURED";
       const isPrivateStorageUnavailable = ["EACCES", "EPERM", "ENOENT", "EROFS"].includes(uploadError.code || "") ||
         isGoogleDriveError ||
@@ -3055,6 +3057,12 @@ export async function registerRoutes(
       });
       const storageMessage = isGoogleDriveError
         ? uploadError.message
+        : uploadError.code === "SUPABASE_URL_MISSING"
+          ? "Configuration Supabase incomplète : SUPABASE_URL manque dans les variables d'environnement du serveur Plesk."
+          : uploadError.code === "SUPABASE_URL_INVALID"
+            ? "Configuration Supabase invalide : SUPABASE_URL doit être l'URL du projet, par exemple https://xxxxx.supabase.co."
+            : uploadError.code === "SUPABASE_SERVICE_ROLE_KEY_MISSING"
+              ? "Configuration Supabase incomplète : SUPABASE_SERVICE_ROLE_KEY manque dans les variables d'environnement du serveur Plesk."
         : uploadError.code === "SUPABASE_STORAGE_NOT_CONFIGURED"
           ? "Supabase Storage n'est pas configuré sur ce serveur."
           : uploadError.code === "SUPABASE_STORAGE_UPLOAD_FAILED"
