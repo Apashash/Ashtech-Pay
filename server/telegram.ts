@@ -454,7 +454,7 @@ export async function notifyDepositFailed(opts: {
   const isLink = opts.depositType === "payment_link";
   const typeLabel = isLink ? "Lien de paiement" : "Dépôt normal";
   const methodLabel = opts.paymentMethod === "mobile_money" ? "Mobile Money" : opts.paymentMethod || "";
-  const sourceLabel = opts.source === "api" ? "🔌 <b>Paiement Checkout Hosted Page</b>\n" : opts.source === "hosted_page" ? "🖥️ <b>Paiement Checkout Hosted Page</b>\n" : "";
+  const sourceLabel = opts.source === "api" ? "🔌 <b>Paiement via API</b>\n" : opts.source === "hosted_page" ? "🖥️ <b>Paiement Checkout Hosted Page</b>\n" : "";
   const msg =
     `❌ <b>ÉCHEC DE PAIEMENT (DÉPÔT)</b>\n` +
     `──────────────────\n` +
