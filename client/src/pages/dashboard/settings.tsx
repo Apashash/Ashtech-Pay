@@ -12,7 +12,7 @@ import {
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation, Link } from "wouter";
 import { apiRequest, getAuthHeaders, queryClient, setAuthToken } from "@/lib/queryClient";
-import { getProfileImageSrc } from "@/lib/profile-image";
+import { ProfileImage } from "@/components/profile-image";
 import type { User } from "@shared/schema";
 import {
   Save,
@@ -516,11 +516,19 @@ export default function SettingsPage() {
               aria-label="Modifier la photo de profil"
               data-testid="button-profile-photo"
             >
-              <img
-                src={profilePhotoPreview || getProfileImageSrc(user?.profileImagePath)}
-                alt="Photo de profil"
-                className="w-full h-full object-cover"
-              />
+                {profilePhotoPreview ? (
+                  <img
+                    src={profilePhotoPreview}
+                    alt="Photo de profil"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <ProfileImage
+                    profileImagePath={user?.profileImagePath}
+                    alt="Photo de profil"
+                    className="w-full h-full object-cover"
+                  />
+                )}
               <span className="absolute inset-0 flex items-center justify-center bg-black/45 text-white opacity-0 group-hover:opacity-100 transition-opacity">
                 {uploadProfilePhotoMutation.isPending
                   ? <Loader2 className="w-5 h-5 animate-spin" />

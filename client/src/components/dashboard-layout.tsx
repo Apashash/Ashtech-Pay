@@ -68,7 +68,7 @@ import type { SupportedCurrency } from "@shared/schema";
 import { COUNTRY_CURRENCIES } from "@shared/schema";
 import { useLanguage } from "@/lib/language";
 import { LoadingScreen } from "@/components/loading-indicator";
-import { getProfileImageSrc } from "@/lib/profile-image";
+import { ProfileImage } from "@/components/profile-image";
 import { LanguageSwitcher } from "@/components/language-switcher";
 
 const MENU_URLS = [
@@ -439,8 +439,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               data-testid="link-sidebar-profile-settings"
             >
               <div className="w-10 h-10 rounded-full overflow-hidden bg-primary/15 border border-primary/20 flex items-center justify-center shrink-0">
-                <img
-                  src={getProfileImageSrc(user.profileImagePath)}
+                <ProfileImage
+                  profileImagePath={user.profileImagePath}
                   alt="Photo de profil"
                   className="w-full h-full object-cover"
                 />
@@ -513,8 +513,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                   onClick={() => setLocation(hasUnreadGlobalMessage ? "/dashboard/global-message" : "/dashboard/settings")}
                   data-testid="button-profile"
                 >
-                  <img
-                    src={getProfileImageSrc(user.profileImagePath)}
+                  <ProfileImage
+                    profileImagePath={user.profileImagePath}
                     alt="Photo de profil"
                     className="w-full h-full object-cover"
                   />
