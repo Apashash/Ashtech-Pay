@@ -18,6 +18,7 @@ interface SearchableSelectContentProps {
   searchPlaceholder?: string;
   emptyMessage?: string;
   className?: string;
+  listClassName?: string;
 }
 
 export function SearchableSelectContent({
@@ -25,6 +26,7 @@ export function SearchableSelectContent({
   searchPlaceholder = "Rechercher un pays...",
   emptyMessage = "Aucun résultat",
   className,
+  listClassName,
 }: SearchableSelectContentProps) {
   const [search, setSearch] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -74,7 +76,7 @@ export function SearchableSelectContent({
           </button>
         )}
       </div>
-      <div className="max-h-[240px] overflow-y-auto p-1">
+      <div className={cn("max-h-[240px] overflow-y-auto p-1", listClassName)}>
         {filtered.length === 0 ? (
           <div className="py-6 text-center text-sm text-muted-foreground">{emptyMessage}</div>
         ) : (

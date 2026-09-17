@@ -3,7 +3,8 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelectContent } from "@/components/ui/searchable-select-content";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -399,17 +400,18 @@ function GroupedRuleCard({
               <SelectTrigger className="w-full h-9 text-sm">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
-                {targetOptions.map((c) => (
-                  <SelectItem key={c.code} value={c.code}>
-                    <span className="flex items-center gap-2">
-                      <span>{CURRENCY_FLAGS[c.code] || "💱"}</span>
-                      <span className="font-medium">{c.code}</span>
-                      <span className="text-muted-foreground text-xs">{c.name}</span>
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
+              <SearchableSelectContent
+                options={targetOptions.map((c) => ({
+                  value: c.code,
+                  label: c.code,
+                  sub: c.name,
+                  flag: CURRENCY_FLAGS[c.code] || "💱",
+                  searchText: c.name,
+                }))}
+                searchPlaceholder="Rechercher un pays ou une devise..."
+                emptyMessage="Aucune devise trouvée"
+                listClassName="max-h-[200px]"
+              />
             </Select>
           </div>
 
@@ -834,17 +836,18 @@ export default function AutoConversionPage() {
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Choisir la devise cible…" />
                   </SelectTrigger>
-                  <SelectContent>
-                    {targetOptions.map((c) => (
-                      <SelectItem key={c.code} value={c.code}>
-                        <span className="flex items-center gap-2">
-                          <span>{CURRENCY_FLAGS[c.code] || "🌍"}</span>
-                          <span className="font-medium">{c.code}</span>
-                          <span className="text-muted-foreground text-xs">{c.name}</span>
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
+                   <SearchableSelectContent
+                     options={targetOptions.map((c) => ({
+                       value: c.code,
+                       label: c.code,
+                       sub: c.name,
+                       flag: CURRENCY_FLAGS[c.code] || "🌍",
+                       searchText: c.name,
+                     }))}
+                     searchPlaceholder="Rechercher un pays ou une devise..."
+                     emptyMessage="Aucune devise trouvée"
+                     listClassName="max-h-[200px]"
+                   />
                 </Select>
                 {toCurrency && selectedSources.size > 0 && (
                   <p className="text-[10px] text-primary flex items-center gap-1 pt-0.5">
