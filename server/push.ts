@@ -26,9 +26,11 @@ let vapidConfig: VapidConfig | null | undefined;
 const PUSH_CTA = "Appuyez pour consulter votre compte.";
 
 // These outcomes remain available in the in-app notification center, but do
-// not generate a browser push alert. Failed withdrawals/transfers already
-// restore the balance and are intentionally less disruptive to the user.
+// not generate a browser push alert. Failed payment operations are intentionally
+// kept less disruptive because they do not credit or debit the user's balance.
 const PUSH_DISABLED_NOTIFICATION_TYPES = new Set([
+  "deposit_failed",
+  "payment_link_failed",
   "withdrawal_failed",
   "transfer_failed",
 ]);
