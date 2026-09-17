@@ -28,13 +28,21 @@ fi
 # application workflow. Give that persistent instance time to become ready
 # before attempting a fallback launch here.
 mysql_already_ready=false
-for attempt in {1..40}; do
+if [[ "${LOCAL_MYSQL_ONLY:-false}" == "true" ]]; then
+  # The dedicated workflow is the owner of the MariaDB process. It must
+  # launch immediately instead of waiting for the application workflow.
   if mariadb-admin --no-defaults --protocol=socket --socket="${SOCKET}" -uroot ping >/dev/null 2>&1; then
     mysql_already_ready=true
-    break
   fi
-  sleep 0.25
-done
+else
+  for attempt in {1..40}; do
+    if mariadb-admin --no-defaults --protocol=socket --socket="${SOCKET}" -uroot ping >/dev/null 2>&1; then
+      mysql_already_ready=true
+      break
+    fi
+    sleep 0.25
+  done
+fi
 
 if [[ "${mysql_already_ready}" != "true" ]]; then
   echo "[LocalMySQL] Starting MariaDB on 127.0.0.1:${MYSQL_PORT}"
@@ -87,7 +95,33 @@ export MYSQL_DATABASE_URL="mysql://root@127.0.0.1:${MYSQL_PORT}/${DB_NAME}"
 if [[ "${LOCAL_MYSQL_ONLY:-false}" == "true" ]]; then
   echo "[LocalMySQL] Dedicated database workflow is active"
   while true; do
-    sleep 3600
+    if ! mariadb-admin --no-defaults --protocol=socket --socket="${SOCKET}" -uroot ping >/dev/null 2>&1; then
+      echo "[LocalMySQL] MariaDB stopped; restarting the persistent database"
+      mariadbd \
+        --no-defaults \
+        --datadir="${DATA_DIR}" \
+        --socket="${SOCKET}" \
+        --port="${MYSQL_PORT}" \
+        --bind-address=127.0.0.1 \
+        --pid-file="${PID_FILE}" \
+        --log-error="${LOG_FILE}" \
+        --max_allowed_packet=64M \
+        --wait_timeout=28800 \
+        --skip-name-resolve \
+        >/dev/null 2>&1 &
+      for attempt in {1..30}; do
+        if mariadb-admin --no-defaults --protocol=socket --socket="${SOCKET}" -uroot ping >/dev/null 2>&1; then
+          echo "[LocalMySQL] MariaDB is ready again"
+          break
+        fi
+        if [[ "${attempt}" == "30" ]]; then
+          echo "[LocalMySQL] MariaDB restart did not become ready" >&2
+          tail -80 "${LOG_FILE}" >&2 || true
+        fi
+        sleep 1
+      done
+    fi
+    sleep 1
   done
 fi
 
