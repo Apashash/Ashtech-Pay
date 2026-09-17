@@ -14,6 +14,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import type { User } from "@shared/schema";
 import { apiRequest, queryClient, getAuthHeaders } from "@/lib/queryClient";
 import { useLanguage } from "@/lib/language";
+import { getUploadErrorMessage, preparePaymentLinkImage } from "@/lib/payment-link-image";
 import { ArrowLeft, Loader2, Upload, X, FileText, Link as LinkIcon, ExternalLink, Calendar, Image, Globe, Check } from "lucide-react";
 import { z } from "zod";
 
@@ -159,15 +160,18 @@ export default function LinkEditPage() {
   };
 
   const uploadImage = async (file: File): Promise<string> => {
+    const uploadFile = await preparePaymentLinkImage(file);
     const formData = new FormData();
-    formData.append("file", file);
+    formData.append("file", uploadFile);
     const res = await fetch("/api/uploads/file", {
       method: "POST",
       credentials: "include",
       headers: getAuthHeaders(),
       body: formData,
     });
-    if (!res.ok) throw new Error(lk.toastUploadError);
+    if (!res.ok) {
+      throw new Error(await getUploadErrorMessage(res, lk.toastUploadError));
+    }
     const result = await res.json();
     return result.url || result.objectPath;
   };
