@@ -118,7 +118,6 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     queryKey: ["/api/user"],
   });
   const settingsItems = SETTINGS_URLS
-    .filter(item => item.key !== "apiKeys" || !user || user.role === "admin" || user.isVerified)
     .map(item => ({ title: t.sidebar[item.key], url: item.url, icon: item.icon, imageSrc: item.imageSrc, color: item.color }));
   const isAdminAccount = user?.role === "admin";
 

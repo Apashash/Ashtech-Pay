@@ -224,7 +224,7 @@ function Router() {
       <Route path="/dashboard/kyc" component={KYCPage} />
       <Route path="/dashboard/kyc-verified" component={KYCVerifiedPage} />
       <Route path="/dashboard/support" component={SupportPage} />
-      <Route path="/dashboard/api-keys"><MerchantKycGuard><ApiKeysPage /></MerchantKycGuard></Route>
+      <Route path="/dashboard/api-keys" component={ApiKeysPage} />
       <Route path="/dashboard/direct-api"><DirectApiGuard><DirectApiPage /></DirectApiGuard></Route>
       <Route path="/dashboard/hosted-page"><MerchantKycGuard><HostedPageDashboard /></MerchantKycGuard></Route>
       <Route path="/dashboard/hosted-page/keys"><MerchantKycGuard><HostedPageKeys /></MerchantKycGuard></Route>

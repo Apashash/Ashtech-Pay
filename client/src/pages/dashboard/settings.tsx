@@ -778,16 +778,14 @@ export default function SettingsPage() {
               </div>
             </CollapsibleContent>
           </Collapsible>
-          {(user?.role === "admin" || user?.isVerified) && (
-            <SettingsRow
-              imageSrc="/settings-api-icon.png"
-              icon={Shield}
-              label={t.settings.apiKeysLabel}
-              iconColor="text-indigo-500"
-              onClick={() => setLocation("/dashboard/api-keys")}
-              data-testid="row-api-keys"
-            />
-          )}
+          <SettingsRow
+            imageSrc="/settings-api-icon.png"
+            icon={Shield}
+            label={t.settings.apiKeysLabel}
+            iconColor="text-indigo-500"
+            onClick={() => setLocation("/dashboard/api-keys")}
+            data-testid="row-api-keys"
+          />
         </SettingsCard>
 
         {/* APPAREILS CONNECTÉS */}

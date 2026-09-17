@@ -1,14 +1,26 @@
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { useEffect, useState } from "react";
 import { useLanguage } from "@/lib/language";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import type { User } from "@shared/schema";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   ArrowRight,
   CheckCircle2,
   Globe2,
+  ShieldCheck,
 } from "lucide-react";
 
 function OptionCard({
@@ -64,7 +76,21 @@ export default function ApiKeysPage() {
   const { t } = useLanguage();
   const copy = t.apiHub;
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
+  const isKycVerified = user?.role === "admin" || user?.isVerified === true;
   const directApiEnabled = user?.role === "admin" || user?.apiEnabled === true;
+  const [showKycDialog, setShowKycDialog] = useState(false);
+
+  useEffect(() => {
+    if (user && !isKycVerified) setShowKycDialog(true);
+  }, [user, isKycVerified]);
+
+  const openFeature = (path: string) => {
+    if (!isKycVerified) {
+      setShowKycDialog(true);
+      return;
+    }
+    setLocation(path);
+  };
 
   return (
     <DashboardLayout>
@@ -84,7 +110,7 @@ export default function ApiKeysPage() {
             description={copy.embeddedDescription}
             points={[copy.embeddedPoint1, copy.embeddedPoint2, copy.embeddedPoint3]}
             buttonLabel={copy.embeddedButton}
-            onClick={() => setLocation("/dashboard/hosted-page")}
+            onClick={() => openFeature("/dashboard/hosted-page")}
             testId="button-api-embedded-checkout"
           />
           <OptionCard
@@ -94,9 +120,9 @@ export default function ApiKeysPage() {
             title={copy.directTitle}
             description={directApiEnabled ? copy.directDescription : copy.directDisabledDescription}
             points={[copy.directPoint1, copy.directPoint2, copy.directPoint3]}
-            buttonLabel={directApiEnabled ? copy.directButton : copy.directDisabledButton}
-            buttonDisabled={!directApiEnabled}
-            onClick={() => setLocation("/dashboard/direct-api")}
+            buttonLabel={!isKycVerified ? copy.kycRequiredButton : directApiEnabled ? copy.directButton : copy.directDisabledButton}
+            buttonDisabled={isKycVerified && !directApiEnabled}
+            onClick={() => openFeature("/dashboard/direct-api")}
             testId="button-api-direct"
           />
         </div>
@@ -106,6 +132,25 @@ export default function ApiKeysPage() {
           <p className="text-[15px] leading-6 text-muted-foreground">{copy.footer}</p>
         </div>
       </div>
+      <AlertDialog open={showKycDialog} onOpenChange={setShowKycDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/10">
+              <ShieldCheck className="h-6 w-6 text-amber-600" />
+            </div>
+            <AlertDialogTitle className="text-center">{copy.kycRequiredTitle}</AlertDialogTitle>
+            <AlertDialogDescription className="text-center">
+              {copy.kycRequiredDescription}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{copy.kycRequiredCancel}</AlertDialogCancel>
+            <AlertDialogAction onClick={() => setLocation("/dashboard/kyc")}>
+              {copy.kycRequiredButton}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 }
