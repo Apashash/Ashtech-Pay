@@ -1071,7 +1071,8 @@ const translations = {
       directPoint1: "Contrôle complet du parcours de paiement",
       directPoint2: "API Mobile Money et crypto",
       directPoint3: "Documentation, exemples et webhooks",
-      directButton: "Explorer Direct API",
+       directButton: "Explorer Direct API",
+       directDisabledButton: "Activation requise",
       footer: "Besoin d'aide pour choisir ? Hosted Checkout est recommandé pour rediriger rapidement vers une page de paiement. Direct API convient aux équipes qui veulent personnaliser chaque étape.",
     },
     kycVerified: {
@@ -2461,7 +2462,8 @@ const translations = {
       directPoint1: "Full control over the payment flow",
       directPoint2: "Mobile Money and crypto APIs",
       directPoint3: "Documentation, examples and webhooks",
-      directButton: "Explore Direct API",
+       directButton: "Explore Direct API",
+       directDisabledButton: "Activation required",
       footer: "Need help choosing? Hosted Checkout is recommended when you want to redirect customers quickly. Direct API is best for teams that want to customize every step.",
     },
     kycVerified: {
