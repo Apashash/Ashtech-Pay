@@ -68,8 +68,8 @@ import {
   uploadToSupabase,
   getSignedImageUrl,
   downloadFromSupabase,
+  getStorageBucket,
   isSupabaseStorageConfigured,
-  STORAGE_BUCKET,
 } from "./supabase";
 import { decryptField, encryptField, isFieldEncryptionConfigured } from "./fieldEncryption";
 import { isAdminPinProtectionEnabled, requireAdminPin, verifyAdminPinCode } from "./adminPin";
@@ -2815,7 +2815,7 @@ export async function registerRoutes(
       // a reusable CDN URL outside the ownership check above.
       const isProfileAvatar = isRelativePath && storagePath.startsWith("profile-avatars/");
       if (supabasePublicBase && isRelativePath && !isProfileAvatar) {
-        const publicUrl = `${supabasePublicBase}/storage/v1/object/public/${STORAGE_BUCKET}/${storagePath}`;
+        const publicUrl = `${supabasePublicBase}/storage/v1/object/public/${getStorageBucket()}/${storagePath}`;
         res.setHeader("Cache-Control", "public, max-age=3600");
         return res.redirect(302, publicUrl);
       }
@@ -10710,7 +10710,9 @@ export async function registerRoutes(
   // SECURITY: disabled in production to prevent infrastructure enumeration.
   app.get("/api/admin/debug-storage", requireAuth, requireAdmin, async (req, res) => {
     if (process.env.NODE_ENV === "production") return res.status(404).end();
-    const { supabase: sbClient, STORAGE_BUCKET: bucket, listSupabaseBuckets, testDownload } = await import("./supabase");
+    const { getSupabaseClient, getStorageBucket, listSupabaseBuckets, testDownload } = await import("./supabase");
+    const sbClient = getSupabaseClient();
+    const bucket = getStorageBucket();
     const result: Record<string, any> = {
       env: {
         SUPABASE_URL: process.env.SUPABASE_URL ? `${process.env.SUPABASE_URL.slice(0, 30)}...` : "NOT SET",
