@@ -66,3 +66,4 @@
 - [Mintlify validation scope](mintlify-validation-scope.md) — root CLI validation scans the mixed app and docs tree; use docs-only checks for MDX changes.
 - [AshTech hosted skill installer](ashtech-hosted-skill-installer.md) — keep the complete Skill at `/skill.md`; docs should expose the short `npx skills add ... --all` command.
 - [Plesk browser-only access](plesk-browser-only-access.md) — this deployment has no Plesk terminal; expose diagnostics through authenticated browser routes instead of shell-only instructions.
+- [Google Drive on Plesk](google-drive-plesk.md) — Replit's Drive connector does not reach the external Plesk runtime; use a Google service account and native API auth there.
