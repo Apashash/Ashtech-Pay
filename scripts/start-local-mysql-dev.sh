@@ -24,7 +24,19 @@ if [[ ! -d "${DATA_DIR}/mysql" ]]; then
     >/dev/null
 fi
 
-if ! mariadb-admin --no-defaults --protocol=socket --socket="${SOCKET}" -uroot ping >/dev/null 2>&1; then
+# The dedicated Local MySQL workflow may be starting at the same time as the
+# application workflow. Give that persistent instance time to become ready
+# before attempting a fallback launch here.
+mysql_already_ready=false
+for attempt in {1..40}; do
+  if mariadb-admin --no-defaults --protocol=socket --socket="${SOCKET}" -uroot ping >/dev/null 2>&1; then
+    mysql_already_ready=true
+    break
+  fi
+  sleep 0.25
+done
+
+if [[ "${mysql_already_ready}" != "true" ]]; then
   echo "[LocalMySQL] Starting MariaDB on 127.0.0.1:${MYSQL_PORT}"
   mariadbd \
     --no-defaults \
@@ -68,4 +80,15 @@ fi
 echo "[LocalMySQL] Ready: ${DB_NAME}"
 export DB_DIALECT=mysql
 export MYSQL_DATABASE_URL="mysql://root@127.0.0.1:${MYSQL_PORT}/${DB_NAME}"
+
+# In the dedicated database workflow, keep MariaDB alive independently from
+# the Node.js process. The application workflow still runs the same readiness
+# checks as a fallback when this workflow is not running.
+if [[ "${LOCAL_MYSQL_ONLY:-false}" == "true" ]]; then
+  echo "[LocalMySQL] Dedicated database workflow is active"
+  while true; do
+    sleep 3600
+  done
+fi
+
 exec npm run dev
