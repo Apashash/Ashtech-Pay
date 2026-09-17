@@ -16450,6 +16450,11 @@ export async function registerRoutes(
       }
 
       const callbackUrl = buildWebhookUrl("/api/afribapay/webhook");
+      // Use the same valid application base URL as the initiation request.
+      // APP_URL is not guaranteed to be present in Passenger/Plesk processes;
+      // sending "undefined/..." to AfribaPay can be reported as an opaque
+      // provider "internal server error" during OTP confirmation.
+      const appBaseUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
       const result = await confirmAfribaPayOtp({
         operator: ctx.operator,
         country: ctx.country,
@@ -16460,8 +16465,8 @@ export async function registerRoutes(
         reference_id: ref,
         otp_code: otpCode,
         notify_url: callbackUrl,
-        return_url: `${process.env.APP_URL}/pay/success`,
-        cancel_url: `${process.env.APP_URL}/pay/cancel`,
+        return_url: `${appBaseUrl}/pay/${paymentLink.slug}?ref=${encodeURIComponent(ref)}&status=success`,
+        cancel_url: `${appBaseUrl}/pay/${paymentLink.slug}?ref=${encodeURIComponent(ref)}&status=cancelled`,
         lang: "fr",
       });
 

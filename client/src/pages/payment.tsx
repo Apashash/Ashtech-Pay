@@ -290,20 +290,26 @@ export default function PaymentPage() {
     }
   };
 
-  const startPaymentPolling = (ref: string) => {
-    setCountdown(8 * 60);
+  const startPaymentCountdown = (reset = true) => {
+    if (reset) setCountdown(8 * 60);
     if (countdownRef.current) clearInterval(countdownRef.current);
     countdownRef.current = setInterval(() => {
       setCountdown(prev => {
         if (prev <= 1) {
           if (countdownRef.current) clearInterval(countdownRef.current);
           if (pollingRef.current) clearInterval(pollingRef.current);
+          setOtpRequired(false);
+          setFailureReason("Le délai de confirmation OTP est expiré. Veuillez recommencer.");
           setPaymentStatus("failed");
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
+  };
+
+  const startPaymentPolling = (ref: string, resetCountdown = true) => {
+    startPaymentCountdown(resetCountdown);
 
     if (pollingRef.current) clearInterval(pollingRef.current);
     const checkStatus = async () => {
@@ -482,6 +488,9 @@ export default function PaymentPage() {
         setOtpRequired(true);
         setOtpType(data.otpType || "api");
         setOtpUssdCode(data.ussdCode || "");
+        // OTP confirmation does not start the regular polling path yet, but
+        // the OTP screen still needs its own countdown.
+        startPaymentCountdown();
       } else {
         setOtpRequired(false);
         if (ref) startPaymentPolling(ref);
@@ -547,7 +556,9 @@ export default function PaymentPage() {
     onSuccess: () => {
       setOtpRequired(false);
       toast({ title: "OTP validé", description: "Paiement en cours de traitement…" });
-      startPaymentPolling(paymentReference);
+      // Keep the original payment deadline; confirming the OTP must not give
+      // the transaction another full eight minutes.
+      startPaymentPolling(paymentReference, false);
     },
     onError: (error: Error) => {
       toast({ title: "Erreur OTP", description: error.message, variant: "destructive" });
@@ -679,10 +690,13 @@ export default function PaymentPage() {
   };
 
   const resetForm = () => {
+    if (countdownRef.current) clearInterval(countdownRef.current);
+    if (pollingRef.current) clearInterval(pollingRef.current);
     setPaymentComplete(false);
     setPaymentStatus("pending");
     setPaymentReference("");
     setFailureReason("");
+    setCountdown(8 * 60);
     setFullName(""); setEmail(""); setCryptoFirstName(""); setCryptoLastName(""); setPhone(""); setCustomAmount("");
     setCountry(""); setOperator(""); setPaymentMethod("");
     setErrors({});
