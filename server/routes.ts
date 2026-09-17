@@ -13522,6 +13522,98 @@ export async function registerRoutes(
     }
   });
 
+  // Admin: Toggle one operator for one transaction type without synchronizing
+  // the other operation types. An operator-specific inactive fee must override
+  // country/global fallback fees, so create the scoped override when needed.
+  app.patch("/api/admin/fees/operator-toggle", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { operatorId, transactionType, isActive } = req.body || {};
+      const allowedTypes = new Set(["deposit", "withdrawal", "transfer"]);
+      if (
+        typeof operatorId !== "string" ||
+        !allowedTypes.has(transactionType) ||
+        typeof isActive !== "boolean"
+      ) {
+        return res.status(400).json({ message: "Paramètres d'activation opérateur invalides." });
+      }
+
+      const operator = await storage.getOperator(operatorId);
+      if (!operator) {
+        return res.status(404).json({ message: "Opérateur non trouvé." });
+      }
+
+      const allFees = await storage.getAllFees();
+      const operatorFee = allFees.find(
+        fee => fee.operatorId === operator.id && fee.transactionType === transactionType,
+      );
+
+      let updatedFee;
+      if (operatorFee) {
+        updatedFee = await storage.updateFee(operatorFee.id, { isActive });
+      } else {
+        const fallbackFee = allFees.find(
+          fee =>
+            fee.transactionType === transactionType &&
+            !fee.operatorId &&
+            fee.countryId === operator.countryId,
+        ) || allFees.find(
+          fee =>
+            fee.transactionType === transactionType &&
+            !fee.operatorId &&
+            !fee.countryId,
+        );
+
+        if (!fallbackFee) {
+          return res.status(409).json({
+            message: "Aucun frais de référence n'est configuré pour cet opérateur.",
+          });
+        }
+
+        updatedFee = await storage.createFee({
+          name: fallbackFee.name.replace(/pays|global/gi, operator.name).replace(
+            /^(Dépôt|Retrait|Envoi)/i,
+            match => `${match} - ${operator.name}`,
+          ),
+          transactionType: fallbackFee.transactionType,
+          feeType: fallbackFee.feeType,
+          feeValue: fallbackFee.feeValue,
+          afribapayFee: fallbackFee.afribapayFee,
+          pixpayFee: fallbackFee.pixpayFee,
+          pawapayFee: fallbackFee.pawapayFee,
+          ashtechMargin: fallbackFee.ashtechMargin,
+          minFee: fallbackFee.minFee,
+          maxFee: fallbackFee.maxFee,
+          countryId: operator.countryId,
+          operatorId: operator.id,
+          isActive,
+        });
+      }
+
+      if (!updatedFee) {
+        return res.status(500).json({ message: "Impossible de mettre à jour l'opérateur." });
+      }
+
+      await storage.createAdminLog({
+        adminId: req.userId!,
+        action: isActive ? "activate_operator_fee" : "deactivate_operator_fee",
+        targetType: "fee",
+        targetId: updatedFee.id,
+        details: JSON.stringify({
+          operatorId: operator.id,
+          operatorName: operator.name,
+          transactionType,
+          isActive,
+        }),
+        ipAddress: req.ip || null,
+      });
+
+      res.json({ success: true, fee: updatedFee });
+    } catch (error) {
+      console.error("Admin operator fee toggle error:", error);
+      res.status(500).json({ message: "Erreur serveur" });
+    }
+  });
+
   app.post("/api/admin/fees", requireAuth, requireAdmin, async (req, res) => {
     try {
       const fee = await storage.createFee(req.body);

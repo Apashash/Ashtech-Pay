@@ -174,6 +174,20 @@ export default function AdminFeesDeposits() {
     onError: (err: any) => toast({ title: "Erreur fournisseur dépôt", description: err?.message || "Erreur serveur", variant: "destructive" }),
   });
 
+  const operatorToggleMutation = useMutation({
+    mutationFn: async ({ operatorId, isActive }: { operatorId: string; isActive: boolean }) =>
+      apiRequest("PATCH", "/api/admin/fees/operator-toggle", {
+        operatorId,
+        transactionType: "deposit",
+        isActive,
+      }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/fees"] });
+      toast({ title: variables.isActive ? "Opérateur dépôt activé" : "Opérateur dépôt désactivé" });
+    },
+    onError: (err: any) => toast({ title: "Erreur d'activation", description: err?.message || "Erreur serveur", variant: "destructive" }),
+  });
+
   const pawapayMutation = useMutation({
     mutationFn: async ({ id, pawaFee, margin, active }: { id: string; pawaFee: string; margin: string; active: boolean }) =>
       apiRequest("PATCH", `/api/admin/fees/${id}/pawapay`, { pawapayFee: pawaFee, ashtechMargin: margin, isActive: active }),
@@ -363,13 +377,18 @@ export default function AdminFeesDeposits() {
                             : isPawaPay ? parseFloat((fee as any)?.pawapayFee || "0") : parseFloat((fee as any)?.pixpayFee || "0");
                         const margin = parseFloat((fee as any)?.ashtechMargin || "0");
                         const total = provFee + margin;
-                        return (
-                          <button
-                            key={op.id}
-                            className="w-full text-left px-4 py-3 hover:bg-muted/30 active:bg-muted/50 transition-colors flex items-center justify-between gap-3"
-                            onClick={() => openEdit(op, country)}
-                            data-testid={`op-fee-${op.id}`}
-                          >
+                         const feeIsActive = fee?.isActive !== false;
+                         return (
+                           <div
+                             key={op.id}
+                             className="w-full px-4 py-3 hover:bg-muted/30 transition-colors flex items-center gap-3"
+                           >
+                             <button
+                               type="button"
+                               className="flex-1 min-w-0 text-left"
+                               onClick={() => openEdit(op, country)}
+                               data-testid={`op-fee-${op.id}`}
+                             >
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="font-medium text-sm">{op.name}</span>
@@ -403,8 +422,28 @@ export default function AdminFeesDeposits() {
                                 )}
                               </div>
                             </div>
-                            <Pencil className="w-4 h-4 text-muted-foreground shrink-0" />
-                          </button>
+                             </button>
+                             <div className="flex items-center gap-2 shrink-0">
+                               <span className={`hidden sm:inline text-xs font-medium ${feeIsActive ? "text-green-500" : "text-muted-foreground"}`}>
+                                 {feeIsActive ? "Actif" : "Désactivé"}
+                               </span>
+                               <Switch
+                                 checked={feeIsActive}
+                                 disabled={operatorToggleMutation.isPending}
+                                 onCheckedChange={(checked) => operatorToggleMutation.mutate({ operatorId: op.id, isActive: checked })}
+                                 aria-label={`${feeIsActive ? "Désactiver" : "Activer"} ${op.name} pour les dépôts`}
+                                 data-testid={`switch-operator-deposit-${op.id}`}
+                               />
+                               <button
+                                 type="button"
+                                 className="p-1 rounded-md hover:bg-muted"
+                                 onClick={() => openEdit(op, country)}
+                                 aria-label={`Modifier les frais de ${op.name}`}
+                               >
+                                 <Pencil className="w-4 h-4 text-muted-foreground" />
+                               </button>
+                             </div>
+                           </div>
                         );
                       })}
                     </div>
