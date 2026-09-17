@@ -18,6 +18,7 @@ import {
   ArrowRight,
   CheckCircle2,
   Globe2,
+  Headphones,
   ShieldCheck,
 } from "lucide-react";
 
@@ -77,6 +78,7 @@ export default function ApiKeysPage() {
   const isKycVerified = user?.role === "admin" || user?.isVerified === true;
   const directApiEnabled = user?.role === "admin" || user?.apiEnabled === true;
   const [showKycDialog, setShowKycDialog] = useState(false);
+  const [showDirectActivationDialog, setShowDirectActivationDialog] = useState(false);
 
   useEffect(() => {
     if (user && !isKycVerified) setShowKycDialog(true);
@@ -85,6 +87,10 @@ export default function ApiKeysPage() {
   const openFeature = (path: string) => {
     if (!isKycVerified) {
       setShowKycDialog(true);
+      return;
+    }
+    if (path === "/dashboard/direct-api" && !directApiEnabled) {
+      setShowDirectActivationDialog(true);
       return;
     }
     setLocation(path);
@@ -119,7 +125,6 @@ export default function ApiKeysPage() {
             description={directApiEnabled ? copy.directDescription : copy.directDisabledDescription}
             points={[copy.directPoint1, copy.directPoint2, copy.directPoint3]}
             buttonLabel={!isKycVerified ? copy.kycRequiredButton : directApiEnabled ? copy.directButton : copy.directDisabledButton}
-            buttonDisabled={isKycVerified && !directApiEnabled}
             onClick={() => openFeature("/dashboard/direct-api")}
             testId="button-api-direct"
           />
@@ -154,6 +159,34 @@ export default function ApiKeysPage() {
               onClick={() => setShowKycDialog(false)}
             >
               {copy.kycRequiredCancel}
+            </Button>
+          </BottomSheetFooter>
+        </BottomSheetContent>
+      </BottomSheet>
+      <BottomSheet open={showDirectActivationDialog} onOpenChange={setShowDirectActivationDialog}>
+        <BottomSheetContent>
+          <BottomSheetHeader className="pt-5 pb-3 text-center">
+            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-amber-500/10">
+              <Headphones className="h-7 w-7 text-amber-600" />
+            </div>
+            <BottomSheetTitle className="text-xl">{copy.directActivationTitle}</BottomSheetTitle>
+            <BottomSheetDescription className="mx-auto max-w-sm text-[15px] leading-6">
+              {copy.directActivationDescription}
+            </BottomSheetDescription>
+          </BottomSheetHeader>
+          <BottomSheetFooter className="flex-col gap-2 pb-7 pt-2">
+            <Button
+              className="w-full bg-amber-500 text-white hover:bg-amber-600"
+              onClick={() => setLocation("/dashboard/support")}
+            >
+              {copy.directActivationButton}
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => setShowDirectActivationDialog(false)}
+            >
+              {copy.directActivationCancel}
             </Button>
           </BottomSheetFooter>
         </BottomSheetContent>
