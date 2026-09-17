@@ -38,7 +38,7 @@ export default function AdminMerchants() {
   const [search, setSearch] = useState("");
   const { toast } = useToast();
 
-  const { data: users = [], isLoading } = useQuery<ApiUser[]>({
+  const { data: users = [], isLoading, isError } = useQuery<ApiUser[]>({
     queryKey: ["/api/admin/api-management"],
   });
 
@@ -81,6 +81,16 @@ export default function AdminMerchants() {
             </p>
           </div>
         </div>
+
+        {isError && (
+          <Card className="border-destructive/30 bg-destructive/5">
+            <CardContent className="py-4">
+              <p className="text-sm text-destructive">
+                Impossible de charger la liste des marchands. Actualisez la page ou réessayez dans quelques instants.
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader className="pb-3">

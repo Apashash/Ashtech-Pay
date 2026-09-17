@@ -63,7 +63,7 @@ function StatCard({
 }
 
 export default function AdminApiManagement() {
-  const { data: users = [], isLoading } = useQuery<ApiUser[]>({
+  const { data: users = [], isLoading, isError } = useQuery<ApiUser[]>({
     queryKey: ["/api/admin/api-management"],
   });
 
@@ -99,6 +99,16 @@ export default function AdminApiManagement() {
             </Button>
           </Link>
         </div>
+
+        {isError && (
+          <Card className="border-destructive/30 bg-destructive/5">
+            <CardContent className="py-4">
+              <p className="text-sm text-destructive">
+                Impossible de charger les données des marchands. Actualisez la page ou réessayez dans quelques instants.
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Stats grid */}
         {isLoading ? (

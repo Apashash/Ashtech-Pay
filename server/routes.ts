@@ -18435,7 +18435,7 @@ export async function registerRoutes(
                 COALESCE(SUM(CASE WHEN t.status = 'completed' AND t.source = 'hosted_page' THEN CAST(t.amount AS DECIMAL(30, 10)) ELSE 0 END), 0) AS hp_amount
               FROM users u
               LEFT JOIN transactions t ON t.user_id = u.id
-              WHERE u.role NOT IN ('admin', 'support', 'finance')
+              WHERE COALESCE(u.role, 'user') NOT IN ('admin', 'support', 'finance')
               GROUP BY u.id, u.full_name, u.email, u.username, u.is_verified, u.api_enabled, u.api_key, u.created_at
               ORDER BY u.created_at DESC
             `
@@ -18450,13 +18450,20 @@ export async function registerRoutes(
                 COALESCE(SUM(t.amount::numeric) FILTER (WHERE t.status = 'completed' AND t.source = 'hosted_page'), 0) AS hp_amount
               FROM users u
               LEFT JOIN transactions t ON t.user_id = u.id
-              WHERE u.role NOT IN ('admin', 'support', 'finance')
+              WHERE COALESCE(u.role, 'user') NOT IN ('admin', 'support', 'finance')
               GROUP BY u.id, u.full_name, u.email, u.username, u.is_verified, u.api_enabled, u.api_key, u.created_at
               ORDER BY u.created_at DESC
             `,
       );
 
-      const result = (rows.rows as any[]).map(row => ({
+      // Drizzle's PostgreSQL adapter returns { rows }, while its MySQL adapter
+      // returns the selected rows array directly. Normalize both shapes here;
+      // otherwise MySQL production requests fail and the admin UI incorrectly
+      // displays an empty merchant list.
+      const selectedRows = isMysqlDialect
+        ? (Array.isArray(rows) ? rows : (rows as any).rows || [])
+        : ((rows as any).rows || []);
+      const result = (selectedRows as any[]).map(row => ({
         id: row.id,
         fullName: row.full_name,
         email: row.email,
