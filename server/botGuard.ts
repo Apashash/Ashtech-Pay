@@ -2,7 +2,6 @@ import type { Request, Response, NextFunction } from "express";
 import { db } from "./db";
 import { platformSettings } from "@shared/schema-runtime";
 import { like, eq } from "drizzle-orm";
-import { sendMessage } from "./telegram";
 export { CLEAN_404_HTML, sendClean404 } from "./clean404";
 import { sendClean404 } from "./clean404";
 
@@ -12,10 +11,6 @@ const bannedIPs = new Map<string, number>();
 
 // DB key prefix for persisted bot bans
 const BOT_BAN_PREFIX = "botban:";
-
-// Telegram alert throttle — max 1 alert per IP per 10 minutes
-const alertCooldown = new Map<string, number>();
-const ALERT_COOLDOWN_MS = 10 * 60 * 1000;
 
 // Nettoyage automatique des bans expirés toutes les heures
 setInterval(() => {
@@ -53,27 +48,6 @@ async function removeBanFromDb(ip: string): Promise<void> {
   try {
     await db.delete(platformSettings).where(eq(platformSettings.key, `${BOT_BAN_PREFIX}${ip}`));
   } catch {}
-}
-
-// ─── Send throttled Telegram alert ────────────────────────────────────────
-function sendBotAlert(ip: string, path: string, reason: string, durationH: number): void {
-  const last = alertCooldown.get(ip) || 0;
-  if (Date.now() - last < ALERT_COOLDOWN_MS) return;
-  alertCooldown.set(ip, Date.now());
-
-  const timestamp = new Date().toLocaleString("fr-FR", { timeZone: "Africa/Douala" });
-  const banLine = durationH > 0
-    ? `⏱️ IP bannie pour: <b>${durationH}h</b>\n`
-    : `⏱️ Requête rejetée (pas de ban IP)\n`;
-  const msg =
-    `🤖 <b>Bot/Scanner bloqué</b>\n\n` +
-    `🔴 IP: <code>${ip}</code>\n` +
-    `📂 Chemin: <code>${path}</code>\n` +
-    `⚠️ Raison: ${reason}\n` +
-    banLine +
-    `🕐 ${timestamp}`;
-
-  sendMessage(msg).catch(() => {});
 }
 
 // ─── Load persisted bans from DB on startup ───────────────────────────────
@@ -380,7 +354,6 @@ export function botGuard(req: Request, res: Response, next: NextFunction): void 
       const until = Date.now() + durationMs;
       bannedIPs.set(ip, until);
       persistBan(ip, until, rawPath).catch(() => {});
-      sendBotAlert(ip, rawPath, "Honeypot WordPress/PHP scan", 48);
     }
     sendClean404(res);
     return;
@@ -398,7 +371,7 @@ export function botGuard(req: Request, res: Response, next: NextFunction): void 
     return;
   }
 
-  // 3. Patterns de chemins suspects (injection / traversal) → ban 24h + persist + alerte
+  // 3. Patterns de chemins suspects (injection / traversal) → ban 24h + persist
   const isSuspiciousPath = SUSPICIOUS_PATH_PATTERNS.some((p) => p.test(rawPath));
   if (isSuspiciousPath) {
     console.warn(`[BotGuard] ⚠️ Chemin suspect: ${rawPath}`);
@@ -407,7 +380,6 @@ export function botGuard(req: Request, res: Response, next: NextFunction): void 
       const until = Date.now() + durationMs;
       bannedIPs.set(ip, until);
       persistBan(ip, until, rawPath).catch(() => {});
-      sendBotAlert(ip, rawPath, "Injection/traversal path", 24);
     }
     res.status(400).json({ message: "Requête invalide." });
     return;
@@ -431,7 +403,6 @@ export function botGuard(req: Request, res: Response, next: NextFunction): void 
       // Chaque requête avec un mauvais UA est de toute façon rejetée individuellement ici,
       // donc un vrai bot reste bloqué à chaque tentative sans punir les autres.
       if (BAD_UA_PATTERNS.some((p) => p.test(uaLower))) {
-        sendBotAlert(ip, rawPath, `User-Agent malveillant: ${ua.slice(0, 60)}`, 0);
         console.warn(`[BotGuard] 🤖 Requête bot rejetée (sans ban IP) UA="${ua.slice(0, 80)}"`);
         res.status(403).json({ message: "Accès refusé." });
         return;
