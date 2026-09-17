@@ -314,6 +314,20 @@ export interface IStorage {
   getUserNotifications(userId: string, limit?: number): Promise<UserNotification[]>;
   getUnreadNotificationCount(userId: string): Promise<number>;
   createUserNotification(notification: InsertUserNotification): Promise<UserNotification>;
+  ensurePendingPaymentNotification(params: {
+    userId: string;
+    transactionId: string;
+    paymentType: string;
+    amount: string;
+    currency?: string | null;
+  }): Promise<void>;
+  resolvePendingPaymentNotification(params: {
+    transactionId: string;
+    paymentType: string;
+    status: "completed" | "failed";
+    amount: string;
+    currency?: string | null;
+  }): Promise<boolean>;
   getPushSubscriptions(userId: string): Promise<PushSubscription[]>;
   savePushSubscription(userId: string, subscription: { endpoint: string; p256dh: string; auth: string }, userAgent?: string | null): Promise<PushSubscription>;
   deletePushSubscription(userId: string, endpoint: string): Promise<void>;
@@ -2461,6 +2475,84 @@ export class DatabaseStorage implements IStorage {
       }))
       .catch((error) => console.error("[Push] Delivery scheduling failed:", error?.message || error));
     return newNotif;
+  }
+
+  async ensurePendingPaymentNotification(params: {
+    userId: string;
+    transactionId: string;
+    paymentType: string;
+    amount: string;
+    currency?: string | null;
+  }): Promise<void> {
+    const isPaymentLink = params.paymentType === "payment_link";
+    const pendingType = isPaymentLink ? "payment_link_pending" : "deposit_pending";
+    const [transaction] = await db.select({
+      status: transactions.status,
+      currency: transactions.currency,
+    })
+      .from(transactions)
+      .where(eq(transactions.id, params.transactionId))
+      .limit(1);
+    if (!transaction || transaction.status !== "pending") return;
+
+    const [existing] = await db.select({ id: userNotifications.id })
+      .from(userNotifications)
+      .where(and(
+        eq(userNotifications.transactionId, params.transactionId),
+        eq(userNotifications.type, pendingType),
+      ))
+      .limit(1);
+    if (existing) return;
+
+    await db.insert(userNotifications).values({
+      id: randomUUID(),
+      userId: params.userId,
+      type: pendingType,
+      title: isPaymentLink ? "Paiement en attente" : "Dépôt en attente",
+      message: JSON.stringify({
+        amount: params.amount,
+        currency: params.currency || transaction.currency || "XAF",
+      }),
+      transactionId: params.transactionId,
+      isRead: false,
+    });
+  }
+
+  async resolvePendingPaymentNotification(params: {
+    transactionId: string;
+    paymentType: string;
+    status: "completed" | "failed";
+    amount: string;
+    currency?: string | null;
+  }): Promise<boolean> {
+    const isPaymentLink = params.paymentType === "payment_link";
+    const pendingType = isPaymentLink ? "payment_link_pending" : "deposit_pending";
+    const finalType = params.status === "completed"
+      ? (isPaymentLink ? "payment_link_received" : "deposit_confirmed")
+      : (isPaymentLink ? "payment_link_failed" : "deposit_failed");
+    const [pending] = await db.select({ id: userNotifications.id })
+      .from(userNotifications)
+      .where(and(
+        eq(userNotifications.transactionId, params.transactionId),
+        eq(userNotifications.type, pendingType),
+      ))
+      .limit(1);
+    if (!pending) return false;
+
+    await db.update(userNotifications)
+      .set({
+        type: finalType,
+        title: params.status === "completed"
+          ? (isPaymentLink ? "Paiement reçu" : "Dépôt confirmé")
+          : (isPaymentLink ? "Paiement rejeté" : "Dépôt rejeté"),
+        message: JSON.stringify({
+          amount: params.amount,
+          currency: params.currency || "XAF",
+        }),
+        isRead: false,
+      })
+      .where(eq(userNotifications.id, pending.id));
+    return true;
   }
 
   async getPushSubscriptions(userId: string): Promise<PushSubscription[]> {

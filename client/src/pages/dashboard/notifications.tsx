@@ -5,7 +5,7 @@ import { format } from "date-fns";
 import { fr, enUS } from "date-fns/locale";
 import {
   ChevronLeft, ChevronRight, CheckCheck, Trash2, ArrowDownCircle,
-  ArrowUpCircle, Send, Megaphone, MessageSquare, ShieldCheck, X, Loader2, ExternalLink,
+  ArrowUpCircle, Send, Megaphone, MessageSquare, ShieldCheck, Clock3, X, Loader2, ExternalLink,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { Button } from "@/components/ui/button";
@@ -76,6 +76,8 @@ export default function NotificationsPage() {
     switch (type) {
       case "deposit_confirmed":
       case "deposit_failed":
+      case "deposit_pending":
+      case "payment_link_pending":
       case "withdrawal_confirmed":
       case "withdrawal_failed":
       case "payment_link_received":
@@ -98,8 +100,10 @@ export default function NotificationsPage() {
     const map: Record<string, string> = {
       deposit_confirmed: t.notifications.typeDepositConfirmedTitle,
       deposit_failed: t.notifications.typeDepositFailedTitle,
+      deposit_pending: t.notifications.typeDepositPendingTitle,
       payment_link_received: t.notifications.typePaymentLinkReceivedTitle,
       payment_link_failed: t.notifications.typePaymentLinkFailedTitle,
+      payment_link_pending: t.notifications.typePaymentLinkPendingTitle,
       withdrawal_confirmed: t.notifications.typeWithdrawalConfirmedTitle,
       withdrawal_failed: t.notifications.typeWithdrawalFailedTitle,
     };
@@ -125,8 +129,10 @@ export default function NotificationsPage() {
     switch (type) {
       case "deposit_confirmed":    return amt ? tpl(t.notifications.typeDepositConfirmedMsg)    : (isStructuredPayload ? safeStructuredMessage : stored.replace(/\bXAF\b/g, currency));
       case "deposit_failed":       return t.notifications.typeDepositFailedMsg;
+      case "deposit_pending":      return amt ? tpl(t.notifications.typeDepositPendingMsg)      : (isStructuredPayload ? safeStructuredMessage : stored.replace(/\bXAF\b/g, currency));
       case "payment_link_received":return amt ? tpl(t.notifications.typePaymentLinkReceivedMsg): (isStructuredPayload ? safeStructuredMessage : stored.replace(/\bXAF\b/g, currency));
       case "payment_link_failed":  return t.notifications.typePaymentLinkFailedMsg;
+      case "payment_link_pending": return amt ? tpl(t.notifications.typePaymentLinkPendingMsg) : (isStructuredPayload ? safeStructuredMessage : stored.replace(/\bXAF\b/g, currency));
       case "withdrawal_confirmed": return amt ? tpl(t.notifications.typeWithdrawalConfirmedMsg): (isStructuredPayload ? safeStructuredMessage : stored.replace(/\bXAF\b/g, currency));
       case "withdrawal_failed":    return amt ? tpl(t.notifications.typeWithdrawalFailedMsg)   : (isStructuredPayload ? safeStructuredMessage : stored.replace(/\bXAF\b/g, currency));
       default:                     return isStructuredPayload ? safeStructuredMessage : stored.replace(/\bXAF\b/g, currency);
@@ -136,6 +142,8 @@ export default function NotificationsPage() {
   function getIcon(type: string) {
     switch (type) {
       case "deposit_confirmed":    return <ArrowDownCircle className="w-5 h-5 text-green-500" />;
+      case "deposit_pending":      return <Clock3 className="w-5 h-5 text-amber-500" />;
+      case "payment_link_pending": return <Clock3 className="w-5 h-5 text-amber-500" />;
       case "withdrawal_confirmed": return <ArrowUpCircle   className="w-5 h-5 text-orange-500" />;
       case "transfer_received":    return <Send            className="w-5 h-5 text-blue-500" />;
       case "global_message":       return <Megaphone       className="w-5 h-5 text-purple-500" />;

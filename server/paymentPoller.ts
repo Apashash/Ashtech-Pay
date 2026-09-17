@@ -45,6 +45,16 @@ export function addPendingPayment(
   console.log(`[PaymentPoller] Adding pending payment: ${payment.reference} (provider: ${payment.provider || "unknown"})`);
   const now = Date.now();
   pendingPayments.set(payment.reference, { ...payment, attempts: payment.attempts ?? 0, startedAt: now, lastCheckedAt: 0 });
+  if (payment.type === "deposit" || payment.type === "payment_link") {
+    void storage.ensurePendingPaymentNotification({
+      userId: payment.userId,
+      transactionId: payment.transactionId,
+      paymentType: payment.type,
+      amount: payment.amount,
+    }).catch((error) => {
+      console.error("[PaymentPoller] Pending notification creation failed:", error?.message || error);
+    });
+  }
 }
 
 export function removePendingPayment(reference: string) {
@@ -201,14 +211,23 @@ export async function processPaymentResult(payment: PendingPayment, status: "com
       }
 
       const isPaymentLink = payment.type === "payment_link";
-      await storage.createUserNotification({
-        userId: payment.userId,
-        type: isPaymentLink ? "payment_link_received" : "deposit_confirmed",
-        title: isPaymentLink ? "payment_link_received" : "deposit_confirmed",
-        message: JSON.stringify({ amount: payment.amount, currency: paymentCurrency }),
+      const notificationUpdated = await storage.resolvePendingPaymentNotification({
         transactionId: transaction.id,
-        isRead: false,
+        paymentType: payment.type,
+        status: "completed",
+        amount: payment.amount,
+        currency: paymentCurrency,
       });
+      if (!notificationUpdated) {
+        await storage.createUserNotification({
+          userId: payment.userId,
+          type: isPaymentLink ? "payment_link_received" : "deposit_confirmed",
+          title: isPaymentLink ? "payment_link_received" : "deposit_confirmed",
+          message: JSON.stringify({ amount: payment.amount, currency: paymentCurrency }),
+          transactionId: transaction.id,
+          isRead: false,
+        });
+      }
       console.log(`[PaymentPoller] ✓ Payment COMPLETED for ${payment.reference} (${payment.provider || "unknown"}) → credited ${payment.amount} ${paymentCurrency}`);
 
       const isLink = payment.type === "payment_link";
@@ -278,14 +297,23 @@ export async function processPaymentResult(payment: PendingPayment, status: "com
       }
     } else {
       const isPaymentLink = payment.type === "payment_link";
-      await storage.createUserNotification({
-        userId: payment.userId,
-        type: isPaymentLink ? "payment_link_failed" : "deposit_failed",
-        title: isPaymentLink ? "payment_link_failed" : "deposit_failed",
-        message: "{}",
+      const notificationUpdated = await storage.resolvePendingPaymentNotification({
         transactionId: transaction.id,
-        isRead: false,
+        paymentType: payment.type,
+        status: "failed",
+        amount: payment.amount,
+        currency: transaction.currency || "XAF",
       });
+      if (!notificationUpdated) {
+        await storage.createUserNotification({
+          userId: payment.userId,
+          type: isPaymentLink ? "payment_link_failed" : "deposit_failed",
+          title: isPaymentLink ? "payment_link_failed" : "deposit_failed",
+          message: "{}",
+          transactionId: transaction.id,
+          isRead: false,
+        });
+      }
       if (payment.paymentIntentId) {
         await storage.updatePaymentIntentStatus(payment.paymentIntentId, "failed");
       }
