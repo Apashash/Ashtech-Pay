@@ -29,6 +29,7 @@ const SendMoneyPage = React.lazy(() => import("@/pages/dashboard/send"));
 const FeeExplanationsPage = React.lazy(() => import("@/pages/dashboard/fee-details"));
 const GlobalMessagePage = React.lazy(() => import("@/pages/dashboard/global-message"));
 const WalletsPage = React.lazy(() => import("@/pages/dashboard/wallets"));
+const AddWalletPage = React.lazy(() => import("@/pages/dashboard/add-wallet"));
 const ConvertPage = React.lazy(() => import("@/pages/dashboard/convert"));
 const KYCPage = React.lazy(() => import("@/pages/dashboard/kyc"));
 const KYCVerifiedPage = React.lazy(() => import("@/pages/dashboard/kyc-verified"));
@@ -219,6 +220,7 @@ function Router() {
       <Route path="/dashboard/send" component={SendMoneyPage} />
       <Route path="/dashboard/fee-details" component={FeeExplanationsPage} />
       <Route path="/dashboard/global-message" component={GlobalMessagePage} />
+      <Route path="/dashboard/wallets/add" component={AddWalletPage} />
       <Route path="/dashboard/wallets" component={WalletsPage} />
       <Route path="/dashboard/convert" component={ConvertPage} />
       <Route path="/dashboard/kyc" component={KYCPage} />
