@@ -20,3 +20,9 @@ For wallet creation on imported Plesk schemas, prefer the existing native MySQL 
 **Why:** Wallet creation must be atomic under mobile double-clicks and can encounter small schema/readback differences after a PostgreSQL-to-MySQL import.
 
 **How to apply:** Validate the currency and ownership first, then use the MySQL `INSERT ... ON DUPLICATE KEY UPDATE` path with an explicit `updated_at` value and return the selected wallet.
+
+Raw Drizzle MySQL `db.execute()` SELECTs resolve to the rows array directly, while PostgreSQL resolves to an object containing `rows`; normalize the result before mapping it.
+
+**Why:** Assuming the PostgreSQL `{ rows }` shape caused the admin merchant API endpoint to throw in MySQL production and the UI to appear empty.
+
+**How to apply:** Keep dialect-specific result normalization beside raw SQL routes, and surface query failures instead of defaulting data to an empty list.
