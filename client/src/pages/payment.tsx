@@ -33,6 +33,7 @@ import { normalizePaymentLinkRequestError, parsePaymentLinkJson } from "@/lib/pa
 import { getPawaPayPinInstructions } from "@/lib/pawapay-instructions";
 
 const CRYPTO_COUNTDOWN_SECONDS = 5 * 60;
+const PAYMENT_COUNTDOWN_SECONDS = 8 * 60;
 // The server may perform one uncached active-conf lookup before the deposit
 // request, and PawaPay can take longer while handing an automatic PIN prompt
 // to the operator. Do not let Safari abort an initiation that was already
@@ -95,10 +96,11 @@ export default function PaymentPage() {
   
   const [paymentStatus, setPaymentStatus] = useState<"pending" | "success" | "failed">("pending");
   const [failureReason, setFailureReason] = useState<string>("");
-  const [countdown, setCountdown] = useState(8 * 60);
+  const [countdown, setCountdown] = useState(PAYMENT_COUNTDOWN_SECONDS);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
+  const countdownDeadlineRef = useRef<number | null>(null);
   const [otpRequired, setOtpRequired] = useState(false);
   const [otpType, setOtpType] = useState<"api" | "ussd">("api");
   const [otpUssdCode, setOtpUssdCode] = useState("");
@@ -291,21 +293,26 @@ export default function PaymentPage() {
   };
 
   const startPaymentCountdown = (reset = true) => {
-    if (reset) setCountdown(8 * 60);
+    if (reset || countdownDeadlineRef.current === null) {
+      countdownDeadlineRef.current = Date.now() + PAYMENT_COUNTDOWN_SECONDS * 1000;
+    }
     if (countdownRef.current) clearInterval(countdownRef.current);
-    countdownRef.current = setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 1) {
-          if (countdownRef.current) clearInterval(countdownRef.current);
-          if (pollingRef.current) clearInterval(pollingRef.current);
-          setOtpRequired(false);
-          setFailureReason("Le délai de confirmation OTP est expiré. Veuillez recommencer.");
-          setPaymentStatus("failed");
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    const updateCountdown = () => {
+      const deadline = countdownDeadlineRef.current;
+      const remaining = deadline === null
+        ? PAYMENT_COUNTDOWN_SECONDS
+        : Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+      setCountdown(remaining);
+      if (remaining > 0) return;
+      if (countdownRef.current) clearInterval(countdownRef.current);
+      countdownRef.current = null;
+      if (pollingRef.current) clearInterval(pollingRef.current);
+      setOtpRequired(false);
+      setFailureReason("Le délai de confirmation OTP est expiré. Veuillez recommencer.");
+      setPaymentStatus("failed");
+    };
+    updateCountdown();
+    countdownRef.current = setInterval(updateCountdown, 1000);
   };
 
   const startPaymentPolling = (ref: string, resetCountdown = true) => {
@@ -488,9 +495,6 @@ export default function PaymentPage() {
         setOtpRequired(true);
         setOtpType(data.otpType || "api");
         setOtpUssdCode(data.ussdCode || "");
-        // OTP confirmation does not start the regular polling path yet, but
-        // the OTP screen still needs its own countdown.
-        startPaymentCountdown();
       } else {
         setOtpRequired(false);
         if (ref) startPaymentPolling(ref);
@@ -683,6 +687,14 @@ export default function PaymentPage() {
     };
   }, []);
 
+  // Start the OTP timer from the rendered state as a safety net. This keeps
+  // the timer working even when a mobile browser batches the mutation update.
+  useEffect(() => {
+    if (otpRequired && paymentStatus === "pending") {
+      startPaymentCountdown(false);
+    }
+  }, [otpRequired, paymentStatus]);
+
   const formatCountdown = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -696,7 +708,8 @@ export default function PaymentPage() {
     setPaymentStatus("pending");
     setPaymentReference("");
     setFailureReason("");
-    setCountdown(8 * 60);
+    setCountdown(PAYMENT_COUNTDOWN_SECONDS);
+    countdownDeadlineRef.current = null;
     setFullName(""); setEmail(""); setCryptoFirstName(""); setCryptoLastName(""); setPhone(""); setCustomAmount("");
     setCountry(""); setOperator(""); setPaymentMethod("");
     setErrors({});
@@ -1065,7 +1078,7 @@ export default function PaymentPage() {
                 <>
                   {/* Operator logo with amber halo */}
                   <div className="relative flex items-center justify-center pt-2">
-                    <div className="absolute w-24 h-24 rounded-full bg-amber-500/10 animate-pulse" />
+                    <div className="absolute w-24 h-24 rounded-full bg-amber-500/10 otp-logo-halo" />
                     <div className="w-16 h-16 rounded-full overflow-hidden bg-white border-2 border-border shadow-md flex items-center justify-center relative z-10">
                       {selectedOperatorData && getOperatorLogo(selectedOperatorData.name) ? (
                         <img src={getOperatorLogo(selectedOperatorData.name)!} alt={selectedOperatorData.name} className="w-full h-full object-cover" />
@@ -1142,12 +1155,24 @@ export default function PaymentPage() {
                       <span className="flex items-center gap-1.5 text-muted-foreground">
                         <Clock className="w-3.5 h-3.5" /> Expiration
                       </span>
-                      <span className="font-semibold tabular-nums text-foreground">{countdown}s</span>
+                      <span
+                        className="font-semibold tabular-nums text-foreground"
+                        aria-live="polite"
+                      >
+                        {formatCountdown(countdown)}
+                      </span>
                     </div>
-                    <div className="h-2 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className="h-2 bg-muted rounded-full overflow-hidden"
+                      role="progressbar"
+                      aria-valuemin={0}
+                      aria-valuemax={PAYMENT_COUNTDOWN_SECONDS}
+                      aria-valuenow={countdown}
+                      aria-label="Temps restant avant expiration"
+                    >
                       <div
                         className="h-full bg-amber-500 rounded-full transition-all duration-1000 ease-linear"
-                       style={{ width: `${(countdown / (8 * 60)) * 100}%` }}
+                        style={{ width: `${(countdown / PAYMENT_COUNTDOWN_SECONDS) * 100}%` }}
                       />
                     </div>
                   </div>
@@ -1222,12 +1247,14 @@ export default function PaymentPage() {
                       <span className="flex items-center gap-1.5 text-muted-foreground">
                         <Clock className="w-3.5 h-3.5" /> Expiration
                       </span>
-                      <span className="font-semibold tabular-nums text-foreground">{countdown}s</span>
+                      <span className="font-semibold tabular-nums text-foreground" aria-live="polite">
+                        {formatCountdown(countdown)}
+                      </span>
                     </div>
                     <div className="h-2 bg-muted rounded-full overflow-hidden">
                       <div
                         className="h-full bg-blue-500 rounded-full transition-all duration-1000 ease-linear"
-                        style={{ width: `${(countdown / (8 * 60)) * 100}%` }}
+                        style={{ width: `${(countdown / PAYMENT_COUNTDOWN_SECONDS) * 100}%` }}
                       />
                     </div>
                   </div>
@@ -1307,12 +1334,14 @@ export default function PaymentPage() {
                       <span className="flex items-center gap-1.5 text-muted-foreground">
                         <Clock className="w-3.5 h-3.5" /> Expiration
                       </span>
-                      <span className="font-semibold tabular-nums text-foreground">{countdown}s</span>
+                      <span className="font-semibold tabular-nums text-foreground" aria-live="polite">
+                        {formatCountdown(countdown)}
+                      </span>
                     </div>
                     <div className="h-2 bg-muted rounded-full overflow-hidden">
                       <div
                         className="h-full bg-blue-500 rounded-full transition-all duration-1000 ease-linear"
-                        style={{ width: `${(countdown / (8 * 60)) * 100}%` }}
+                        style={{ width: `${(countdown / PAYMENT_COUNTDOWN_SECONDS) * 100}%` }}
                       />
                     </div>
                   </div>

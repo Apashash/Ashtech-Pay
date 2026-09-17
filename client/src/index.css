@@ -2,6 +2,24 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Visible feedback while an OTP request waits for the customer. */
+@keyframes otp-logo-halo {
+  0%, 100% {
+    opacity: 0.25;
+    transform: scale(0.86);
+  }
+  50% {
+    opacity: 0.78;
+    transform: scale(1.14);
+  }
+}
+
+.otp-logo-halo {
+  animation: otp-logo-halo 1.8s ease-in-out infinite;
+  transform-origin: center;
+  will-change: opacity, transform;
+}
+
 /* Custom red X used for close, cancel, remove, and delete actions. */
 svg.lucide-x {
   color: transparent !important;
