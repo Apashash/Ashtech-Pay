@@ -485,6 +485,24 @@ const upload = multer({
 const SessionStore = connectPgSimple(session);
 const isMysqlDialect = process.env.DB_DIALECT?.toLowerCase() === "mysql";
 
+// Raw Drizzle SELECTs use different result shapes by dialect: PostgreSQL
+// returns a QueryResult with `.rows`, while MySQL returns the selected rows
+// directly. Mutations likewise expose `rowCount` vs `affectedRows`.
+function getRawDbRows(result: unknown): any[] {
+  const value = result as any;
+  if (Array.isArray(value)) {
+    return Array.isArray(value[0]) ? value[0] : value;
+  }
+  return Array.isArray(value?.rows) ? value.rows : [];
+}
+
+function getRawDbAffectedRows(result: unknown): number {
+  const value = result as any;
+  if (typeof value?.rowCount === "number") return value.rowCount;
+  if (typeof value?.affectedRows === "number") return value.affectedRows;
+  return getRawDbRows(value).length;
+}
+
 async function getUserTicketStats(userId: string): Promise<{ unreadCount: number; totalCount: number }> {
   const [totalRows, unreadRows] = await Promise.all([
     db.select({ count: count() })
@@ -571,7 +589,7 @@ const OTP_OP_LOCK_MS = 15 * 60 * 1000;
 async function getOtpOpLockRemaining(userId: string): Promise<number> {
   try {
     const result = await db.execute(sql`SELECT otp_locked_until FROM users WHERE id = ${userId}`);
-    const row = (result as any).rows?.[0];
+    const row = getRawDbRows(result)[0];
     if (!row) return 0;
     const lockedUntil = Number(row.otp_locked_until ?? 0);
     const remaining = lockedUntil - Date.now();
@@ -1889,7 +1907,7 @@ async function loadTokenRevocationsFromDb(): Promise<void> {
       drizzleSql`SELECT id, token_revoked_before FROM users WHERE token_revoked_before IS NOT NULL AND token_revoked_before > 0`
     );
     let count = 0;
-    for (const row of result.rows as { id: string; token_revoked_before: number }[]) {
+    for (const row of getRawDbRows(result) as { id: string; token_revoked_before: number }[]) {
       if (row.token_revoked_before > 0) {
         revokedTokensBefore.set(row.id, Number(row.token_revoked_before));
         count++;
@@ -4816,13 +4834,7 @@ export async function registerRoutes(
       // PostgreSQL returns a QueryResult with `.rows`; Drizzle's MySQL
       // execute() returns the selected rows directly as an array. Normalize
       // both shapes so dashboard counters match the transaction history.
-      const txStatsResult = txStats as any;
-      const txStatsRows = Array.isArray(txStatsResult)
-        ? txStatsResult
-        : Array.isArray(txStatsResult?.rows)
-          ? txStatsResult.rows
-          : [];
-      const row = (txStatsRows[0] || {}) as Record<string, any>;
+      const row = (getRawDbRows(txStats)[0] || {}) as Record<string, any>;
       const stats = {
         totalReceived: parseFloat(row.total_received || "0").toFixed(2),
         totalSent: parseFloat(row.total_sent || "0").toFixed(2),
@@ -10830,7 +10842,7 @@ export async function registerRoutes(
       // Test download of first real KYC file from DB
       try {
         const kycRows = await db.execute(sql`SELECT document_front_path FROM kyc_submissions WHERE document_front_path NOT LIKE '/uploads/%' LIMIT 1`);
-        const firstPath = (kycRows as any).rows?.[0]?.document_front_path;
+        const firstPath = getRawDbRows(kycRows)[0]?.document_front_path;
         if (firstPath) {
           result.sampleFileTest = { path: firstPath, ...(await testDownload(bucket, firstPath)) };
         } else {
@@ -14040,7 +14052,7 @@ export async function registerRoutes(
   app.delete("/api/admin/audit-logs", requireAuth, requireAdmin, async (req, res) => {
     try {
       const result = await db.execute(sql`DELETE FROM audit_logs`);
-      const deleted = (result as any).rowCount ?? 0;
+      const deleted = getRawDbAffectedRows(result);
       const ip = getClientIp(req);
       storage.createAdminLog({ adminId: req.userId!, action: "audit_logs_cleared", details: `${deleted} entrées supprimées depuis IP ${ip}` }).catch(() => {});
       console.log(`[AuditClear] ${deleted} entrée(s) supprimée(s) par admin ${req.userId}`);
@@ -14095,7 +14107,7 @@ export async function registerRoutes(
       try {
         await db.execute(sql`UPDATE users SET token_revoked_before = ${revokedAt}`);
         const allUsers = await db.execute(sql`SELECT id FROM users`);
-        for (const row of allUsers.rows as { id: string }[]) {
+        for (const row of getRawDbRows(allUsers) as { id: string }[]) {
           revokedTokensBefore.set(row.id, revokedAt);
         }
       } catch (tokenErr) {
