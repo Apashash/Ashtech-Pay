@@ -119,6 +119,11 @@ import {
 } from "./kycPrivateDocuments";
 import { ensureMysqlKycSubmissionSchema } from "./mysqlBootstrap";
 import { isPrivateOrReservedIp } from "./networkSecurity";
+import {
+  GoogleDriveStorageError,
+  isGoogleDriveConfigured,
+  uploadToGoogleDrive,
+} from "./googleDriveStorage";
 
 const PAWAPAY_PUBLIC_INITIATION_TIMEOUT_MS = 20_000;
 
@@ -2904,12 +2909,31 @@ export async function registerRoutes(
         });
       }
 
-      // Try Supabase Storage first (file is already in memory — no disk I/O needed)
+      // Payment-link images prefer Google Drive when configured for Plesk.
+      // KYC remains private and continues through its dedicated storage path.
+      const googleDriveResult = safeFolder === "payment-links"
+        ? await uploadToGoogleDrive(req.file.buffer, req.file.originalname, req.file.mimetype)
+        : null;
+      if (googleDriveResult) {
+        return res.json({
+          success: true,
+          objectPath: googleDriveResult.path,
+          url: googleDriveResult.url,
+          filename: req.file.originalname,
+          originalName: req.file.originalname,
+          size: req.file.size,
+          mimetype: req.file.mimetype,
+          storage: "google_drive",
+        });
+      }
+
+      // Supabase remains an optional storage fallback when Google Drive is not
+      // configured. The final fallback is the public imagepro directory.
       const supabaseResult = await uploadToSupabase(
         req.file.buffer,
         req.file.originalname,
         req.file.mimetype,
-        safeFolder
+        safeFolder,
       );
 
       if (supabaseResult) {
@@ -2949,7 +2973,10 @@ export async function registerRoutes(
       }
     } catch (error) {
       const uploadError = error as NodeJS.ErrnoException;
-      const isPrivateStorageUnavailable = ["EACCES", "EPERM", "ENOENT", "EROFS"].includes(uploadError.code || "");
+      const isGoogleDriveError = uploadError instanceof GoogleDriveStorageError ||
+        String(uploadError.code || "").startsWith("GOOGLE_DRIVE_");
+      const isPrivateStorageUnavailable = ["EACCES", "EPERM", "ENOENT", "EROFS"].includes(uploadError.code || "") ||
+        isGoogleDriveError;
       const uploadMessage = uploadError.message || String(error);
       const isKycDatabaseError = isKycUpload && (
         uploadError.code === "KYC_ENCRYPTION_NOT_CONFIGURED" ||
@@ -2967,7 +2994,9 @@ export async function registerRoutes(
         code: uploadError.code || null,
         message: uploadMessage,
       });
-      const storageMessage = uploadError.code === "EACCES" || uploadError.code === "EPERM"
+      const storageMessage = isGoogleDriveError
+        ? uploadError.message
+        : uploadError.code === "EACCES" || uploadError.code === "EPERM"
         ? isKycUpload
           ? "L'utilisateur Node.js n'a pas les droits d'écriture sur le stockage privé KYC."
           : "L'utilisateur Node.js n'a pas les droits d'écriture sur le dossier imagepro. Vérifiez ses permissions ou configurez IMAGEPRO_DIR vers un dossier persistant accessible par Node.js."
