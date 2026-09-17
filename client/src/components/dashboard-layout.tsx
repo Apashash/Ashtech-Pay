@@ -129,10 +129,18 @@ function preloadDashboardRoute(url: string, prefetchData = false) {
   }
 }
 
-function DashboardNavLink({ href, children }: { href: string; children: React.ReactNode }) {
+function DashboardNavLink({
+  href,
+  children,
+  ...props
+}: Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, "href"> & {
+  href: string;
+  children: React.ReactNode;
+}) {
   return (
     <Link
       href={href}
+      {...props}
       onPointerEnter={() => preloadDashboardRoute(href)}
       onFocus={() => preloadDashboardRoute(href)}
       onPointerDown={() => preloadDashboardRoute(href, true)}
