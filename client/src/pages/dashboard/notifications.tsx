@@ -1,8 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { format } from "date-fns";
-import { fr, enUS } from "date-fns/locale";
 import {
   ChevronLeft, ChevronRight, CheckCheck, Trash2, ArrowDownCircle,
   ArrowUpCircle, Send, Megaphone, MessageSquare, ShieldCheck, Clock3, X, Loader2, ExternalLink,
@@ -22,6 +20,31 @@ interface Notification {
   transactionId: string | null;
   isRead: boolean;
   createdAt: string | null;
+}
+
+const NOTIFICATION_TIME_ZONE = "Africa/Douala";
+
+function formatNotificationDate(value: string, language: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  const parts = new Intl.DateTimeFormat(language === "fr" ? "fr-FR" : "en-US", {
+    timeZone: NOTIFICATION_TIME_ZONE,
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value || "";
+  const day = get("day");
+  const month = get("month");
+  const hour = get("hour");
+  const minute = get("minute");
+
+  return language === "fr"
+    ? `${day} ${month} à ${hour}:${minute}`
+    : `${month} ${day} at ${hour}:${minute}`;
 }
 
 export default function NotificationsPage() {
@@ -273,7 +296,7 @@ export default function NotificationsPage() {
 
                       {notif.createdAt && (
                         <p className="text-xs text-muted-foreground/70 mt-1.5">
-                          {format(new Date(notif.createdAt), language === "fr" ? "dd MMM 'à' HH:mm" : "dd MMM 'at' HH:mm", { locale: language === "fr" ? fr : enUS })}
+                          {formatNotificationDate(notif.createdAt, language)}
                         </p>
                       )}
                     </div>
