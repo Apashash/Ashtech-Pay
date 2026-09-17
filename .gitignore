@@ -14,6 +14,8 @@ node_modules
 .local/afribapay_token.json
 .local/swychr_token.json
 .local/pixpay_token.json
+.local/mysql-data/
+.local/mysql-run/
 .cache
 
 # ─── Uploads (user files — not source code) ───────────────────────────────────

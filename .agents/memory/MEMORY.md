@@ -69,3 +69,4 @@
 - [Google Drive on Plesk](google-drive-plesk.md) — Replit's Drive connector does not reach the external Plesk runtime; use a Google service account and native API auth there.
 - [Supabase Storage on Plesk](supabase-plesk-storage.md) — “Storage not configured” happens before bucket access when the Node process cannot see SUPABASE_URL or the service-role key.
 - [Supabase Node WebSocket transport](supabase-node-websocket.md) — Node.js 20 needs the installed `ws` constructor passed as Supabase Realtime transport before the Storage client can initialize.
+- [Local MySQL workflow](local-mysql-workflow.md) — auxiliary MariaDB startup must use a dedicated port variable and preserve Replit's HTTP `PORT`.
