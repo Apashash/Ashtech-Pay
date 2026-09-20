@@ -188,6 +188,41 @@ function escapeTelegramHtml(value: string): string {
     .replace(/>/g, "&gt;");
 }
 
+function telegramReferences(opts: {
+  reference: string;
+  merchantReference?: string;
+  externalReference?: string;
+}): string {
+  return (
+    `\n🧾 <b>RÉFÉRENCES</b>\n` +
+    `──────────────────\n` +
+    `🔖 <b>AshTechPay</b>\n` +
+    `<code>${escapeTelegramHtml(opts.reference)}</code>\n\n` +
+    (opts.merchantReference
+      ? `🏪 <b>Site marchand</b>\n<code>${escapeTelegramHtml(opts.merchantReference)}</code>\n\n`
+      : "") +
+    (opts.externalReference
+      ? `🔗 <b>Fournisseur</b>\n<code>${escapeTelegramHtml(opts.externalReference)}</code>\n\n`
+      : "")
+  );
+}
+
+function telegramReferenceCopyKeyboard(opts: {
+  reference: string;
+  merchantReference?: string;
+  externalReference?: string;
+}): any[][] {
+  return [
+    [{ text: "📋 Copier réf. AshTechPay", copy_text: { text: opts.reference } }],
+    ...(opts.merchantReference
+      ? [[{ text: "📋 Copier réf. site marchand", copy_text: { text: opts.merchantReference } }]]
+      : []),
+    ...(opts.externalReference
+      ? [[{ text: "📋 Copier réf. fournisseur", copy_text: { text: opts.externalReference } }]]
+      : []),
+  ];
+}
+
 function now(): string {
   return new Date().toLocaleString("fr-FR", { timeZone: "Africa/Douala" });
 }
@@ -416,9 +451,7 @@ export async function notifyDepositConfirmed(opts: {
     `💳 Montant crédité : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
     walletLine("💼 Wallet crédité", opts.creditedCurrency || opts.walletCurrency, opts.currency) +
     (opts.provider ? `🔌 Passerelle : ${providerDisplay(opts.provider)}\n` : "") +
-    `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
-    (opts.merchantReference ? `🏪 Réf. site marchand : <code>${opts.merchantReference}</code>\n` : "") +
-    (opts.externalReference ? `🔗 Réf. Fournisseur : <code>${opts.externalReference}</code>\n` : "") +
+    telegramReferences(opts) +
     `🕐 Heure : ${now()}\n` +
     `──── 📤 EXPÉDITEUR (PAYEUR) ────\n` +
     (payerName ? `👤 Nom : <b>${payerName}</b>\n` : "") +
@@ -434,7 +467,7 @@ export async function notifyDepositConfirmed(opts: {
     ((opts.beneficiaryPhone || opts.userPhone) ? `📞 Téléphone : ${opts.beneficiaryPhone || opts.userPhone}\n` : "") +
     (beneficiaryPays ? `🌍 Pays : <b>${beneficiaryPays}</b>\n` : "");
 
-  await sendMessage(msg);
+  await sendMessageWithKeyboard(msg, telegramReferenceCopyKeyboard(opts));
 }
 
 export async function notifyDepositFailed(opts: {
@@ -473,9 +506,7 @@ export async function notifyDepositFailed(opts: {
     `💰 Montant : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
     (opts.provider ? `🔌 Passerelle : ${opts.provider}\n` : "") +
     (opts.reason ? `⚠️ Raison : ${opts.reason}\n` : "") +
-    `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
-    (opts.merchantReference ? `🏪 Réf. site marchand : <code>${opts.merchantReference}</code>\n` : "") +
-    (opts.externalReference ? `🔗 Réf. Fournisseur : <code>${opts.externalReference}</code>\n` : "") +
+    telegramReferences(opts) +
     `🕐 Heure : ${now()}\n` +
     `──── 📤 EXPÉDITEUR (PAYEUR) ────\n` +
     (isLink && opts.payerName ? `👤 Nom : <b>${opts.payerName}</b>\n` : "") +
@@ -489,7 +520,7 @@ export async function notifyDepositFailed(opts: {
     `📧 Email : ${opts.userEmail}\n` +
     (opts.userPhone ? `📞 Téléphone : ${opts.userPhone}\n` : "") +
     (beneficiaryPays ? `🌍 Pays : <b>${beneficiaryPays}</b>\n` : "");
-  await sendMessage(msg);
+  await sendMessageWithKeyboard(msg, telegramReferenceCopyKeyboard(opts));
 }
 
 // ─── MODIFICATION NUMÉRO DE RETRAIT ──────────────────
