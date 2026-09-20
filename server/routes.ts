@@ -19607,6 +19607,8 @@ export async function registerRoutes(
           }
 
           try {
+            let insufficientProviderBalance = false;
+            let providerError: string | undefined;
             let payoutResult: { success: boolean; transaction_id?: string; message?: string };
             // pollerRef must match the actual reference submitted to the provider
             // so the poller status check finds the right transaction.
@@ -19742,13 +19744,55 @@ export async function registerRoutes(
               });
             } else {
               console.error(`[Telegram Approve] Payout failed via ${provider}: ${payoutResult.message}`);
+              const providerMessage = (payoutResult.message || "").toLowerCase();
+              insufficientProviderBalance =
+                providerMessage.includes("insuffi") ||
+                providerMessage.includes("solde") ||
+                providerMessage.includes("balance");
+              providerError = sanitizeGatewayMessage(
+                payoutResult.message,
+                "Le fournisseur a refusé l'opération sans fournir de détail.",
+              );
               await storage.updateTransactionStatus(tx.id, "pending_manual");
+            }
+
+            if (insufficientProviderBalance || providerError) {
+              return {
+                userName: txUser.fullName || txUser.username,
+                amount: tx.amount,
+                currency: txCurrency,
+                provider,
+                status: "pending_manual",
+                txType: tx.type,
+                insufficientProviderBalance,
+                providerError: insufficientProviderBalance ? undefined : providerError,
+              };
             }
           } catch (err: any) {
             console.error(`[Telegram Approve] Payout error via ${provider}:`, err?.message || err);
             // A PawaPay transport error after UUID persistence has an unknown
             // provider outcome. Leave it for manual/recovery processing.
             await storage.updateTransactionStatus(tx.id, "pending_manual");
+            const providerMessage = String(err?.message || "").toLowerCase();
+            const insufficientProviderBalance =
+              providerMessage.includes("insuffi") ||
+              providerMessage.includes("solde") ||
+              providerMessage.includes("balance");
+            return {
+              userName: txUser.fullName || txUser.username,
+              amount: tx.amount,
+              currency: txCurrency,
+              provider,
+              status: "pending_manual",
+              txType: tx.type,
+              insufficientProviderBalance,
+              providerError: insufficientProviderBalance
+                ? undefined
+                : sanitizeGatewayMessage(
+                    err?.message,
+                    "Une erreur technique est survenue pendant l'envoi au fournisseur.",
+                  ),
+            };
           }
 
           const finalTransaction = await storage.getTransactionById(tx.id).catch(() => null);

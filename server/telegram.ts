@@ -181,6 +181,13 @@ function fmt(amount: string | number, currency: string): string {
   return `${parseFloat(String(amount)).toLocaleString("fr-FR")} ${currency}`;
 }
 
+function escapeTelegramHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
 function now(): string {
   return new Date().toLocaleString("fr-FR", { timeZone: "Africa/Douala" });
 }
@@ -1600,6 +1607,8 @@ export async function handleTelegramUpdate(
       provider?: string;
       status?: "processing" | "completed" | "failed" | "pending_manual";
       txType?: string;
+      insufficientProviderBalance?: boolean;
+      providerError?: string;
     } | null>;
     rejectWithdrawal: (reference: string, reason: string) => Promise<{ userName: string; txType?: string } | null>;
     searchUsers: (query: string) => Promise<{ userName: string; email: string; balance: number; currency: string; kycStatus: string; country?: string; banned: boolean }[]>;
@@ -1885,6 +1894,49 @@ export async function handleTelegramUpdate(
       const result = await handlers.approveWithdrawal(reference, provider);
       if (result) {
         const operationLabel = result.txType === "transfer_out" ? "TRANSFERT" : "RETRAIT";
+        if (result.insufficientProviderBalance) {
+          await editMessageText(messageId,
+            `⚠️ <b>${operationLabel} NON SOUMIS</b>\n\n` +
+            `👤 ${result.userName}\n` +
+            `💰 ${fmt(result.amount, result.currency)}\n` +
+            `🔌 Via : <b>${providerDisplay(provider)}</b>\n` +
+            `🔖 <code>${reference}</code>\n` +
+            `⚠️ Solde fournisseur insuffisant.\n` +
+            `🕐 ${now()}`);
+          await sendMessageWithKeyboard(
+            `⚠️ <b>SOLDE FOURNISSEUR INSUFFISANT</b>\n\n` +
+            `Le wallet ${providerDisplay(provider)} ne permet pas d'effectuer ce ${operationLabel.toLowerCase()}.\n` +
+            `Rechargez le wallet fournisseur, puis confirmez à nouveau ou annulez et remboursez le client.\n\n` +
+            `🔖 <code>${reference}</code>`,
+            [
+              [{ text: `🔄 Confirmer à nouveau via ${providerDisplay(provider)}`, callback_data: `wap:${reference}:${provider}` }],
+              [{ text: "❌ Annuler & Rembourser", callback_data: `wrd:${reference}:can` }],
+            ],
+          );
+          return;
+        }
+        if (result.providerError) {
+          const providerError = escapeTelegramHtml(result.providerError);
+          await editMessageText(messageId,
+            `❌ <b>${operationLabel} NON SOUMIS</b>\n\n` +
+            `👤 ${result.userName}\n` +
+            `💰 ${fmt(result.amount, result.currency)}\n` +
+            `🔌 Via : <b>${providerDisplay(provider)}</b>\n` +
+            `🔖 <code>${reference}</code>\n` +
+            `⚠️ Erreur : ${providerError}\n` +
+            `🕐 ${now()}`);
+          await sendMessageWithKeyboard(
+            `❌ <b>ERREUR FOURNISSEUR</b>\n\n` +
+            `🔌 ${providerDisplay(provider)} : ${providerError}\n\n` +
+            `Vous pouvez confirmer à nouveau ou annuler et rembourser le client.\n` +
+            `🔖 <code>${reference}</code>`,
+            [
+              [{ text: `🔄 Confirmer à nouveau via ${providerDisplay(provider)}`, callback_data: `wap:${reference}:${provider}` }],
+              [{ text: "❌ Annuler & Rembourser", callback_data: `wrd:${reference}:can` }],
+            ],
+          );
+          return;
+        }
         const statusLabel: Record<string, string> = {
           processing: "⏳ EN ATTENTE DE CONFIRMATION FOURNISSEUR",
           pending_manual: "⏸ EN ATTENTE DE RAPPROCHEMENT MANUEL",
