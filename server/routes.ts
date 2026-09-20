@@ -2026,6 +2026,13 @@ function sanitizeGatewayMessage(msg: string | null | undefined, fallback: string
   return safeMessage || fallback;
 }
 
+function isProviderTimeoutFailure(result: {
+  providerCode?: unknown;
+  providerStatus?: unknown;
+}): boolean {
+  return result.providerCode === "provider_timeout" || Number(result.providerStatus) === 504;
+}
+
 function isDefinitivePayoutRejection(result: {
   message?: string | null;
   status?: string | null;
@@ -6431,7 +6438,7 @@ export async function registerRoutes(
 
                 if (!otpInitResult.success) {
                   await storage.updateTransactionStatus(transaction.id, "failed");
-                  return res.status(400).json(buildProviderErrorPayload({
+                  return res.status(isProviderTimeoutFailure(otpInitResult) ? 502 : 400).json(buildProviderErrorPayload({
                     error: "payment_initiation_failed",
                     message: otpInitResult.message,
                     fallback: "Impossible d'envoyer le code OTP.",
@@ -6587,7 +6594,7 @@ export async function registerRoutes(
             } else {
               console.error(`[AfribaPay Payin FAILED] country=${countryCode} operator=${afribapayOperatorCode}`);
               await storage.updateTransactionStatus(transaction.id, "failed");
-              res.status(400).json(buildProviderErrorPayload({
+              res.status(isProviderTimeoutFailure(afribaResponse) ? 502 : 400).json(buildProviderErrorPayload({
                 error: "payment_initiation_failed",
                 message: afribaResponse.message,
                 fallback: "Échec de l'initiation du paiement Mobile Money.",
@@ -10130,7 +10137,7 @@ export async function registerRoutes(
 
                 if (!otpInitResult.success) {
                   await storage.updatePaymentIntentStatus(intent.id, "failed");
-                  return res.status(400).json(buildProviderErrorPayload({
+                  return res.status(isProviderTimeoutFailure(otpInitResult) ? 502 : 400).json(buildProviderErrorPayload({
                     error: "payment_initiation_failed",
                     message: otpInitResult.message,
                     fallback: "Impossible d'envoyer le code OTP.",
@@ -10272,7 +10279,7 @@ export async function registerRoutes(
               await storage.updatePaymentIntentStatus(intent.id, "failed");
               const failedTx = await storage.getTransactionByReference(reference);
               if (failedTx) await storage.updateTransactionStatus(failedTx.id, "failed");
-              return res.status(400).json(buildProviderErrorPayload({
+              return res.status(isProviderTimeoutFailure(afribaResponse) ? 502 : 400).json(buildProviderErrorPayload({
                 error: "payment_initiation_failed",
                 message: afribaResponse.message,
                 fallback: "Échec du paiement Mobile Money.",

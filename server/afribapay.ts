@@ -12,6 +12,14 @@ const TOKEN_FILE = appPath(".local", "afribapay_token.json");
 const TOKEN_REFRESH_SKEW_MS = 60_000;
 const TOKEN_FALLBACK_TTL_MS = 15 * 60_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
+const PROVIDER_TIMEOUT_MESSAGE = "Le service de paiement n'a pas répondu dans le délai prévu. Veuillez réessayer.";
+
+function isAbortError(error: unknown): boolean {
+  const candidate = error as { name?: unknown; code?: unknown; message?: unknown } | null;
+  return candidate?.name === "AbortError"
+    || candidate?.code === "ABORT_ERR"
+    || /aborted|abort/i.test(String(candidate?.message || ""));
+}
 
 export const AFRIBAPAY_MIN_PAYIN_AMOUNT = 100;
 // AfribaPay's public docs currently state both 2,000,000 and 2,500,000 for
@@ -482,7 +490,14 @@ export async function initiateAfribaPayin(params: AfribaPayinParams): Promise<Af
     };
   } catch (err: any) {
     console.error("[AfribaPay Payin] Error:", err);
-    return { success: false, message: err.message || "Erreur réseau AfribaPay" };
+    return isAbortError(err)
+      ? {
+          success: false,
+          message: PROVIDER_TIMEOUT_MESSAGE,
+          providerCode: "provider_timeout",
+          providerStatus: 504,
+        }
+      : { success: false, message: err.message || "Erreur réseau de paiement" };
   }
 }
 
@@ -847,7 +862,14 @@ export async function initiateAfribaPayOtp(params: Omit<AfribaPayinParams, "retu
     return { success: true, raw: data };
   } catch (err: any) {
     console.error("[AfribaPay OTP Init] Error:", err);
-    return { success: false, message: err.message || "Erreur réseau OTP" };
+    return isAbortError(err)
+      ? {
+          success: false,
+          message: PROVIDER_TIMEOUT_MESSAGE,
+          providerCode: "provider_timeout",
+          providerStatus: 504,
+        }
+      : { success: false, message: err.message || "Erreur réseau OTP" };
   }
 }
 
@@ -943,7 +965,14 @@ export async function confirmAfribaPayOtp(params: AfribaPayOtpParams): Promise<A
     };
   } catch (err: any) {
     console.error("[AfribaPay OTP Confirm] Error:", err);
-    return { success: false, message: err.message || "Erreur réseau OTP" };
+    return isAbortError(err)
+      ? {
+          success: false,
+          message: PROVIDER_TIMEOUT_MESSAGE,
+          providerCode: "provider_timeout",
+          providerStatus: 504,
+        }
+      : { success: false, message: err.message || "Erreur réseau OTP" };
   }
 }
 
