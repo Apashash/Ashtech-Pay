@@ -108,7 +108,7 @@ import {
   replacePawaPayCredentials,
 } from "./pawapayConfig";
 import { enqueueMerchantWebhook } from "./merchantWebhook";
-import { buildProviderErrorPayload } from "./providerErrors";
+import { buildProviderErrorPayload, sanitizeProviderMessage } from "./providerErrors";
 import { buildPublicPaymentStatus } from "./publicPaymentState";
 import { buildPawaPayFeeUpdates } from "./feeUpdates";
 import { toLocalMobileMoneyPhone, validateMobileMoneyPhone } from "@shared/mobile-money-phone";
@@ -2018,17 +2018,12 @@ async function resolveFileUrl(filePath: string): Promise<string | null> {
 }
 
 /**
- * Sanitize upstream gateway messages before returning them to merchants/customers.
- * If the upstream message mentions an internal provider name (AfribaPay/PixPay),
- * the raw message is logged server-side and a neutral fallback is returned instead.
+ * Sanitize upstream gateway messages before returning them to merchants/customers
+ * while preserving the useful provider diagnostic.
  */
 function sanitizeGatewayMessage(msg: string | null | undefined, fallback: string): string {
-  if (!msg || !msg.trim()) return fallback;
-  if (/afribapay|pixpay/i.test(msg)) {
-    console.warn(`[GatewaySanitize] provider name stripped from upstream message: ${msg}`);
-    return fallback;
-  }
-  return msg.trim();
+  const safeMessage = sanitizeProviderMessage(msg);
+  return safeMessage || fallback;
 }
 
 function isDefinitivePayoutRejection(result: {
@@ -6436,7 +6431,16 @@ export async function registerRoutes(
 
                 if (!otpInitResult.success) {
                   await storage.updateTransactionStatus(transaction.id, "failed");
-                  return res.status(400).json({ message: otpInitResult.message || "Impossible d'envoyer le code OTP" });
+                  return res.status(400).json(buildProviderErrorPayload({
+                    error: "payment_initiation_failed",
+                    message: otpInitResult.message,
+                    fallback: "Impossible d'envoyer le code OTP.",
+                    provider: "afribapay",
+                    raw: otpInitResult.raw,
+                    providerCode: otpInitResult.providerCode,
+                    providerStatus: otpInitResult.providerStatus,
+                    sensitiveValues: [data.phoneNumber],
+                  }));
                 }
               }
               // ── USSD OTP: user dials the code themselves — no initiation call needed ──
@@ -6583,7 +6587,16 @@ export async function registerRoutes(
             } else {
               console.error(`[AfribaPay Payin FAILED] country=${countryCode} operator=${afribapayOperatorCode}`);
               await storage.updateTransactionStatus(transaction.id, "failed");
-              res.status(400).json({ message: sanitizeGatewayMessage(afribaResponse.message, "Échec de l'initiation du paiement Mobile Money.") });
+              res.status(400).json(buildProviderErrorPayload({
+                error: "payment_initiation_failed",
+                message: afribaResponse.message,
+                fallback: "Échec de l'initiation du paiement Mobile Money.",
+                provider: "afribapay",
+                raw: afribaResponse.raw,
+                providerCode: afribaResponse.providerCode,
+                providerStatus: afribaResponse.providerStatus,
+                sensitiveValues: [data.phoneNumber],
+              }));
             }
 
           } else if (paymentProvider === "pixpay") {
@@ -10117,7 +10130,16 @@ export async function registerRoutes(
 
                 if (!otpInitResult.success) {
                   await storage.updatePaymentIntentStatus(intent.id, "failed");
-                  return res.status(400).json({ message: otpInitResult.message || "Impossible d'envoyer le code OTP" });
+                  return res.status(400).json(buildProviderErrorPayload({
+                    error: "payment_initiation_failed",
+                    message: otpInitResult.message,
+                    fallback: "Impossible d'envoyer le code OTP.",
+                    provider: "afribapay",
+                    raw: otpInitResult.raw,
+                    providerCode: otpInitResult.providerCode,
+                    providerStatus: otpInitResult.providerStatus,
+                    sensitiveValues: [phone],
+                  }));
                 }
               }
               // ── USSD OTP: user dials the code themselves — no initiation call needed ──
@@ -10250,7 +10272,16 @@ export async function registerRoutes(
               await storage.updatePaymentIntentStatus(intent.id, "failed");
               const failedTx = await storage.getTransactionByReference(reference);
               if (failedTx) await storage.updateTransactionStatus(failedTx.id, "failed");
-              return res.status(400).json({ message: sanitizeGatewayMessage(afribaResponse.message, "Échec du paiement Mobile Money.") });
+              return res.status(400).json(buildProviderErrorPayload({
+                error: "payment_initiation_failed",
+                message: afribaResponse.message,
+                fallback: "Échec du paiement Mobile Money.",
+                provider: "afribapay",
+                raw: afribaResponse.raw,
+                providerCode: afribaResponse.providerCode,
+                providerStatus: afribaResponse.providerStatus,
+                sensitiveValues: [phone],
+              }));
             }
           }
 

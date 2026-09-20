@@ -34,7 +34,11 @@ function firstString(...values: unknown[]): string | undefined {
 function providerCodeString(...values: unknown[]): string | undefined {
   for (const value of values) {
     const candidate = nonEmptyString(value);
-    if (candidate && /^[A-Za-z0-9][A-Za-z0-9_.:-]{1,79}$/.test(candidate)) {
+    if (
+      candidate &&
+      !/(?:afribapay|pix\s*pay|pawa\s*pay|izi\s*change)/i.test(candidate) &&
+      /^[A-Za-z0-9][A-Za-z0-9_.:-]{1,79}$/.test(candidate)
+    ) {
       return candidate;
     }
   }
@@ -85,7 +89,8 @@ function normalizeStatus(value: unknown): number | string | undefined {
   return /^\d+$/.test(stringValue) ? Number(stringValue) : stringValue;
 }
 
-function redactSensitiveText(message: string, sensitiveValues: unknown[] = []): string {
+export function sanitizeProviderMessage(message: string | null | undefined, sensitiveValues: unknown[] = []): string {
+  if (!message || !message.trim()) return "";
   let safeMessage = message;
 
   for (const value of sensitiveValues) {
@@ -95,14 +100,25 @@ function redactSensitiveText(message: string, sensitiveValues: unknown[] = []): 
     }
   }
 
-  // Configuration failures are actionable for operators but the upstream
-  // wording is too technical for a public checkout.
-  if (/production API token is not configured/i.test(safeMessage)) {
-    return "Le fournisseur de paiement n'est pas configuré. Veuillez réessayer plus tard ou contacter le support.";
-  }
+  // Do not expose the upstream provider's brand in merchant-facing messages,
+  // but preserve the rest of the useful upstream diagnostic.
+  safeMessage = safeMessage.replace(
+    /\b(?:Afriba\s*Pay|Pix\s*Pay|Pawa\s*Pay|Izi\s*Change)\b/gi,
+    "le service de paiement",
+  );
 
-  // Do not expose the upstream provider's brand in merchant-facing messages.
-  safeMessage = safeMessage.replace(/\b(?:Afriba\s*Pay|Pix\s*Pay|Pawa\s*Pay|Izi\s*Change)\b/gi, "le fournisseur de paiement");
+  // E-mail addresses are not needed to diagnose a payment failure.
+  safeMessage = safeMessage.replace(
+    /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,
+    "[redacted]",
+  );
+
+  // Provider errors can echo secrets or authentication values. Keep the
+  // diagnostic sentence while never returning the value itself.
+  safeMessage = safeMessage.replace(
+    /\b(pin|otp|password|passwd|secret|token|api[_ -]?key|merchant[_ -]?key)\b(\s*(?:code|value|is|est)?\s*[:=]\s*)("[^"]*"|'[^']*'|[^\s,;)]+)/gi,
+    "$1$2[redacted]",
+  );
 
   // Provider messages occasionally echo a destination phone number or an
   // identifier. Never forward long digit sequences from an upstream message.
@@ -161,7 +177,7 @@ export function buildProviderErrorPayload(
   options: ProviderErrorPayloadOptions,
 ): Record<string, unknown> {
   const extracted = extractProviderErrorDetails(options.raw);
-  const message = redactSensitiveText(
+  const message = sanitizeProviderMessage(
     nonEmptyString(options.message) || extractProviderErrorMessage(options.raw) || options.fallback,
     options.sensitiveValues,
   );
