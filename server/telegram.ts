@@ -354,6 +354,7 @@ export async function notifyDepositConfirmed(opts: {
   amount: string | number;
   currency: string;
   reference: string;
+  merchantReference?: string;
   externalReference?: string;
   provider?: string;
   country?: string;
@@ -409,6 +410,7 @@ export async function notifyDepositConfirmed(opts: {
     walletLine("💼 Wallet crédité", opts.creditedCurrency || opts.walletCurrency, opts.currency) +
     (opts.provider ? `🔌 Passerelle : ${providerDisplay(opts.provider)}\n` : "") +
     `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
+    (opts.merchantReference ? `🏪 Réf. site marchand : <code>${opts.merchantReference}</code>\n` : "") +
     (opts.externalReference ? `🔗 Réf. Fournisseur : <code>${opts.externalReference}</code>\n` : "") +
     `🕐 Heure : ${now()}\n` +
     `──── 📤 EXPÉDITEUR (PAYEUR) ────\n` +
@@ -436,6 +438,7 @@ export async function notifyDepositFailed(opts: {
   amount: string | number;
   currency: string;
   reference: string;
+  merchantReference?: string;
   externalReference?: string;
   reason?: string;
   provider?: string;
@@ -464,6 +467,7 @@ export async function notifyDepositFailed(opts: {
     (opts.provider ? `🔌 Passerelle : ${opts.provider}\n` : "") +
     (opts.reason ? `⚠️ Raison : ${opts.reason}\n` : "") +
     `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
+    (opts.merchantReference ? `🏪 Réf. site marchand : <code>${opts.merchantReference}</code>\n` : "") +
     (opts.externalReference ? `🔗 Réf. Fournisseur : <code>${opts.externalReference}</code>\n` : "") +
     `🕐 Heure : ${now()}\n` +
     `──── 📤 EXPÉDITEUR (PAYEUR) ────\n` +
