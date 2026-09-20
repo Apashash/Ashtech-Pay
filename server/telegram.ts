@@ -340,54 +340,6 @@ function isPawaPay(provider: string | undefined): boolean {
   return (provider || "").toLowerCase() === "pawapay";
 }
 
-// ─── DÉPÔTS ──────────────────
-
-export async function notifyNewDeposit(opts: {
-  userName: string;
-  userEmail: string;
-  userPhone?: string;
-  userCountry?: string;
-  amount: string | number;
-  currency: string;
-  method: string;
-  phone?: string;
-  operator?: string;
-  reference: string;
-  externalReference?: string;
-  provider?: string;
-  country?: string;
-  walletCurrency?: string;
-  grossAmount?: string | number;
-  source?: string;
-}): Promise<void> {
-  const payerPays = opts.country ? countryDisplay(opts.country) : countryDisplay(opts.currency);
-  const beneficiaryPays = opts.userCountry ? countryDisplay(opts.userCountry) : "";
-  const hasGross = opts.grossAmount != null && String(opts.grossAmount) !== String(opts.amount);
-  const sourceLabel = opts.source === "api" ? "🔌 <b>Paiement via API</b>\n" : opts.source === "hosted_page" ? "🖥️ <b>Paiement Checkout Hosted Page</b>\n" : "";
-  const msg =
-    `${isPawaPay(opts.provider) ? "⏳ <b>PAWAPAY — DÉPÔT EN ATTENTE</b>" : "🟡 <b>NOUVEAU DÉPÔT EN ATTENTE</b>"}\n` +
-    `──────────────────\n` +
-    (sourceLabel ? sourceLabel : "") +
-    (hasGross ? `💰 Montant brut : <b>${fmt(opts.grossAmount!, opts.currency)}</b>\n` : "") +
-    `💳 Montant crédité : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
-    walletLine("💼 Wallet cible", opts.walletCurrency, opts.currency) +
-    (opts.provider ? `🔌 Passerelle : ${providerDisplay(opts.provider)}\n` : "") +
-    `🔖 Réf. AshtechPay : <code>${opts.reference}</code>\n` +
-    (opts.externalReference ? `🔗 Réf. Fournisseur : <code>${opts.externalReference}</code>\n` : "") +
-    `🕐 Heure : ${now()}\n` +
-    `──── 📤 EXPÉDITEUR (PAYEUR) ────\n` +
-    (opts.phone ? `📞 Téléphone : ${opts.phone}\n` : "") +
-    (opts.operator ? `📡 Opérateur : <b>${opts.operator}</b>\n` : "") +
-    (payerPays ? `🌍 Pays : <b>${payerPays}</b>\n` : "") +
-    `📱 Méthode : ${opts.method}\n` +
-    `──── 📥 BÉNÉFICIAIRE ────\n` +
-    `👤 Nom : <b>${opts.userName}</b>\n` +
-    `📧 Email : ${opts.userEmail}\n` +
-    (opts.userPhone ? `📞 Téléphone : ${opts.userPhone}\n` : "") +
-    (beneficiaryPays ? `🌍 Pays : <b>${beneficiaryPays}</b>\n` : "");
-  await sendMessage(msg);
-}
-
 export async function notifyDepositConfirmed(opts: {
   userName: string;
   userEmail: string;

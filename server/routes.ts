@@ -137,7 +137,6 @@ const PAWAPAY_PUBLIC_INITIATION_TIMEOUT_MS = 20_000;
 import { addSSEClient, removeSSEClient, setActiveTicket, isUserOnline, getOnlineUserIds, getAdminViewingTicket, getUserViewingTicket, notifyUser, notifyAdmins, broadcastOnlineStatus, notifyUserForceLogout, notifyOtherSessionsForceLogout, notifyAllUsersForceLogout, notifySpecificSessionForceLogout } from "./sse";
 import { sendClean404 } from "./botGuard";
 import {
-  notifyNewDeposit,
   notifyWithdrawalPendingManual,
   notifyWithdrawalManuallyValidated,
   notifyWithdrawalAutoValidated,
@@ -6419,22 +6418,6 @@ export async function registerRoutes(
            },
          } : {}),
       });
-
-      notifyNewDeposit({
-        userName: user.fullName || user.username,
-        userEmail: user.email || "",
-        userPhone: user.phone || undefined,
-        userCountry: user.country || undefined,
-        amount: creditedAmount,
-        grossAmount: totalAmount,
-        currency: countryCurrency,
-        method: data.paymentMethod === "mobile_money" ? `Mobile Money (${operatorName})` : data.paymentMethod,
-        phone: data.phoneNumber || undefined,
-        operator: operatorName || undefined,
-        reference: depositRef,
-        provider: paymentProvider,
-        country: countryCode,
-      }).catch(() => {});
 
       // Call payment gateway for mobile money deposits
       if (data.paymentMethod === "mobile_money" && data.phoneNumber) {
