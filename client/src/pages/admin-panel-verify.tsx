@@ -86,15 +86,20 @@ export default function AdminPanelVerifyPage() {
       if (!res.ok) throw Object.assign(new Error(json.message || "Erreur"), json);
       return json;
     },
-    onSuccess: () => {
+    onSuccess: (data: { ok: boolean; pinRequired?: boolean }) => {
       queryClient.setQueryData(["/api/admin/otp-status"], (old: any) => ({
         ...(old || {}),
         needsPanelVerify: undefined,
-        needsPanelPin: undefined,
+        needsPanelPin: data.pinRequired || undefined,
         verified: true,
       }));
       setCode("");
-      setLocation(ADMIN_URL);
+      if (data.pinRequired) {
+        setStep("pin");
+      } else {
+        sessionStorage.removeItem("admin_verify_return");
+        setLocation(ADMIN_URL);
+      }
     },
     onError: (err: any) => {
       setCode("");

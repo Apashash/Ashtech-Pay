@@ -1548,18 +1548,19 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
     // valid when an admin API request is made.
     const panelTotpExp = req.session._pav;
     if (typeof panelTotpExp !== "number" || panelTotpExp <= Date.now()) {
+      // The 24h inactivity window expired: revoke both panel factors so the
+      // next access always follows the complete TOTP -> PIN sequence.
+      delete req.session._pav;
+      delete req.session._pavVerifiedAt;
+      delete req.session._ppv;
+      delete req.session._ppvIp;
+      req.session.save(() => {});
       return res.status(403).json({
         message: "Vérification Google Authenticator requise pour accéder au panneau admin.",
         totpRequired: true,
         panelTotpRequired: true,
       });
     }
-
-    // ── Slide all admin factors by 24h on every successful panel access ─────
-    const newAvsExp = Date.now() + ADMIN_OTP_SESSION_TTL_MS;
-    req.session._avs = newAvsExp;
-    req.session._avsIp = adminIpEarly;
-    adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: newAvsExp, ip: adminIpEarly });
 
     // When enabled, the second gate is the server-side admin PIN, bound to
     // the same IP. Diagnostic mode intentionally relies on panel TOTP only.
@@ -1568,12 +1569,32 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
     if (isAdminPinProtectionEnabled() &&
         (typeof panelPinExp !== "number" || panelPinExp <= Date.now() ||
          !panelPinIp || normalizeLoopback(panelPinIp) !== normalizeLoopback(adminIpEarly))) {
+      if (typeof panelPinExp === "number" && panelPinExp <= Date.now()) {
+        // An expired PIN means the shared inactivity window elapsed. Revoke
+        // the panel TOTP as well instead of allowing the factors to drift.
+        delete req.session._pav;
+        delete req.session._pavVerifiedAt;
+        delete req.session._ppv;
+        delete req.session._ppvIp;
+        req.session.save(() => {});
+        return res.status(403).json({
+          message: "Votre session admin est inactive depuis 24 heures. Vérifiez Google Authenticator puis le code PIN.",
+          totpRequired: true,
+          panelTotpRequired: true,
+        });
+      }
       return res.status(403).json({
         message: "Code PIN admin requis pour accéder au panneau d'administration.",
         pinRequired: true,
         panelPinRequired: true,
       });
     }
+
+    // Slide all factors only after the complete TOTP + PIN gate succeeds.
+    const newAvsExp = Date.now() + ADMIN_OTP_SESSION_TTL_MS;
+    req.session._avs = newAvsExp;
+    req.session._avsIp = adminIpEarly;
+    adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: newAvsExp, ip: adminIpEarly });
 
     const newPanelAuthExp = Date.now() + ADMIN_PANEL_ACCESS_TTL_MS;
     req.session._pav = newPanelAuthExp;
@@ -4109,7 +4130,7 @@ export async function registerRoutes(
         path: req.path,
       }).catch(() => {});
 
-      res.json({ ok: true });
+      res.json({ ok: true, pinRequired: isAdminPinProtectionEnabled() });
     } catch (error) {
       console.error("admin-panel-verify error:", error);
       res.status(500).json({ message: "Erreur serveur." });
@@ -10841,6 +10862,7 @@ export async function registerRoutes(
   const needsPanelVerify = !panelValid && !panelValidDb;
   const panelPinExp = req.session._ppv;
   const panelPinIp = req.session._ppvIp;
+  const panelPinExpired = typeof panelPinExp === "number" && panelPinExp <= now;
   const panelPinValid = typeof panelPinExp === "number" && panelPinExp > now &&
     typeof panelPinIp === "string" &&
     normalizeLoopback(panelPinIp) === normalizeLoopback(currentIp);
@@ -10848,7 +10870,7 @@ export async function registerRoutes(
 
     res.json({
       verified,
-      needsPanelVerify: needsPanelVerify || undefined,
+      needsPanelVerify: (needsPanelVerify || panelPinExpired) || undefined,
       needsPanelPin: needsPanelPin || undefined,
       totpEnabled: !!user.totpEnabled,
       enforcementEnabled: ADMIN_TOTP_ENFORCEMENT_ENABLED,
