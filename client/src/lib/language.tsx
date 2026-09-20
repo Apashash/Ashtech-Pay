@@ -1424,7 +1424,7 @@ const translations = {
       totalAmount: "Montant total",
       processing: "Traitement...",
       payNow: "Payer maintenant",
-      securePayment: "Paiement sécurisé — Vos données sont protégées",
+      securePayment: "Paiement sécurisé Vos données sont protégées",
       poweredBy: "Propulsé par",
       discover: "Découvrir Ashtech Pay",
       secureLabel: "Paiement sécurisé",
