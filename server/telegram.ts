@@ -3100,6 +3100,13 @@ export async function notifyAuditEvent(opts: {
   success: boolean;
   details?: Record<string, unknown> | null;
 }): Promise<void> {
+  // These operations already have dedicated Telegram notifications for their
+  // actionable states (manual review, confirmation, rejection, refund).
+  // Keep the audit records without duplicating them in the Telegram channel.
+  if (opts.action === "withdrawal_created" || opts.action === "transfer_sent") {
+    return;
+  }
+
   const emoji = AUDIT_EMOJIS[opts.action] ?? "📋";
   const label = AUDIT_LABELS[opts.action] ?? opts.action.toUpperCase().replace(/_/g, " ");
   const statusEmoji = opts.success ? "✅" : "❌";
