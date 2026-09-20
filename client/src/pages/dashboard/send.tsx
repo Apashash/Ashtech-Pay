@@ -52,6 +52,8 @@ interface OperatorConfig {
   feeFixed: number;
   minFee: number | null;
   maxFee: number | null;
+  available?: boolean;
+  unavailableReason?: string | null;
 }
 
 interface CountryConfig {
@@ -508,6 +510,7 @@ export default function SendMoneyPage() {
     amountValue > 0 &&
     watchedCountryId &&
     watchedOperatorId &&
+    selectedOperator?.available !== false &&
     !externalMutation.isPending &&
     !feePreview.isLoading &&
     !currencyMismatch &&
@@ -761,25 +764,31 @@ export default function SendMoneyPage() {
                                   const logo = getOperatorLogo(op.name);
                                   const isSelected = field.value === op.id;
                                   const isOrangeMoney = op.name.toLowerCase().includes("orange");
+                                   const isUnavailable = op.available === false;
                                   return (
                                     <button
                                       key={op.id}
                                       type="button"
                                       data-testid={`button-operator-${op.id}`}
-                                      onClick={() => field.onChange(op.id)}
-                                      className={`flex-shrink-0 flex flex-col items-center justify-center gap-2 w-24 h-20 rounded-2xl border-2 transition-all cursor-pointer ${
-                                        isSelected
+                                       disabled={isUnavailable}
+                                       title={isUnavailable ? (op.unavailableReason || "Indisponible pour le moment") : undefined}
+                                       onClick={() => { if (!isUnavailable) field.onChange(op.id); }}
+                                       className={`relative flex-shrink-0 flex flex-col items-center justify-center gap-1 w-24 h-20 rounded-2xl border-2 transition-all ${
+                                         isUnavailable
+                                           ? "border-black/20 bg-white text-black cursor-not-allowed"
+                                           : isSelected
                                           ? "border-primary bg-primary/10 shadow-md"
-                                          : "border-border bg-card/50 hover:border-primary/40"
+                                           : "border-border bg-card/50 hover:border-primary/40 cursor-pointer"
                                       }`}
                                     >
                                       {logo
-                                        ? <img src={logo} alt={op.name} className={`${isOrangeMoney ? "w-16 h-12" : "w-10 h-10"} object-contain rounded-xl`} />
-                                        : <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center"><Smartphone className="w-5 h-5 text-primary" /></div>
+                                         ? <img src={logo} alt={op.name} className={`${isOrangeMoney ? "w-16 h-9" : "w-9 h-9"} object-contain rounded-xl ${isUnavailable ? "grayscale" : ""}`} />
+                                         : <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isUnavailable ? "bg-gray-100" : "bg-primary/10"}`}><Smartphone className={`w-5 h-5 ${isUnavailable ? "text-black" : "text-primary"}`} /></div>
                                       }
-                                      <span className={`text-[11px] font-semibold text-center leading-tight px-1 ${isSelected ? "text-primary" : "text-foreground"}`}>
+                                       <span className={`text-[11px] font-semibold text-center leading-tight px-1 ${isUnavailable ? "text-black" : isSelected ? "text-primary" : "text-foreground"}`}>
                                         {op.name}
                                       </span>
+                                       {isUnavailable && <span className="text-[8px] font-bold uppercase leading-none text-black">Indisponible</span>}
                                     </button>
                                   );
                                 })}

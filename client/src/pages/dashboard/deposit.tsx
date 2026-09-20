@@ -41,6 +41,8 @@ interface OperatorConfig {
   otpUssdCode?: string | null;
   minFee: number | null;
   maxFee: number | null;
+  available?: boolean;
+  unavailableReason?: string | null;
 }
 
 interface CountryConfig {
@@ -178,7 +180,7 @@ export default function DepositPage() {
 
   const feeCalculation = useMemo(() => {
     const amount = parseFloat(watchedAmount) || 0;
-    if (amount <= 0 || !selectedOperator) return null;
+    if (amount <= 0 || !selectedOperator || selectedOperator.available === false) return null;
 
     const provider = selectedOperator.paymentProvider;
     const isAfribaPay = provider === "afribapay";
@@ -480,8 +482,8 @@ export default function DepositPage() {
   const canSubmit = useMemo(() => {
     const amount = parseFloat(watchedAmount) || 0;
     return amount >= minDeposit && amount <= maxDeposit &&
-      !!watchedCountryId && !!watchedOperatorId && watchedPhoneNumber.length >= 8;
-  }, [watchedAmount, minDeposit, maxDeposit, watchedCountryId, watchedOperatorId, watchedPhoneNumber]);
+      !!watchedCountryId && !!watchedOperatorId && selectedOperator?.available !== false && watchedPhoneNumber.length >= 8;
+  }, [watchedAmount, minDeposit, maxDeposit, watchedCountryId, watchedOperatorId, watchedPhoneNumber, selectedOperator]);
 
   const resetWizard = () => {
     setShowValidationMessage(false);
@@ -1453,23 +1455,29 @@ export default function DepositPage() {
                                   const logo = getOperatorLogo(op.name);
                                   const isSelected = field.value === op.id;
                                   const isOrangeMoney = op.name.toLowerCase().includes("orange");
+                                   const isUnavailable = op.available === false;
                                   return (
                                     <button
                                       key={op.id}
                                       type="button"
                                       data-testid={`button-operator-${op.id}`}
-                                      onClick={() => field.onChange(op.id)}
-                                      className={`flex-shrink-0 flex flex-col items-center justify-center gap-2 w-28 h-24 rounded-2xl border-2 transition-all cursor-pointer ${
-                                        isSelected
+                                       disabled={isUnavailable}
+                                       title={isUnavailable ? (op.unavailableReason || "Indisponible pour le moment") : undefined}
+                                       onClick={() => { if (!isUnavailable) field.onChange(op.id); }}
+                                       className={`relative flex-shrink-0 flex flex-col items-center justify-center gap-1.5 w-28 h-24 rounded-2xl border-2 transition-all ${
+                                         isUnavailable
+                                           ? "border-black/20 bg-white text-black cursor-not-allowed"
+                                           : isSelected
                                           ? "border-primary bg-primary/10 shadow-md"
-                                          : "border-border bg-card/50 hover:border-primary/40 hover:bg-muted/30"
+                                           : "border-border bg-card/50 hover:border-primary/40 hover:bg-muted/30 cursor-pointer"
                                       }`}
                                     >
                                       {logo
-                                        ? <img src={logo} alt={op.name} className={`${isOrangeMoney ? "w-16 h-12" : "w-12 h-12"} object-contain rounded-xl`} />
-                                        : <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center"><Smartphone className="w-6 h-6 text-primary" /></div>
+                                         ? <img src={logo} alt={op.name} className={`${isOrangeMoney ? "w-16 h-10" : "w-11 h-10"} object-contain rounded-xl ${isUnavailable ? "grayscale" : ""}`} />
+                                         : <div className={`w-11 h-10 rounded-xl flex items-center justify-center ${isUnavailable ? "bg-gray-100" : "bg-primary/10"}`}><Smartphone className={`w-6 h-6 ${isUnavailable ? "text-black" : "text-primary"}`} /></div>
                                       }
-                                      <span className={`text-xs font-semibold text-center leading-tight px-1 ${isSelected ? "text-primary" : "text-foreground"}`}>{op.name}</span>
+                                       <span className={`text-xs font-semibold text-center leading-tight px-1 ${isUnavailable ? "text-black" : isSelected ? "text-primary" : "text-foreground"}`}>{op.name}</span>
+                                       {isUnavailable && <span className="text-[9px] font-bold uppercase leading-none text-black">Indisponible</span>}
                                     </button>
                                   );
                                 })}

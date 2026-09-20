@@ -32,6 +32,8 @@ interface OperatorConfig {
   ashtechMargin: number;
   minFee: number | null;
   maxFee: number | null;
+  available?: boolean;
+  unavailableReason?: string | null;
 }
 
 interface CountryConfig {
@@ -348,7 +350,9 @@ export default function WithdrawPage() {
     : 0;
 
   const isAmountValid = amountValue >= minWithdrawal && amountValue <= maxWithdrawal && amountValue <= balance;
-  const isMobileMoneyValid = selectedMethod === "mobile_money" ? (!!selectedCountry && !!selectedOperator && !!watchedAccountDetails) : true;
+  const isMobileMoneyValid = selectedMethod === "mobile_money"
+    ? (!!selectedCountry && !!selectedOperator && selectedOperatorData?.available !== false && !!watchedAccountDetails)
+    : true;
   const isBankTransferValid = selectedMethod === "bank_transfer" ? !!watchedAccountDetails : true;
   const isSubmitDisabled = withdrawMutation.isPending || !isAmountValid || !isMobileMoneyValid || !isBankTransferValid;
 
@@ -577,30 +581,36 @@ export default function WithdrawPage() {
                         const logo = getOperatorLogo(op.name);
                         const isSelected = selectedOperator === op.id;
                         const isOrangeMoney = op.name.toLowerCase().includes("orange");
+                        const isUnavailable = op.available === false;
                         return (
                           <button
                             key={op.id}
                             type="button"
                             data-testid={`button-operator-${op.id}`}
-                            onClick={() => setSelectedOperator(op.id)}
-                            className={`flex-shrink-0 flex flex-col items-center justify-center gap-2 w-24 h-[88px] rounded-2xl border-2 transition-all ${
-                              isSelected
+                            disabled={isUnavailable}
+                            title={isUnavailable ? (op.unavailableReason || "Indisponible pour le moment") : undefined}
+                            onClick={() => { if (!isUnavailable) setSelectedOperator(op.id); }}
+                            className={`relative flex-shrink-0 flex flex-col items-center justify-center gap-1 w-24 h-[88px] rounded-2xl border-2 transition-all ${
+                              isUnavailable
+                                ? "border-black/20 bg-white text-black cursor-not-allowed"
+                                : isSelected
                                 ? "border-primary bg-primary/8 shadow-sm"
-                                : "border-border bg-background hover:border-muted-foreground/40"
+                                : "border-border bg-background hover:border-muted-foreground/40 cursor-pointer"
                             }`}
                           >
                             {logo ? (
-                              <img src={logo} alt={op.name} className={`${isOrangeMoney ? "w-16 h-12" : "w-11 h-11"} object-contain rounded-xl`} />
+                              <img src={logo} alt={op.name} className={`${isOrangeMoney ? "w-16 h-10" : "w-10 h-10"} object-contain rounded-xl ${isUnavailable ? "grayscale" : ""}`} />
                             ) : (
-                              <div className="w-11 h-11 rounded-xl bg-muted flex items-center justify-center">
-                                <Smartphone className="w-6 h-6 text-muted-foreground" />
+                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isUnavailable ? "bg-gray-100" : "bg-muted"}`}>
+                                <Smartphone className={`w-6 h-6 ${isUnavailable ? "text-black" : "text-muted-foreground"}`} />
                               </div>
                             )}
                             <span className={`text-[11px] font-semibold text-center leading-tight px-1 ${
-                              isSelected ? "text-primary" : "text-foreground"
+                              isUnavailable ? "text-black" : isSelected ? "text-primary" : "text-foreground"
                             }`}>
                               {op.name}
                             </span>
+                            {isUnavailable && <span className="text-[8px] font-bold uppercase leading-none text-black">Indisponible</span>}
                           </button>
                         );
                       })}

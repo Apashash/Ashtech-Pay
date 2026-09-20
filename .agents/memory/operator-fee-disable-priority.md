@@ -1,10 +1,10 @@
 ---
-name: Operator fee disable priority
-description: The admin fee toggle is an operational disable for the associated operator.
+name: Operator fee availability
+description: The admin fee toggle marks the associated operator temporarily unavailable for one operation.
 ---
 
-An operator-specific fee marked inactive must block that operator for its own transaction type before any country-level or global fee fallback is considered. Deposit, withdrawal, and transfer toggles are independent; apply the scoped rule to operator listings, `/v1/countries`, `/v1/fees`, and server-side initiation paths.
+An operator-specific fee marked inactive must keep that operator and its country visible, but expose the operator as temporarily unavailable and prevent selection. It must block initiation for its own transaction type before any country-level or global fee fallback is considered. Deposit, withdrawal, and transfer toggles are independent.
 
-**Why:** The admin's `Actif` toggle is intended to remove the operator only from the selected operation. A deposit disable must not unexpectedly remove the same operator from withdrawal or transfer.
+**Why:** Users and API merchants must still see that the country and operator are supported, while understanding that the operator is temporarily unavailable. A deposit disable must not unexpectedly affect withdrawal or transfer.
 
-**How to apply:** When adding or changing an operator configuration or payment route, compare both `operatorId` and `transactionType`, and fail closed on an inactive record rather than relying on client-side filtering. Rejected stale requests should use the `OPERATOR_DISABLED_BY_ADMIN` code and explain that the administrator disabled the operator.
+**How to apply:** In catalog/config responses, return the operator with an unavailable status. Disable it in the UI with an explicit “Indisponible” label. On every initiation path, fail closed with `OPERATOR_DISABLED_BY_ADMIN` and a temporary-unavailability message.
