@@ -631,12 +631,14 @@ export async function notifyWithdrawalPendingManual(opts: {
   recipientCountry?: string;
   grossAmount?: string | number;
   recipientName?: string;
+  txType?: "withdrawal" | "transfer_out";
 }): Promise<void> {
   const senderPays = countryDisplay(opts.senderCountry || opts.currency);
   const recipientPays = countryDisplay(opts.recipientCountry || opts.currency);
   const hasGross = opts.grossAmount != null && String(opts.grossAmount) !== String(opts.amount);
+  const operationLabel = opts.txType === "transfer_out" ? "TRANSFERT" : "RETRAIT";
   const msg =
-    `${isPawaPay(opts.provider) ? "⏸ <b>PAWAPAY — RETRAIT EN ATTENTE MANUELLE</b>" : "⏸ <b>RETRAIT EN ATTENTE MANUELLE</b>"}\n` +
+    `${isPawaPay(opts.provider) ? `⏸ <b>PAWAPAY — ${operationLabel} EN ATTENTE MANUELLE</b>` : `⏸ <b>${operationLabel} EN ATTENTE MANUELLE</b>`}\n` +
     `──────────────────\n` +
     (hasGross ? `💰 Montant brut : <b>${fmt(opts.grossAmount!, opts.currency)}</b>\n` : "") +
     `💳 Montant net : <b>${fmt(opts.amount, opts.currency)}</b>\n` +
@@ -1597,8 +1599,9 @@ export async function handleTelegramUpdate(
       currency: string;
       provider?: string;
       status?: "processing" | "completed" | "failed" | "pending_manual";
+      txType?: string;
     } | null>;
-    rejectWithdrawal: (reference: string, reason: string) => Promise<{ userName: string } | null>;
+    rejectWithdrawal: (reference: string, reason: string) => Promise<{ userName: string; txType?: string } | null>;
     searchUsers: (query: string) => Promise<{ userName: string; email: string; balance: number; currency: string; kycStatus: string; country?: string; banned: boolean }[]>;
     approveWithdrawalNumberChange: (changeId: string) => Promise<{ userName: string; userEmail: string; newPhone: string; action: string } | null>;
     rejectWithdrawalNumberChange: (changeId: string, reason: string) => Promise<{ userName: string; userEmail: string } | null>;
@@ -1881,6 +1884,7 @@ export async function handleTelegramUpdate(
       }
       const result = await handlers.approveWithdrawal(reference, provider);
       if (result) {
+        const operationLabel = result.txType === "transfer_out" ? "TRANSFERT" : "RETRAIT";
         const statusLabel: Record<string, string> = {
           processing: "⏳ EN ATTENTE DE CONFIRMATION FOURNISSEUR",
           pending_manual: "⏸ EN ATTENTE DE RAPPROCHEMENT MANUEL",
@@ -1889,8 +1893,8 @@ export async function handleTelegramUpdate(
         };
         const status = result.status || "processing";
         const header = provider === "pawapay" && status === "processing"
-          ? "⏳ <b>PAWAPAY — RETRAIT SOUMIS</b>"
-          : `${statusLabel[status] || "✅ RETRAIT TRAITÉ"}`;
+          ? `⏳ <b>PAWAPAY — ${operationLabel} SOUMIS</b>`
+          : `${statusLabel[status] || `✅ ${operationLabel} TRAITÉ`}`;
         await editMessageText(messageId,
           `${header}\n\n👤 ${result.userName}\n💰 ${fmt(result.amount, result.currency)}\n🔌 Via : <b>${providerDisplay(provider)}</b>\n🔖 <code>${reference}</code>\n🕐 ${now()}`);
       } else {
@@ -1926,8 +1930,9 @@ export async function handleTelegramUpdate(
       const reason = reasonMap[code] ?? "Demande non conforme";
       const result = await handlers.rejectWithdrawal(reference, reason);
       if (result) {
+        const operationLabel = result.txType === "transfer_out" ? "TRANSFERT" : "RETRAIT";
         await editMessageText(messageId,
-          `❌ <b>RETRAIT REJETÉ</b>\n\n👤 ${result.userName}\n🔖 <code>${reference}</code>\n⚠️ ${reason}\n🕐 ${now()}`);
+          `❌ <b>${operationLabel} REJETÉ</b>\n\n👤 ${result.userName}\n🔖 <code>${reference}</code>\n⚠️ ${reason}\n🕐 ${now()}`);
       } else {
         await editMessageText(messageId, `⚠️ Impossible de rejeter — transaction introuvable.`);
       }
@@ -1940,7 +1945,7 @@ export async function handleTelegramUpdate(
       pendingWithdrawalRejections.set(chatId, { reference, messageId, ts: Date.now() });
       await callBotApi("sendMessage", {
         chat_id: chatId,
-        text: `✍️ Envoyez la raison du rejet pour le retrait <code>${reference}</code> :`,
+        text: `✍️ Envoyez la raison du rejet pour la transaction <code>${reference}</code> :`,
         parse_mode: "HTML",
         reply_markup: { force_reply: true, selective: true },
       });
@@ -2125,9 +2130,10 @@ export async function handleTelegramUpdate(
       pendingWithdrawalRejections.delete(chatId);
       const result = await handlers.rejectWithdrawal(pendingWdr.reference, text);
       if (result) {
+        const operationLabel = result.txType === "transfer_out" ? "TRANSFERT" : "RETRAIT";
         await editMessageText(pendingWdr.messageId,
-          `❌ <b>RETRAIT REJETÉ</b>\n\n👤 ${result.userName}\n🔖 <code>${pendingWdr.reference}</code>\n⚠️ ${text}\n🕐 ${now()}`);
-        await callBotApi("sendMessage", { chat_id: chatId, text: `✅ Rejet retrait enregistré : <i>${text}</i>`, parse_mode: "HTML" });
+          `❌ <b>${operationLabel} REJETÉ</b>\n\n👤 ${result.userName}\n🔖 <code>${pendingWdr.reference}</code>\n⚠️ ${text}\n🕐 ${now()}`);
+        await callBotApi("sendMessage", { chat_id: chatId, text: `✅ Rejet ${operationLabel.toLowerCase()} enregistré : <i>${text}</i>`, parse_mode: "HTML" });
       } else {
         await callBotApi("sendMessage", { chat_id: chatId, text: `⚠️ Transaction introuvable ou déjà traitée.`, parse_mode: "HTML" });
       }

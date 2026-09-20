@@ -6011,6 +6011,23 @@ export async function registerRoutes(
             transactionId: transaction.id,
             isRead: false,
           });
+          notifyWithdrawalPendingManual({
+            userName: sender.fullName || sender.username,
+            userEmail: sender.email || "",
+            userPhone: sender.phone || undefined,
+            amount: creditedAmount,
+            grossAmount: totalAmount,
+            currency: txCurrency,
+            phone: recipientPhone,
+            operator: (operator as any)?.name || undefined,
+            reference,
+            provider: transferProvider,
+            walletCurrency,
+            senderCountry: sender.country || "",
+            recipientCountry: transferCountryCode,
+            recipientName,
+            txType: "transfer_out",
+          }).catch(() => {});
         }
       } catch (payoutErr: any) {
         console.error(`[Transfer] Payout error for ${reference}:`, payoutErr.message);
@@ -6024,6 +6041,23 @@ export async function registerRoutes(
           transactionId: transaction.id,
           isRead: false,
         });
+        notifyWithdrawalPendingManual({
+          userName: sender.fullName || sender.username,
+          userEmail: sender.email || "",
+          userPhone: sender.phone || undefined,
+          amount: creditedAmount,
+          grossAmount: totalAmount,
+          currency: txCurrency,
+          phone: recipientPhone,
+          operator: (operator as any)?.name || undefined,
+          reference,
+          provider: transferProvider,
+          walletCurrency,
+          senderCountry: sender.country || "",
+          recipientCountry: transferCountryCode,
+          recipientName,
+          txType: "transfer_out",
+        }).catch(() => {});
       }
 
       audit(req, AUDIT.TRANSFER_SENT, {
@@ -19568,6 +19602,7 @@ export async function registerRoutes(
               currency: txCurrency,
               provider: "pawapay",
               status: reconciled === "completed" ? "completed" : reconciled === "failed" ? "failed" : "processing",
+              txType: tx.type,
             };
           }
 
@@ -19641,7 +19676,7 @@ export async function registerRoutes(
                 try { existingStatus = (await getPawaPayPayout(existingId)).status; } catch { existingStatus = "pending"; }
                 if (existingStatus === "completed" || existingStatus === "failed") {
                   await processPawaPayPayoutCallback(tx, existingStatus === "completed" ? "success" : "failed");
-                  return { userName: txUser.fullName || txUser.username, amount: tx.amount, currency: txCurrency };
+                  return { userName: txUser.fullName || txUser.username, amount: tx.amount, currency: txCurrency, txType: tx.type };
                 }
                 await storage.updateTransactionStatus(tx.id, "processing");
                 addPendingPayout({
@@ -19655,6 +19690,7 @@ export async function registerRoutes(
                   currency: txCurrency,
                   provider: "pawapay",
                   status: "processing",
+                  txType: tx.type,
                 };
               }
               await assertPawaPayProviderActive(resolvePawaPayProviderCode(operator, operator?.name || "", countryCode), "PAYOUT", pawaPayCountry(countryCode));
@@ -19706,13 +19742,13 @@ export async function registerRoutes(
               });
             } else {
               console.error(`[Telegram Approve] Payout failed via ${provider}: ${payoutResult.message}`);
-              await storage.updateTransactionStatus(tx.id, provider === "pawapay" ? "pending_manual" : "completed");
+              await storage.updateTransactionStatus(tx.id, "pending_manual");
             }
           } catch (err: any) {
             console.error(`[Telegram Approve] Payout error via ${provider}:`, err?.message || err);
             // A PawaPay transport error after UUID persistence has an unknown
             // provider outcome. Leave it for manual/recovery processing.
-            await storage.updateTransactionStatus(tx.id, provider === "pawapay" ? "pending_manual" : "completed");
+            await storage.updateTransactionStatus(tx.id, "pending_manual");
           }
 
           const finalTransaction = await storage.getTransactionById(tx.id).catch(() => null);
@@ -19727,6 +19763,7 @@ export async function registerRoutes(
             currency: txCurrency,
             provider,
             status: finalStatus,
+            txType: tx.type,
           };
         },
 
@@ -19742,22 +19779,23 @@ export async function registerRoutes(
             if (reconciled === "unresolved") {
               throw new Error("Paiement encore en cours de rapprochement; rejet manuel interdit.");
             }
-            return { userName: txUser.fullName || txUser.username };
+            return { userName: txUser.fullName || txUser.username, txType: tx.type };
           }
           await storage.updateTransactionStatus(tx.id, "failed");
           const totalDebited = parseFloat(tx.totalAmount || tx.amount);
           await storage.refundToOriginalWallet(tx.userId, tx.type, tx.currency || "XAF", totalDebited);
 
+          const isTransfer = tx.type === "transfer_out";
           await storage.createUserNotification({
             userId: tx.userId,
-            type: "withdrawal_failed",
-            title: "Retrait annulé",
-            message: `Votre retrait de ${tx.amount} ${tx.currency} a été annulé. Raison : ${reason}. Votre solde a été remboursé.`,
+            type: isTransfer ? "transfer_failed" : "withdrawal_failed",
+            title: isTransfer ? "Transfert annulé" : "Retrait annulé",
+            message: `Votre ${isTransfer ? "transfert" : "retrait"} de ${tx.amount} ${tx.currency} a été annulé. Raison : ${reason}. Votre solde a été remboursé.`,
             transactionId: tx.id,
             isRead: false,
           }).catch(() => {});
 
-          return { userName: txUser.fullName || txUser.username };
+          return { userName: txUser.fullName || txUser.username, txType: tx.type };
         },
 
         // ── Search users by partial email ────────────────────────────────────
