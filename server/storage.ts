@@ -139,6 +139,7 @@ export interface IStorage {
   getTransactionByPaymentIntentId(paymentIntentId: string): Promise<Transaction | undefined>;
   getTransactionById(id: string): Promise<Transaction | undefined>;
   getTransactionByReference(reference: string): Promise<Transaction | undefined>;
+  getTransactionByExternalReference(externalReference: string): Promise<Transaction | undefined>;
   getTransactionByUserReference(userId: string, reference: string): Promise<Transaction | undefined>;
   getApiTransactionByMerchantReference(userId: string, reference: string): Promise<Transaction | undefined>;
   getLastIncomingTransactionByCurrency(userId: string, currency: string): Promise<Transaction | undefined>;
@@ -658,6 +659,15 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(transactions)
       .where(eq(transactions.reference, reference));
+    return transaction || undefined;
+  }
+
+  async getTransactionByExternalReference(externalReference: string): Promise<Transaction | undefined> {
+    const [transaction] = await db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.externalReference, externalReference))
+      .limit(1);
     return transaction || undefined;
   }
 

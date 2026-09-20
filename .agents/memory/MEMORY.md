@@ -14,6 +14,7 @@
 - [Admin private document access](admin-private-document-access.md) — protected KYC images/PDFs need authenticated fetches and object URLs; direct browser resource links omit the Bearer token.
 - [Country wallet currency codes](countries-table-currency-codes.md) — destination country mappings must preserve distinct wallets (GA→XAFG, CG→XAFC, etc.), not collapse them into generic XAF/XOF.
 - [AfribaPay OTP detection](afribapay-otp-detection.md) — OTP-requirement check must union live API data with a static fallback table and never silently swallow fetch errors, or OTP-required operators (Orange/Moov CI) fail opaquely.
+- [AfribaPay documentation drift](afribapay-documentation-drift.md) — callback signature and PAYIN ceiling docs conflict; keep compatible HMAC variants and the lower 2,000,000 cap until provider confirmation.
 - [AfribaPay deposit OTP return URLs](afribapay-deposit-otp-return-url.md) — authenticated deposit OTP confirmation must fall back from APP_URL to the current request origin, matching the working payment-link flow.
 - [AfribaPay autonomous auth](afribapay-auth-refresh.md) — use server-side API credentials, encrypted token caching, proactive refresh, and one retry on invalid bearer tokens; never depend on dashboard sessions.
 - [BotGuard blocks payment webhooks](botguard-webhook-ua.md) — every new payment processor webhook must be added to API_UA_EXEMPT_PATHS in botGuard.ts or short/missing User-Agents from processor servers return 403.

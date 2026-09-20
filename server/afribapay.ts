@@ -1,5 +1,6 @@
 import path from "path";
 import fs from "fs";
+import crypto from "crypto";
 import { encryptField, decryptField, isFieldEncryptionConfigured } from "./fieldEncryption";
 import { appPath } from "./appPaths";
 
@@ -10,6 +11,13 @@ const AFRIBAPAY_PAYOUT_URL  = "https://api-payout.afribapay.com";
 const TOKEN_FILE = appPath(".local", "afribapay_token.json");
 const TOKEN_REFRESH_SKEW_MS = 60_000;
 const TOKEN_FALLBACK_TTL_MS = 15 * 60_000;
+const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
+
+export const AFRIBAPAY_MIN_PAYIN_AMOUNT = 100;
+// AfribaPay's public docs currently state both 2,000,000 and 2,500,000 for
+// PAYIN. Use the lower documented ceiling until the provider confirms which
+// limit is authoritative.
+export const AFRIBAPAY_MAX_PAYIN_AMOUNT = 2_000_000;
 
 function getAfribaPayCredentials() {
   return {
@@ -177,15 +185,27 @@ async function refreshAfribaPayToken(): Promise<string> {
   }
 
   const encoded = Buffer.from(`${publicKey}:${secretKey}`).toString("base64");
-  const res = await fetch(`${AFRIBAPAY_PAYIN_URL}/v1/token`, {
-    method: "POST",
-    headers: {
-      "Authorization": `Basic ${encoded}`,
-      "Content-Type": "application/json",
-    },
-  });
-
-  const data = await res.json();
+  const controller = new AbortController();
+  const timeoutMs = Number(process.env.AFRIBAPAY_REQUEST_TIMEOUT_MS);
+  const requestTimeoutMs = Number.isFinite(timeoutMs) && timeoutMs >= 1_000 && timeoutMs <= 120_000
+    ? timeoutMs
+    : DEFAULT_REQUEST_TIMEOUT_MS;
+  const timer = setTimeout(() => controller.abort(), requestTimeoutMs);
+  let res: Response;
+  let data: any;
+  try {
+    res = await fetch(`${AFRIBAPAY_PAYIN_URL}/v1/token`, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "Authorization": `Basic ${encoded}`,
+        "Content-Type": "application/json",
+      },
+    });
+    data = await res.json();
+  } finally {
+    clearTimeout(timer);
+  }
   if (!res.ok || !data.data?.access_token) {
     const raw = data.error?.message || data.message || JSON.stringify(data).slice(0, 120);
     recordAuthFailure(raw);
@@ -259,25 +279,84 @@ async function fetchAfribaPayJson(
 ): Promise<{ res: Response; data: any }> {
   for (let attempt = 0; attempt < 2; attempt++) {
     const headers = await authHeaders();
-    const response = await fetch(url, {
-      ...init,
-      headers: {
-        ...headers,
-        ...(init.headers as Record<string, string> | undefined),
-      },
-    });
-    const rawText = await response.text();
-    let data: any;
-    try { data = rawText ? JSON.parse(rawText) : null; } catch { data = rawText; }
+    const controller = new AbortController();
+    const timeoutMs = Number(process.env.AFRIBAPAY_REQUEST_TIMEOUT_MS);
+    const requestTimeoutMs = Number.isFinite(timeoutMs) && timeoutMs >= 1_000 && timeoutMs <= 120_000
+      ? timeoutMs
+      : DEFAULT_REQUEST_TIMEOUT_MS;
+    const timer = setTimeout(() => controller.abort(), requestTimeoutMs);
+    try {
+      const response = await fetch(url, {
+        ...init,
+        signal: controller.signal,
+        headers: {
+          ...headers,
+          ...(init.headers as Record<string, string> | undefined),
+        },
+      });
+      const rawText = await response.text();
+      let data: any;
+      try { data = rawText ? JSON.parse(rawText) : null; } catch { data = rawText; }
 
-    if (attempt === 0 && isInvalidSecurityToken(response, data, rawText)) {
-      console.warn("[AfribaPay Auth] Provider rejected the bearer token; refreshing and retrying once.");
-      invalidateAfribaPayToken();
-      continue;
+      if (attempt === 0 && isInvalidSecurityToken(response, data, rawText)) {
+        console.warn("[AfribaPay Auth] Provider rejected the bearer token; refreshing and retrying once.");
+        invalidateAfribaPayToken();
+        continue;
+      }
+      return { res: response, data };
+    } finally {
+      clearTimeout(timer);
     }
-    return { res: response, data };
   }
   throw new Error("AfribaPay authentication failed after token refresh");
+}
+
+export function validateAfribaPayinAmount(amount: number): string | undefined {
+  if (!Number.isFinite(amount) || amount < AFRIBAPAY_MIN_PAYIN_AMOUNT) {
+    return `Le montant AfribaPay doit être supérieur ou égal à ${AFRIBAPAY_MIN_PAYIN_AMOUNT}.`;
+  }
+  if (amount > AFRIBAPAY_MAX_PAYIN_AMOUNT) {
+    return `Le montant AfribaPay doit être inférieur ou égal à ${AFRIBAPAY_MAX_PAYIN_AMOUNT}.`;
+  }
+  return undefined;
+}
+
+/**
+ * AfribaPay documents an HMAC-SHA256 signature over the exact raw request body
+ * in the `AfribaPAY-Sign` header. The provider's API key is the secret used
+ * for this signature (the server-side secret credential, never a client key).
+ */
+export function verifyAfribaPayWebhookSignature(
+  rawBody: Buffer | string | undefined,
+  signature: string | string[] | undefined,
+  apiKey?: string,
+  timestamp?: string,
+): boolean {
+  if (!rawBody || !signature || Array.isArray(signature)) return false;
+  const secret = apiKey || getAfribaPayCredentials().secretKey;
+  if (!secret) return false;
+  const received = signature.trim().replace(/^sha256=/i, "");
+  if (!/^[a-f0-9]{64}$/i.test(received)) return false;
+  const receivedBuffer = Buffer.from(received, "hex");
+  const bodyBuffer = Buffer.isBuffer(rawBody) ? rawBody : Buffer.from(rawBody);
+  const signedMessages = [bodyBuffer];
+  if (timestamp?.trim()) {
+    const timestampValue = timestamp.trim();
+    // AfribaPay's published callback examples use both raw-body and
+    // timestamp-prefixed signing descriptions. Keep all accepted variants
+    // server-side and require the same secret/HMAC for each one.
+    signedMessages.push(
+      Buffer.from(`${timestampValue}${bodyBuffer.toString("utf8")}`),
+      Buffer.from(`${timestampValue}.${bodyBuffer.toString("utf8")}`),
+      Buffer.from(`${timestampValue}/${bodyBuffer.toString("utf8")}`),
+    );
+  }
+  return signedMessages.some(message => {
+    const expected = crypto.createHmac("sha256", secret).update(message).digest("hex");
+    const expectedBuffer = Buffer.from(expected, "hex");
+    return receivedBuffer.length === expectedBuffer.length
+      && crypto.timingSafeEqual(receivedBuffer, expectedBuffer);
+  });
 }
 
 // ─── Fetch countries (from AfribaPay) ────────────────────────────────────────
@@ -336,6 +415,15 @@ export interface AfribaPayinResult {
 
 export async function initiateAfribaPayin(params: AfribaPayinParams): Promise<AfribaPayinResult> {
   try {
+    const amountError = validateAfribaPayinAmount(params.amount);
+    if (amountError) {
+      return {
+        success: false,
+        message: amountError,
+        providerCode: "amount_out_of_range",
+        providerStatus: 422,
+      };
+    }
     const { merchantKey } = getAfribaPayCredentials();
     const body = {
       operator: params.operator,
@@ -703,6 +791,15 @@ export async function initiateAfribaPayOtp(params: Omit<AfribaPayinParams, "retu
   raw?: any;
 }> {
   try {
+    const amountError = validateAfribaPayinAmount(params.amount);
+    if (amountError) {
+      return {
+        success: false,
+        message: amountError,
+        providerCode: "amount_out_of_range",
+        providerStatus: 422,
+      };
+    }
     const { merchantKey } = getAfribaPayCredentials();
     const body = {
       operator: params.operator,
@@ -775,6 +872,15 @@ export interface AfribaPayOtpParams {
 
 export async function confirmAfribaPayOtp(params: AfribaPayOtpParams): Promise<AfribaPayinResult> {
   try {
+    const amountError = validateAfribaPayinAmount(params.amount);
+    if (amountError) {
+      return {
+        success: false,
+        message: amountError,
+        providerCode: "amount_out_of_range",
+        providerStatus: 422,
+      };
+    }
     const { merchantKey } = getAfribaPayCredentials();
     const body = {
       operator: params.operator,
@@ -844,21 +950,26 @@ export async function confirmAfribaPayOtp(params: AfribaPayOtpParams): Promise<A
 // ─── Parse AfribaPay webhook ──────────────────────────────────────────────────
 export function parseAfribaPayWebhook(payload: any): {
   order_id?: string;
+  reference_id?: string;
   transaction_id?: string;
   status: "completed" | "failed" | "pending";
 } {
   const d = payload?.data || payload;
-  const statusRaw = (d?.status || "").toUpperCase();
+  const statusRaw = (d?.status || d?.transaction_status || d?.payment_status || "").toUpperCase();
 
   let status: "completed" | "failed" | "pending" = "pending";
-  if (statusRaw === "SUCCESS" || statusRaw === "COMPLETED" || statusRaw === "SUCCESSFUL") {
+  if (statusRaw === "SUCCESS" || statusRaw === "COMPLETED" || statusRaw === "SUCCESSFUL"
+      || statusRaw === "PAID" || statusRaw === "APPROVED" || statusRaw === "PROCESSED") {
     status = "completed";
-  } else if (statusRaw === "FAILED" || statusRaw === "ERROR" || statusRaw === "CANCELLED") {
+  } else if (statusRaw === "FAILED" || statusRaw === "ERROR" || statusRaw === "CANCELLED"
+      || statusRaw === "REJECTED" || statusRaw === "EXPIRED" || statusRaw === "NOT_FOUND"
+      || statusRaw === "NOT FOUND") {
     status = "failed";
   }
 
   return {
     order_id: d?.order_id,
+    reference_id: d?.reference_id,
     transaction_id: d?.transaction_id,
     status,
   };

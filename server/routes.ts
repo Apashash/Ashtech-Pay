@@ -88,7 +88,7 @@ import {
   sandboxStatusLabel,
   type SandboxCollectStatus,
 } from "./sandboxTestNumbers";
-import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, checkAfribaPayStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, getAfribaPayOtpInfo, confirmAfribaPayOtp, isAfribaPayOtpRequiredMessage } from "./afribapay";
+import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, checkAfribaPayStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, getAfribaPayOtpInfo, confirmAfribaPayOtp, isAfribaPayOtpRequiredMessage, verifyAfribaPayWebhookSignature, validateAfribaPayinAmount } from "./afribapay";
 import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, initiatePixPayPayout, checkPixPayStatus, computePixPayFees, parsePixPayWebhook, PIXPAY_CURRENCY_MAP, PIXPAY_SUPPORTED_COUNTRIES, detectPixPayFlowType, getPixPayServiceId, PIXPAY_OTP_USSD_CODES } from "./pixpay";
 import { assertPawaPayProviderActive, classifyPawaPayControlledTransaction, createPawaPayDeposit, createPawaPayId, createPawaPayPayout, createPawaPayPaymentPage, getPawaPayActiveConfiguration, getPawaPayDeposit, getPawaPayPayout, resolvePawaPayOperationConfiguration, PAWAPAY_CUSTOMER_MESSAGE } from "./pawapay";
 import { addPendingPayment, removePendingPayment, expireCryptoPaymentIfNeeded } from "./paymentPoller";
@@ -16117,30 +16117,41 @@ export async function registerRoutes(
   // ─── AfribaPay Webhook ────────────────────────────────────────────────────
   app.post("/api/afribapay/webhook", webhookLimiter, async (req, res) => {
     try {
-      // ── Vérification du secret webhook (obligatoire) ─────────────────────────
+      // AfribaPay documents AfribaPAY-Sign as an HMAC over the exact raw body.
+      // Keep the old callback token as a compatibility fallback for deployments
+      // whose provider account has not yet enabled the documented signature.
       const webhookSecret = process.env.WEBHOOK_SECRET;
-      if (!webhookSecret) {
-        console.error("[AfribaPay Webhook] WEBHOOK_SECRET non configuré — requête rejetée");
-        return res.status(503).json({ message: "Webhook endpoint not configured" });
-      }
       const webhookToken = (req.query.token as string) || (req.headers["x-webhook-token"] as string);
-      if (webhookToken !== webhookSecret) {
-        console.warn("[AfribaPay Webhook] Token invalide — requête rejetée");
+      const providerSignature = req.headers["afribapay-sign"] as string | undefined;
+      const providerTimestamp = (req.headers["afribapay-timestamp"]
+        || req.headers["x-afribapay-timestamp"]) as string | undefined;
+      const rawBody = (req as any).rawBody as Buffer | undefined;
+      const signatureValid = verifyAfribaPayWebhookSignature(rawBody, providerSignature, undefined, providerTimestamp);
+      const tokenValid = Boolean(webhookSecret && webhookToken === webhookSecret);
+      const requireSignature = process.env.AFRIBAPAY_REQUIRE_SIGNED_WEBHOOKS === "true";
+      if (providerSignature ? !signatureValid : (requireSignature ? !signatureValid : !tokenValid)) {
+        console.warn("[AfribaPay Webhook] Signature/token invalide — requête rejetée");
         return res.status(401).json({ message: "Unauthorized" });
       }
+      if (!providerSignature && tokenValid) {
+        console.warn("[AfribaPay Webhook] Legacy callback token accepted; configure AfribaPAY-Sign verification.");
+      }
       const payload = req.body;
-      console.log("[AfribaPay Webhook] Received:", JSON.stringify(payload));
+      console.log("[AfribaPay Webhook] Received callback");
 
       const parsed = parseAfribaPayWebhook(payload);
-      const { order_id, transaction_id, status } = parsed;
+      const { order_id, reference_id, transaction_id, status } = parsed;
 
-      const ref = order_id || transaction_id;
+      const ref = order_id || reference_id || transaction_id;
       if (!ref) {
-        console.error("[AfribaPay Webhook] Missing order_id/transaction_id");
+        console.error("[AfribaPay Webhook] Missing order_id/reference_id/transaction_id");
         return res.status(400).json({ message: "Missing identifier" });
       }
 
-      const transaction = await storage.getTransactionByReference(ref);
+      const transaction = await storage.getTransactionByReference(ref)
+        || (reference_id && reference_id !== ref ? await storage.getTransactionByReference(reference_id) : undefined)
+        || (transaction_id ? await storage.getTransactionByExternalReference(transaction_id) : undefined)
+        || (transaction_id && transaction_id !== ref ? await storage.getTransactionByReference(transaction_id) : undefined);
       if (!transaction) {
         console.error("[AfribaPay Webhook] Transaction not found:", ref);
         return res.status(404).json({ message: "Transaction not found" });
@@ -17489,6 +17500,16 @@ export async function registerRoutes(
            message: `Le pays ${country.code} n'est pas pris en charge pour cet opérateur.`,
          });
        }
+        if (paymentProvider === "afribapay") {
+          const amountError = validateAfribaPayinAmount(amountNum);
+          if (amountError) {
+            return res.status(422).json({
+              error: "unprocessable",
+              code: "AMOUNT_OUT_OF_RANGE",
+              message: amountError,
+            });
+          }
+        }
        if (paymentProvider === "pixpay") {
          const serviceId = getPixPayServiceId(operatorRecord.name, country.code, "cash_out");
          if (!serviceId) {
