@@ -16297,6 +16297,7 @@ export async function registerRoutes(
               currency: txCurrency,
               reference: transaction.reference || String(transaction.id),
               merchantReference: (transaction as any).metadata?.merchantReference || (transaction as any).metadata?.merchant_reference || undefined,
+              externalReference: transaction.externalReference || undefined,
               provider: "AfribaPay",
               country: undefined,
               depositType: isPaymentLink ? "payment_link" : "deposit",
@@ -16383,6 +16384,7 @@ export async function registerRoutes(
               currency: txCurrency,
               reference: transaction.reference || String(transaction.id),
               merchantReference: (transaction as any).metadata?.merchantReference || (transaction as any).metadata?.merchant_reference || undefined,
+              externalReference: transaction.externalReference || undefined,
               reason: isPaymentLink ? "Paiement lien échoué (AfribaPay)" : "Dépôt annulé/échoué (AfribaPay)",
               provider: "AfribaPay",
               country: undefined,
@@ -16512,6 +16514,7 @@ export async function registerRoutes(
               currency: txCurrency,
               reference: transaction.reference || String(transaction.id),
               merchantReference: (transaction as any).metadata?.merchantReference || (transaction as any).metadata?.merchant_reference || undefined,
+              externalReference: transaction.externalReference || undefined,
               provider: "PixPay",
               country: undefined,
               depositType: isPaymentLink ? "payment_link" : "deposit",
@@ -16598,6 +16601,7 @@ export async function registerRoutes(
               currency: txCurrency,
               reference: transaction.reference || String(transaction.id),
               merchantReference: (transaction as any).metadata?.merchantReference || (transaction as any).metadata?.merchant_reference || undefined,
+              externalReference: transaction.externalReference || undefined,
               reason: isPaymentLink
                 ? `Paiement lien échoué (PixPay)${providerMessage ? ` — ${providerMessage}` : ""}`
                 : `Dépôt annulé/échoué (PixPay)${providerMessage ? ` — ${providerMessage}` : ""}`,
