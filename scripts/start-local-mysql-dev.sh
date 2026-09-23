@@ -11,6 +11,7 @@ PID_FILE="${RUN_DIR}/mysql.pid"
 LOG_FILE="${RUN_DIR}/mysql.log"
 SCHEMA_DUMP="${ROOT_DIR}/exports/ashtechpay-supabase-mysql-fixed.sql"
 SCHEMA_MARKER="${DATA_DIR}/.ashtechpay-schema-imported"
+SCHEMA_LOCK="${RUN_DIR}/schema.lock"
 
 mkdir -p "${DATA_DIR}" "${RUN_DIR}"
 
@@ -75,19 +76,35 @@ done
 mariadb --no-defaults --protocol=socket --socket="${SOCKET}" -uroot \
   -e "CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 
-if [[ ! -f "${SCHEMA_MARKER}" ]]; then
-  if [[ ! -f "${SCHEMA_DUMP}" ]]; then
-    echo "[LocalMySQL] Missing schema dump: ${SCHEMA_DUMP}" >&2
-    exit 1
-  fi
-  echo "[LocalMySQL] Importing local schema snapshot"
-  mariadb --no-defaults --protocol=socket --socket="${SOCKET}" -uroot "${DB_NAME}" < "${SCHEMA_DUMP}"
-  touch "${SCHEMA_MARKER}"
-fi
-
-echo "[LocalMySQL] Ready: ${DB_NAME}"
 export DB_DIALECT=mysql
 export MYSQL_DATABASE_URL="mysql://root@127.0.0.1:${MYSQL_PORT}/${DB_NAME}"
+
+# The private export is preferred when it is available. Imported development
+# projects do not include that ignored file, so initialize a fresh database
+# from the tracked Drizzle MySQL schema instead.
+(
+  flock 9
+  if [[ ! -f "${SCHEMA_MARKER}" ]]; then
+    if [[ -f "${SCHEMA_DUMP}" ]]; then
+      echo "[LocalMySQL] Importing local schema snapshot"
+      mariadb --no-defaults --protocol=socket --socket="${SOCKET}" -uroot "${DB_NAME}" < "${SCHEMA_DUMP}"
+    else
+      echo "[LocalMySQL] Schema snapshot unavailable; applying shared/schema.mysql.ts"
+      npx drizzle-kit push
+    fi
+    table_count="$(
+      mariadb --no-defaults --protocol=socket --socket="${SOCKET}" -uroot "${DB_NAME}" -N \
+        -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '${DB_NAME}'"
+    )"
+    if [[ "${table_count}" -lt 26 ]]; then
+      echo "[LocalMySQL] Schema initialization incomplete: found ${table_count} tables, expected at least 26" >&2
+      exit 1
+    fi
+    touch "${SCHEMA_MARKER}"
+  fi
+) 9>"${SCHEMA_LOCK}"
+
+echo "[LocalMySQL] Ready: ${DB_NAME}"
 
 # In the dedicated database workflow, keep MariaDB alive independently from
 # the Node.js process. The application workflow still runs the same readiness

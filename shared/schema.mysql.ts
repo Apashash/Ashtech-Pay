@@ -227,7 +227,7 @@ export const hostedPageKeys = mysqlTable("hosted_page_keys", {
   userIdx: index("hosted_page_keys_user_id_idx").on(t.userId),
 }));
 export const hostedPaymentSessions = mysqlTable("hosted_payment_sessions", {
-  id: text("id").primaryKey(), merchantId: varchar("merchant_id", { length: 191 }).notNull(), amount: money("amount").notNull(), currency: text("currency").notNull(),
+  id: varchar("id", { length: 191 }).primaryKey(), merchantId: varchar("merchant_id", { length: 191 }).notNull(), amount: money("amount").notNull(), currency: text("currency").notNull(),
   description: text("description"), status: text("status").default("pending").notNull(), transactionId: varchar("transaction_id", { length: 191 }), notifyUrl: text("notify_url"),
   createdAt: dt("created_at"), expiresAt: timestamp("expires_at"),
 });
