@@ -2785,47 +2785,56 @@ export class DatabaseStorage implements IStorage {
     const submission = await this.getKycSubmissionById(id);
     if (!submission) return undefined;
 
-    // Update user KYC status — wrapped in try/catch so we log the REAL error
-    // (e.g. guard trigger blocking is_verified on pgBouncer) instead of a generic 500.
+    // Do not approve the submission unless the account-level KYC state is
+    // confirmed by a database readback. A successful HTTP response must not
+    // hide a silently ignored user update.
     try {
-      await this.updateUser(submission.userId, { kycStatus: "verified", isVerified: true });
+      const updatedUser = await this.updateUser(submission.userId, { kycStatus: "verified", isVerified: true });
+      if (!updatedUser || updatedUser.kycStatus !== "verified" || updatedUser.isVerified !== true) {
+        throw new Error("KYC_STATE_NOT_PERSISTED");
+      }
     } catch (userUpdateErr: any) {
       console.error("[KYC approve] updateUser failed:", userUpdateErr?.message || userUpdateErr);
-      // Fallback: update only kycStatus (not is_verified) to avoid guard trigger
+      // Keep compatibility with deployments that still have the legacy guard,
+      // but verify both fields before reporting approval.
       await db.update(users).set({ kycStatus: "verified" }).where(eq(users.id, submission.userId));
+      invalidateUserCache(submission.userId);
+      const fallbackUser = await this.getUser(submission.userId);
+      if (!fallbackUser || fallbackUser.kycStatus !== "verified" || fallbackUser.isVerified !== true) {
+        throw new Error("KYC_STATE_NOT_PERSISTED");
+      }
     }
 
     // Try full update (with reviewer fields). Fall back to status-only if columns
     // don't exist yet on older production deployments.
-    try {
-      if (isMysqlDialect) {
-        return mysqlUpdateAndRead(
-          kycSubmissions,
-          eq(kycSubmissions.id, id),
-          { status: "approved", reviewerId, reviewNote: note, reviewedAt: new Date(), updatedAt: new Date() },
-          () => this.getKycSubmissionById(id),
-        );
+    const persistSubmissionStatus = async (updates: Record<string, unknown>) => {
+      const updated = isMysqlDialect
+        ? await mysqlUpdateAndRead<KycSubmission>(
+            kycSubmissions,
+            eq(kycSubmissions.id, id),
+            updates,
+            () => this.getKycSubmissionById(id),
+          )
+        : (await db.update(kycSubmissions)
+            .set(updates as any)
+            .where(eq(kycSubmissions.id, id))
+            .returning())[0];
+      if (!updated || updated.status !== "approved") {
+        throw new Error("KYC_STATE_NOT_PERSISTED");
       }
-      const [updated] = await db.update(kycSubmissions)
-        .set({ status: "approved", reviewerId, reviewNote: note, reviewedAt: new Date(), updatedAt: new Date() })
-        .where(eq(kycSubmissions.id, id))
-        .returning();
       return updated;
+    };
+    try {
+      return await persistSubmissionStatus({
+        status: "approved",
+        reviewerId,
+        reviewNote: note,
+        reviewedAt: new Date(),
+        updatedAt: new Date(),
+      });
     } catch (e) {
       console.error("[KYC approve] Full update failed — falling back to status-only update:", e);
-      if (isMysqlDialect) {
-        return mysqlUpdateAndRead(
-          kycSubmissions,
-          eq(kycSubmissions.id, id),
-          { status: "approved" },
-          () => this.getKycSubmissionById(id),
-        );
-      }
-      const [updated] = await db.update(kycSubmissions)
-        .set({ status: "approved" })
-        .where(eq(kycSubmissions.id, id))
-        .returning();
-      return updated;
+      return await persistSubmissionStatus({ status: "approved" });
     }
   }
 
@@ -2833,38 +2842,40 @@ export class DatabaseStorage implements IStorage {
     const submission = await this.getKycSubmissionById(id);
     if (!submission) return undefined;
 
-    await this.updateUser(submission.userId, { kycStatus: "rejected" });
+    const updatedUser = await this.updateUser(submission.userId, { kycStatus: "rejected" });
+    if (!updatedUser || updatedUser.kycStatus !== "rejected") {
+      throw new Error("KYC_STATE_NOT_PERSISTED");
+    }
 
     // Try full update. Fall back to status-only if columns don't exist yet.
-    try {
-      if (isMysqlDialect) {
-        return mysqlUpdateAndRead(
-          kycSubmissions,
-          eq(kycSubmissions.id, id),
-          { status: "rejected", reviewerId, reviewNote: note, reviewedAt: new Date(), updatedAt: new Date() },
-          () => this.getKycSubmissionById(id),
-        );
+    const persistSubmissionStatus = async (updates: Record<string, unknown>) => {
+      const updated = isMysqlDialect
+        ? await mysqlUpdateAndRead<KycSubmission>(
+            kycSubmissions,
+            eq(kycSubmissions.id, id),
+            updates,
+            () => this.getKycSubmissionById(id),
+          )
+        : (await db.update(kycSubmissions)
+            .set(updates as any)
+            .where(eq(kycSubmissions.id, id))
+            .returning())[0];
+      if (!updated || updated.status !== "rejected") {
+        throw new Error("KYC_STATE_NOT_PERSISTED");
       }
-      const [updated] = await db.update(kycSubmissions)
-        .set({ status: "rejected", reviewerId, reviewNote: note, reviewedAt: new Date(), updatedAt: new Date() })
-        .where(eq(kycSubmissions.id, id))
-        .returning();
       return updated;
+    };
+    try {
+      return await persistSubmissionStatus({
+        status: "rejected",
+        reviewerId,
+        reviewNote: note,
+        reviewedAt: new Date(),
+        updatedAt: new Date(),
+      });
     } catch (e) {
       console.error("[KYC reject] Full update failed — falling back to status-only update:", e);
-      if (isMysqlDialect) {
-        return mysqlUpdateAndRead(
-          kycSubmissions,
-          eq(kycSubmissions.id, id),
-          { status: "rejected" },
-          () => this.getKycSubmissionById(id),
-        );
-      }
-      const [updated] = await db.update(kycSubmissions)
-        .set({ status: "rejected" })
-        .where(eq(kycSubmissions.id, id))
-        .returning();
-      return updated;
+      return await persistSubmissionStatus({ status: "rejected" });
     }
   }
 

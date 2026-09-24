@@ -12281,6 +12281,16 @@ export async function registerRoutes(
       if (!user) {
         return res.status(404).json({ message: "Utilisateur non trouvé" });
       }
+      const kycStatusMismatch = "kycStatus" in updates && user.kycStatus !== updates.kycStatus;
+      const verifiedFlagMismatch = "isVerified" in updates
+        && Boolean(user.isVerified) !== Boolean(updates.isVerified);
+      if (kycStatusMismatch || verifiedFlagMismatch) {
+        return res.status(409).json({
+          message: "Le nouveau statut KYC n'a pas été confirmé en base. Rechargez le compte avant de réessayer.",
+          currentKycStatus: user.kycStatus,
+          currentIsVerified: Boolean(user.isVerified),
+        });
+      }
       const { password, ...safeUser } = user;
 
       await storage.createAdminLog({
@@ -12818,6 +12828,13 @@ export async function registerRoutes(
         if (reconciled === "unresolved") {
           return res.status(409).json({ message: "Paiement encore en cours de rapprochement; modification manuelle interdite." });
         }
+        if (reconciled !== status) {
+          return res.status(409).json({
+            message: `Le fournisseur indique le statut « ${reconciled} »; le statut demandé « ${status} » n'a pas été appliqué.`,
+            currentStatus: reconciled,
+            requestedStatus: status,
+          });
+        }
         return res.json({ message: "Paiement rapproché avec le fournisseur.", status: reconciled });
       }
       if (status === "completed" && !forceComplete && isPayout && !existingTx.externalReference) {
@@ -12944,10 +12961,16 @@ export async function registerRoutes(
           throw error;
         }
       } else {
-        transaction = await storage.updateTransactionStatus(id, status);
+        // Compare-and-set: do not overwrite a provider callback or another
+        // admin action that changed the row after existingTx was read.
+        transaction = await storage.claimTransactionStatus(id, status, [existingTx.status]);
       }
-      if (!transaction) {
-        return res.status(409).json({ message: "Transaction déjà modifiée ou solde indisponible." });
+      if (!transaction || transaction.status !== status) {
+        return res.status(409).json({
+          message: "Le statut demandé n'a pas été confirmé en base. Rechargez la transaction avant de réessayer.",
+          currentStatus: transaction?.status,
+          requestedStatus: status,
+        });
       }
       
       // Credit user wallet when transaction is approved (payment_link type)
@@ -15637,6 +15660,9 @@ export async function registerRoutes(
       });
     } catch (error) {
       console.error("Approve KYC error:", error);
+      if ((error as Error)?.message === "KYC_STATE_NOT_PERSISTED") {
+        return res.status(409).json({ message: "L'approbation KYC n'a pas été confirmée en base. Vérifiez l'état du compte avant de réessayer." });
+      }
       res.status(500).json({ message: "Erreur serveur" });
     }
   });
@@ -15703,6 +15729,9 @@ export async function registerRoutes(
       });
     } catch (error) {
       console.error("Reject KYC error:", error);
+      if ((error as Error)?.message === "KYC_STATE_NOT_PERSISTED") {
+        return res.status(409).json({ message: "Le rejet KYC n'a pas été confirmé en base. Vérifiez l'état du compte avant de réessayer." });
+      }
       res.status(500).json({ message: "Erreur serveur" });
     }
   });

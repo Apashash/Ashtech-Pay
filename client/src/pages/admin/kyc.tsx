@@ -158,12 +158,14 @@ export default function AdminKYC() {
   });
 
   const approveMutation = useMutation({
-    mutationFn: async ({ id, note }: { id: string; note?: string }) => {
+    mutationFn: async ({ id, userId, note }: { id: string; userId: string; note?: string }) => {
       return apiRequest("POST", `/api/admin/kyc/${id}/approve`, { note });
     },
-    onSuccess: () => {
+    onSuccess: (_response, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/kyc"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/kyc/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/admin/users/${variables.userId}`] });
       toast({ title: "Vérification approuvée" });
       setViewSubmission(null);
       setApproveNote("");
@@ -181,12 +183,14 @@ export default function AdminKYC() {
   });
 
   const rejectMutation = useMutation({
-    mutationFn: async ({ id, note }: { id: string; note: string }) => {
+    mutationFn: async ({ id, userId, note }: { id: string; userId: string; note: string }) => {
       return apiRequest("POST", `/api/admin/kyc/${id}/reject`, { note });
     },
-    onSuccess: () => {
+    onSuccess: (_response, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/kyc"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/kyc/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/admin/users/${variables.userId}`] });
       toast({ title: "Vérification rejetée" });
       setRejectModal(null);
       setRejectNote("");
@@ -396,7 +400,7 @@ export default function AdminKYC() {
                                   variant="ghost"
                                   size="icon"
                                   className="h-8 w-8 text-green-500 hover:text-green-600"
-                                  onClick={() => approveMutation.mutate({ id: sub.id })}
+                                  onClick={() => approveMutation.mutate({ id: sub.id, userId: sub.userId })}
                                   disabled={approveMutation.isPending}
                                   data-testid={`button-quick-approve-${sub.id}`}
                                 >
@@ -654,7 +658,7 @@ export default function AdminKYC() {
                         Rejeter
                       </Button>
                       <Button
-                        onClick={() => approveMutation.mutate({ id: viewSubmission.id, note: approveNote })}
+                        onClick={() => approveMutation.mutate({ id: viewSubmission.id, userId: viewSubmission.userId, note: approveNote })}
                         disabled={approveMutation.isPending}
                         className="gap-2 w-full sm:w-auto"
                         data-testid="button-approve-kyc"
@@ -696,7 +700,7 @@ export default function AdminKYC() {
                 </Button>
                 <Button
                   variant="destructive"
-                  onClick={() => rejectModal && rejectMutation.mutate({ id: rejectModal.id, note: rejectNote })}
+                  onClick={() => rejectModal && rejectMutation.mutate({ id: rejectModal.id, userId: rejectModal.userId, note: rejectNote })}
                   disabled={!rejectNote.trim() || rejectMutation.isPending}
                   className="gap-2 w-full sm:w-auto"
                   data-testid="button-confirm-reject"

@@ -113,11 +113,26 @@ export default function AdminTransactions() {
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ id, status, reason }: { id: string; status: string; reason?: string }) => {
-      return apiRequest("PATCH", `/api/admin/transactions/${id}`, { status, reason: reason || "Action admin" });
+      const response = await apiRequest("PATCH", `/api/admin/transactions/${id}`, { status, reason: reason || "Action admin" });
+      const body = await response.clone().json().catch(() => ({}));
+      return { responseStatus: response.status, body: body as Record<string, unknown> };
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/transactions"] });
-      toast({ title: "Statut mis à jour" });
+    onSuccess: async (result, variables) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["/api/admin/transactions"] }),
+        queryClient.invalidateQueries({ queryKey: [`/api/admin/transactions/${variables.id}/details`] }),
+      ]);
+      const message = typeof result.body.message === "string" ? result.body.message : undefined;
+      if (result.responseStatus === 202) {
+        toast({
+          title: "Paiement en cours",
+          description: message || "Le fournisseur traite encore ce paiement.",
+        });
+      } else if (typeof result.body.status === "string" && message) {
+        toast({ title: "Statut du fournisseur confirmé", description: message });
+      } else {
+        toast({ title: "Statut mis à jour" });
+      }
     },
     onError: (error: any) => {
       toast({ title: "Erreur", description: error?.message || "Une erreur est survenue", variant: "destructive" });
