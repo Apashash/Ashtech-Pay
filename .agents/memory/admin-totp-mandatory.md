@@ -51,13 +51,20 @@ The MySQL pool adapter must map `ResultSetHeader.affectedRows` to its compatible
 
 **How to apply:** Keep the adapter's result normalization correct for every `INSERT`, `UPDATE`, and `DELETE` path that relies on `rowCount`, especially pending admin-login claims and session housekeeping.
 
-### Mobile panel PIN handoff
+### Mobile IP rotation and inactivity window
 
-The panel PIN handoff rebinds the authenticated admin session to the IP present when the PIN succeeds. Normal panel requests remain IP-bound.
+Admin TOTP and panel grants expire after 48 hours without successful authenticated
+panel activity. A network IP change alone does not invalidate a verified admin
+session; `_avsIp` remains diagnostic/rebinding metadata, while an unbound `_avs`
+is still rejected.
 
-**Why:** A 4G/5G address can rotate between the initial TOTP login and the dashboard-to-panel PIN request, causing a valid PIN grant to be rejected by the old IP binding.
+**Why:** Mobile carriers can rotate public IP addresses during an otherwise active
+session. Treating every change as a new authentication event caused repeated TOTP
+prompts unrelated to inactivity.
 
-**How to apply:** Keep the handoff tied to a valid initial admin-login TOTP plus the correct PIN; do not turn off the broader session IP checks or mandatory TOTP enforcement.
+**How to apply:** Keep the grant bound to the authenticated session and its 48-hour
+sliding inactivity deadline. Log and rebind IP changes, but do not remove mandatory
+TOTP or accept legacy sessions that have no recorded IP binding.
 
 ### Panel PIN error ordering
 
@@ -96,7 +103,7 @@ Panel TOTP and PIN endpoints must not return success until `req.session.save()` 
 - `dashboard/index.tsx` uses the same redirect for its hidden five-click gesture
 - `/admin-panel-verify` page calls `GET /api/admin/otp-status`
   - If totpEnabled=false → toast error, redirect to dashboard
-  - A valid TOTP+PIN panel grant is reused; after 24h without panel activity,
+  - A valid TOTP+PIN panel grant is reused; after 48h without panel activity,
     show the TOTP form followed by the PIN form
 - On success: the PIN endpoint creates `_ppv`, then the client opens the admin path
 

@@ -531,10 +531,10 @@ async function getUserTicketStats(userId: string): Promise<{ unreadCount: number
 declare module "express-session" {
   interface SessionData {
     userId: string;
-    role?: string;          // stored at login — used for inactivity timeout (24h admin / 24h user)
+    role?: string;          // stored at login — used for inactivity timeout (48h admin / 24h user)
     lastActivity?: number;  // ms timestamp — updated on every authenticated request
     _avs?: number;
-    _avsIp?: string;      // IP at TOTP verification time — used for admin session IP pinning
+    _avsIp?: string;      // Last bound IP for diagnostics; rotation does not expire verified TOTP
     _otpCode?: string;    // deprecated: plaintext OTP kept for backward compat only
     _otpCodeH?: string;   // VULN-A1 fix: HMAC-SHA256 hash of OTP stored in DB session
     _otpExpiry?: number;
@@ -901,13 +901,9 @@ function isIpBannedFromAdmin(ip: string, blocklist: AdminPanelBlock[]): boolean 
 // Keyed by sessionID so each browser session is independently verified.
 // A new login always gets a fresh sessionID → OTP is always re-asked after logout.
 const adminVerifiedSessions = new Map<string, { userId: string; expiresAt: number; ip?: string }>();
-const ADMIN_REAUTH_INACTIVITY_TTL_MS = 24 * 60 * 60 * 1000; // 24h without authenticated activity
+const ADMIN_REAUTH_INACTIVITY_TTL_MS = 48 * 60 * 60 * 1000; // 48h without authenticated activity
 const ADMIN_OTP_SESSION_TTL_MS = ADMIN_REAUTH_INACTIVITY_TTL_MS; // slides on each requireAdmin pass
 const ADMIN_PANEL_ACCESS_TTL_MS = ADMIN_REAUTH_INACTIVITY_TTL_MS; // _pav/_ppv slide while the panel is active
-// Mobile networks can rotate the public IP between the panel TOTP request and
-// the following PIN request. Allow only this short post-TOTP handoff window;
-// normal panel activity remains IP-bound.
-const ADMIN_PANEL_TOTP_HANDOFF_MS = 2 * 60 * 1000;
 // TOTP is a fixed server-side requirement for every admin API request.
 // Deliberately not configurable through an environment variable: an environment
 // change must never be able to downgrade admin authentication.
@@ -1265,7 +1261,7 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
   }
 
   // ── Inactivity-based session expiry ──────────────────────────────────────────
-    // Admin/support/finance: 24h — Regular users: 24h
+    // Admin: 48h — Regular users: 24h
   {
     const now = Date.now();
     const lastActivity = req.session.lastActivity;
@@ -1273,11 +1269,11 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
       const role = req.session.role ?? "";
       const isPrivileged = ["admin"].includes(role);
       const maxInactivity = isPrivileged
-        ? ADMIN_REAUTH_INACTIVITY_TTL_MS // 24h for admin
+        ? ADMIN_REAUTH_INACTIVITY_TTL_MS // 48h for admin
         : 24 * 60 * 60 * 1000; // 24h for regular users
       if (now - lastActivity > maxInactivity) {
         req.session.destroy(() => {});
-        const label = "24h";
+        const label = isPrivileged ? "48h" : "24h";
         return res.status(401).json({
           message: `Session expirée après ${label} d'inactivité. Reconnectez-vous.`,
           sessionRevoked: true,
@@ -1508,50 +1504,38 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
       });
     }
 
-    // ── Admin session IP pinning — prevent stolen cookie reuse from a different IP ──
-    // _avsIp is stored when TOTP is verified. If the current IP differs, the _avs is
-    // invalidated immediately and the admin must re-verify with Google Authenticator.
-    // Grace: IPv6 ↔ IPv4 loopback equivalences are tolerated (::1 === 127.0.0.1).
+    // Keep a known IP on the verified session for diagnostics, but do not expire
+    // TOTP when a mobile carrier rotates it. The authenticated session and its
+    // inactivity deadline remain the access boundary.
     const avsIp = req.session._avsIp || avsMemEntry?.ip;
     const normalizeLoopback = (ip: string) =>
       ip === "::1" || ip === "::ffff:127.0.0.1" ? "127.0.0.1" : ip;
-    const panelTotpFreshForIpHandoff =
-      typeof req.session._pavVerifiedAt === "number" &&
-      Date.now() - req.session._pavVerifiedAt <= ADMIN_PANEL_TOTP_HANDOFF_MS;
     const adminIpChanged = !!avsIp &&
       normalizeLoopback(adminIpEarly) !== normalizeLoopback(avsIp);
-    if (!avsIp || (adminIpChanged && !panelTotpFreshForIpHandoff)) {
-      // Refuse legacy/unbound _avs values as well as values from another IP.
-      // A fresh TOTP verification is required to bind the session securely.
+    if (!avsIp) {
+      // Refuse legacy/unbound _avs values. A fresh TOTP verification is required
+      // to bind an old session before it can access the admin panel.
       delete req.session._avs;
       delete req.session._avsIp;
       req.session.save(() => {});
       adminVerifiedSessions.delete(req.sessionID);
-      const ipChanged = !!avsIp;
-      console.warn(`[AdminAccess] TOTP session binding rejected — user=${req.userId} — _avs revoked`);
+      console.warn(`[AdminAccess] Unbound TOTP session rejected — user=${req.userId} — _avs revoked`);
       notifyAdminPanelAccess({ type: "blocked_no_auth", ip: adminIpEarly, userId: user.id, userName: user.fullName || user.username, userEmail: user.email || undefined, userRole: user.role, path: req.path }).catch(() => {});
       return res.status(403).json({
-        message: ipChanged
-          ? "Votre adresse IP a changé. Vérification Google Authenticator requise."
-          : "Vérification Google Authenticator requise pour cette session.",
+        message: "Vérification Google Authenticator requise pour cette session.",
         totpRequired: true,
-        ...(ipChanged ? { ipChanged: true } : {}),
       });
     }
-    if (adminIpChanged && panelTotpFreshForIpHandoff) {
-      // Mobile carriers may rotate the public IP during the immediate
-      // TOTP-to-panel transition. Rebind only this freshly TOTP-verified
-      // session; normal panel activity remains IP-bound afterward.
-      console.warn(`[AdminAccess] Fresh TOTP IP handoff — user=${req.userId}`);
-      req.session._avsIp = adminIpEarly;
-      req.session.save(() => {});
+    if (adminIpChanged) {
+      console.info(`[AdminAccess] Network IP changed — retaining TOTP until inactivity expiry — user=${req.userId}`);
     }
+    req.session._avsIp = adminIpEarly;
 
     // The panel TOTP is a separate gate from the login TOTP. It must still be
     // valid when an admin API request is made.
     const panelTotpExp = req.session._pav;
     if (typeof panelTotpExp !== "number" || panelTotpExp <= Date.now()) {
-      // The 24h inactivity window expired: revoke both panel factors so the
+      // The 48h inactivity window expired: revoke both panel factors so the
       // next access always follows the complete TOTP -> PIN sequence.
       delete req.session._pav;
       delete req.session._pavVerifiedAt;
@@ -1581,7 +1565,7 @@ async function requireAdmin(req: Request, res: Response, next: NextFunction) {
         delete req.session._ppvIp;
         req.session.save(() => {});
         return res.status(403).json({
-          message: "Votre session admin est inactive depuis 24 heures. Vérifiez Google Authenticator puis le code PIN.",
+          message: "Votre session admin est inactive depuis 48 heures. Vérifiez Google Authenticator puis le code PIN.",
           totpRequired: true,
           panelTotpRequired: true,
         });
@@ -4096,8 +4080,7 @@ export async function registerRoutes(
       }
       clearOtpFailures(req.userId!);
 
-      // Set _avs (admin verified session, 24h inactivity TTL) — makes requireAdmin pass
-      // Set _pav (panel TOTP verified, 24h inactivity TTL) — the PIN gate follows this.
+      // Set _avs and _pav with the 48h inactivity TTL.
       const avsPanelExp = Date.now() + ADMIN_OTP_SESSION_TTL_MS;
       req.session._avs = avsPanelExp;
       req.session._avsIp = getClientIp(req);
@@ -10773,13 +10756,8 @@ export async function registerRoutes(
     const normalizeLoopback = (ip: string) =>
       ip === "::1" || ip === "::ffff:127.0.0.1" ? "127.0.0.1" : ip;
     const sessionIp = req.session._avsIp || memEntry?.ip;
-    const panelTotpFreshForIpHandoff =
-      typeof req.session._pavVerifiedAt === "number" &&
-      now - req.session._pavVerifiedAt <= ADMIN_PANEL_TOTP_HANDOFF_MS;
-    const ipBound = typeof sessionIp === "string" &&
-      (normalizeLoopback(sessionIp) === normalizeLoopback(currentIp) ||
-       panelTotpFreshForIpHandoff);
-    let verified = (memValid || sessionValid) && ipBound;
+    const hasBoundIp = typeof sessionIp === "string" && sessionIp.length > 0;
+    let verified = (memValid || sessionValid) && hasBoundIp;
 
     // Tier 3: ONE single DB query fetching the session row — extract both _avs and _pav
     // at once to avoid 2 sequential round-trips to the remote DB (was the main perf bottleneck).
@@ -10802,8 +10780,7 @@ export async function registerRoutes(
                 : dbRow.rows[0].sess;
               const dbAvs = dbSessData?._avs;
               const dbAvsIp = typeof dbSessData?._avsIp === "string" ? dbSessData._avsIp : undefined;
-              if (typeof dbAvs === "number" && dbAvs > now && dbAvsIp &&
-                  normalizeLoopback(dbAvsIp) === normalizeLoopback(currentIp)) {
+              if (typeof dbAvs === "number" && dbAvs > now && dbAvsIp) {
                 verified = true;
                 req.session._avsIp = dbAvsIp;
                 adminVerifiedSessions.set(req.sessionID, { userId: req.userId!, expiresAt: dbAvs, ip: dbAvsIp });
@@ -10830,8 +10807,7 @@ export async function registerRoutes(
       if (
         typeof bearerAvs === "number" &&
         bearerAvs > now &&
-        bearerAvsIp &&
-        normalizeLoopback(bearerAvsIp) === normalizeLoopback(currentIp)
+        bearerAvsIp
       ) {
         verified = true;
         req.session._avsIp = bearerAvsIp;
@@ -10850,7 +10826,17 @@ export async function registerRoutes(
     }
   }
 
-  // Check _pav (panel TOTP verified) — 24h inactivity window, refreshed by
+  if (verified) {
+    const boundIp = req.session._avsIp || memEntry?.ip;
+    if (typeof boundIp === "string" && boundIp &&
+        normalizeLoopback(boundIp) !== normalizeLoopback(currentIp)) {
+      console.info(`[AdminAccess] Network IP changed — keeping verified TOTP session — user=${req.userId}`);
+      req.session._avsIp = currentIp;
+      req.session.save(() => {});
+    }
+  }
+
+  // Check _pav (panel TOTP verified) — 48h inactivity window, refreshed by
   // successful panel activity. If _avs is valid but _pav is missing/expired,
   // the panel TOTP must be entered again.
   const pavExp = req.session._pav;
@@ -11480,7 +11466,7 @@ export async function registerRoutes(
       storage.createAdminLog({
         adminId: req.userId!,
         action: "otp_verified",
-        details: `Vérification OTP réussie depuis IP ${ip} — session valide 24h d'inactivité`,
+        details: `Vérification OTP réussie depuis IP ${ip} — session valide 48h d'inactivité`,
       }).catch(() => {});
 
       console.log(`[AdminOTP] Admin userId=${user.id} vérifié`);
