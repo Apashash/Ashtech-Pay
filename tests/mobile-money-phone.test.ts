@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  getAfribaPayPayoutPhone,
   toLocalMobileMoneyPhone,
   validateMobileMoneyPhone,
 } from "../shared/mobile-money-phone.ts";
@@ -18,4 +19,19 @@ test("accepts valid Togo numbers regardless of selected operator", () => {
 test("rejects a Togo number with the wrong length", () => {
   const error = validateMobileMoneyPhone("2287303953", "TG");
   assert.match(error || "", /8 chiffres/);
+});
+
+test("AfribaPay Benin payout preserves the exact phone input", () => {
+  const enteredPhone = " +229 01 23 45 67 89 ";
+  assert.equal(
+    getAfribaPayPayoutPhone(enteredPhone, "BJ", "123456789"),
+    enteredPhone,
+  );
+});
+
+test("other AfribaPay payout countries retain their existing formatting", () => {
+  assert.equal(
+    getAfribaPayPayoutPhone("+228 73 03 95 33", "TG", "73039533"),
+    "73039533",
+  );
 });

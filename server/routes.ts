@@ -111,7 +111,11 @@ import { enqueueMerchantWebhook } from "./merchantWebhook";
 import { buildProviderErrorPayload, sanitizeProviderMessage } from "./providerErrors";
 import { buildPublicPaymentStatus } from "./publicPaymentState";
 import { buildPawaPayFeeUpdates } from "./feeUpdates";
-import { toLocalMobileMoneyPhone, validateMobileMoneyPhone } from "@shared/mobile-money-phone";
+import {
+  getAfribaPayPayoutPhone,
+  toLocalMobileMoneyPhone,
+  validateMobileMoneyPhone,
+} from "@shared/mobile-money-phone";
 import { getVapidPublicKey, sendPushNotificationToAll } from "./push";
 import { buildTransactionBalanceSnapshots } from "./transactionBalances";
 import { formatDebugError, shouldExposeDebugErrors } from "./errorDiagnostics";
@@ -5853,7 +5857,11 @@ export async function registerRoutes(
           console.log(`[Transfer] AfribaPay | country=${countryCode} | currency=${afribapayCurrency} | operator=${afribapayOperatorCode}`);
           const callbackUrl = buildWebhookUrl("/api/afribapay/webhook");
 
-          const localPhone = toLocalMobileMoneyPhone(recipientPhone, countryCode);
+          const localPhone = getAfribaPayPayoutPhone(
+            recipientPhone,
+            countryCode,
+            toLocalMobileMoneyPhone(recipientPhone, countryCode),
+          );
 
           const afribaResult = await initiateAfribaPayout({
             operator: afribapayOperatorCode,
@@ -7168,6 +7176,7 @@ export async function registerRoutes(
           };
           const pfx = phonePrefixes[countryCode];
           if (pfx && localPhone.startsWith(pfx)) localPhone = localPhone.slice(pfx.length);
+          localPhone = getAfribaPayPayoutPhone(data.accountDetails, countryCode, localPhone);
 
           const afribaResult = await initiateAfribaPayout({
             operator: afribapayOperatorCode,
@@ -13043,6 +13052,7 @@ export async function registerRoutes(
             };
             const pfx = phonePrefixes[countryCode];
             if (pfx && localPhone.startsWith(pfx)) localPhone = localPhone.slice(pfx.length);
+            localPhone = getAfribaPayPayoutPhone(transaction.recipientPhone || "", countryCode, localPhone);
 
             const afribaResult = await initiateAfribaPayout({
               operator:     afribapayOperatorCode,
@@ -14740,6 +14750,7 @@ export async function registerRoutes(
         };
         const pfx = phonePrefixes[countryCode];
         if (pfx && localPhone.startsWith(pfx)) localPhone = localPhone.slice(pfx.length);
+        localPhone = getAfribaPayPayoutPhone(phone, countryCode, localPhone);
         const callbackUrl = buildWebhookUrl("/api/afribapay/webhook");
         const afribaAdminRetryRef = `${txRef}-R${Date.now().toString(36)}`;
 
@@ -19612,6 +19623,7 @@ export async function registerRoutes(
               if (localPhone.startsWith("+")) localPhone = localPhone.slice(1);
               const pfx = phonePrefixes[countryCode];
               if (pfx && localPhone.startsWith(pfx)) localPhone = localPhone.slice(pfx.length);
+              localPhone = getAfribaPayPayoutPhone(beneficiaryPhone, countryCode, localPhone);
 
               // Use a unique retry ref so AfribaPay doesn't reject "reference already exists"
               const afribaRetryRef = `${txRef}-R${Date.now().toString(36)}`;

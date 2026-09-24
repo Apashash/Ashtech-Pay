@@ -21,6 +21,16 @@ export function toLocalMobileMoneyPhone(phone: string, countryCode: string): str
   return digits;
 }
 
+export function getAfribaPayPayoutPhone(
+  originalPhone: string,
+  countryCode: string,
+  formattedPhone: string,
+): string {
+  // AfribaPay's Benin payout must receive the exact value entered by the user.
+  // In particular, do not strip the +229 prefix or the leading 0 in the 01 range.
+  return countryCode.toUpperCase() === "BJ" ? originalPhone : formattedPhone;
+}
+
 export function validateMobileMoneyPhone(
   phone: string,
   countryCode: string,
