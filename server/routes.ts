@@ -15592,14 +15592,6 @@ export async function registerRoutes(
       const status = req.query.status as string | undefined;
       const submissions = await storage.getAllKycSubmissions(status);
 
-      // Build a map: documentNumber -> list of submissions with that document
-      const docMap = new Map<string, typeof submissions>();
-      for (const sub of submissions) {
-        if (!sub.documentNumber) continue;
-        const key = sub.documentNumber.trim().toLowerCase();
-        if (!docMap.has(key)) docMap.set(key, []);
-        docMap.get(key)!.push(sub);
-      }
       // Also get ALL submissions (not just filtered) to detect cross-status duplicates
       const allSubmissions = status ? await storage.getAllKycSubmissions() : submissions;
       const allDocMap = new Map<string, typeof allSubmissions>();
@@ -15625,8 +15617,19 @@ export async function registerRoutes(
           new Date(previous.createdAt || 0).getTime() < new Date(sub.createdAt || 0).getTime()
         );
         const key = sub.documentNumber?.trim().toLowerCase() || "";
-        const duplicates = (allDocMap.get(key) || []).filter(d => d.id !== sub.id);
-        const duplicateAccounts = duplicates.map((dup) => {
+        const duplicatesByUser = new Map<string, typeof allSubmissions[number]>();
+        for (const candidate of allDocMap.get(key) || []) {
+          // A rejected/resubmitted KYC record for this same user is not another account.
+          if (!candidate.userId || candidate.userId === sub.userId) continue;
+          const previous = duplicatesByUser.get(candidate.userId);
+          if (
+            !previous ||
+            new Date(candidate.createdAt || 0).getTime() > new Date(previous.createdAt || 0).getTime()
+          ) {
+            duplicatesByUser.set(candidate.userId, candidate);
+          }
+        }
+        const duplicateAccounts = [...duplicatesByUser.values()].map((dup) => {
           const dupUser = userMap.get(dup.userId);
           return {
             submissionId: dup.id,
