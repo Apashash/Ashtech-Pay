@@ -128,8 +128,9 @@ export default function AdminDeposits() {
     mutationFn: async ({ id, status, reason }: { id: string; status: string; reason?: string }) => {
       return apiRequest("PATCH", `/api/admin/transactions/${id}`, { status, reason: reason || "Action admin" });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/transactions", "deposits"] });
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/transactions"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/admin/transactions/${variables.id}/details`] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/layout-stats"] });
       toast({ title: "Statut mis à jour" });
       setSelectedTxId(null);
@@ -144,9 +145,12 @@ export default function AdminDeposits() {
       const response = await apiRequest("POST", "/api/admin/transactions/reject-bulk", { ids });
       return response.json() as Promise<{ succeeded: number; failed: number }>;
     },
-    onSuccess: ({ succeeded, failed }) => {
+    onSuccess: ({ succeeded, failed }, ids) => {
       setSelectedPendingIds(new Set());
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/transactions", "deposits"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/transactions"] });
+      ids.forEach((id) => {
+        queryClient.invalidateQueries({ queryKey: [`/api/admin/transactions/${id}/details`] });
+      });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/layout-stats"] });
       toast({
         title: `${succeeded} transaction${succeeded > 1 ? "s" : ""} rejetée${succeeded > 1 ? "s" : ""}`,

@@ -109,10 +109,14 @@ export default function AdminWithdrawals() {
     mutationFn: async ({ id, status, forceComplete, reason }: { id: string; status: string; forceComplete?: boolean; reason?: string }) => {
       return apiRequest("PATCH", `/api/admin/transactions/${id}`, { status, reason: reason || "Action admin", ...(forceComplete ? { forceComplete: true } : {}) });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/transactions", "withdrawals"] });
+    onSuccess: (response, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/transactions"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/admin/transactions/${variables.id}/details`] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/layout-stats"] });
-      toast({ title: "Statut mis à jour" });
+      toast({
+        title: response.status === 202 ? "Paiement en cours" : "Statut mis à jour",
+        description: response.status === 202 ? "Le fournisseur doit encore confirmer le retrait." : undefined,
+      });
       setSelectedTxId(null);
     },
     onError: (error: any) => {
@@ -147,6 +151,8 @@ export default function AdminWithdrawals() {
         return <Badge className="bg-green-500/20 text-green-500 border-green-500/30 gap-1"><CheckCircle className="w-3 h-3" />Validé</Badge>;
       case "pending":
         return <Badge className="bg-amber-500/20 text-amber-500 border-amber-500/30 gap-1"><Clock className="w-3 h-3" />En attente</Badge>;
+      case "processing":
+        return <Badge variant="secondary" className="gap-1"><Clock className="w-3 h-3" />En cours de traitement</Badge>;
       case "failed":
         return <Badge className="bg-red-500/20 text-red-500 border-red-500/30 gap-1"><XCircle className="w-3 h-3" />Rejeté</Badge>;
       default:
@@ -163,8 +169,9 @@ export default function AdminWithdrawals() {
     mutationFn: async ({ id, reason }: { id: string; reason?: string }) => {
       return apiRequest("PATCH", `/api/admin/transactions/${id}`, { status: "completed", forceComplete: true, reason: reason || "Confirmation manuelle admin" });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/transactions", "withdrawals"] });
+    onSuccess: (response, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/transactions"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/admin/transactions/${variables.id}/details`] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/layout-stats"] });
       toast({ title: "Transaction confirmée manuellement" });
       setSelectedTxId(null);

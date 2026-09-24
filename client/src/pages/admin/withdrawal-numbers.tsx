@@ -84,6 +84,7 @@ export default function AdminWithdrawalNumbersPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/withdrawal-number-changes"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/withdrawal-number-changes/count"] });
       setIsApproveDialogOpen(false);
       setSelectedRequest(null);
       setAdminNote("");
@@ -101,6 +102,7 @@ export default function AdminWithdrawalNumbersPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/withdrawal-number-changes"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/withdrawal-number-changes/count"] });
       setIsRejectDialogOpen(false);
       setSelectedRequest(null);
       setAdminNote("");

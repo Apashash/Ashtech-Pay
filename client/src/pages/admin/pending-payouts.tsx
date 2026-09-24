@@ -71,11 +71,12 @@ export default function AdminPendingPayoutsPage() {
       }
       return data;
     },
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/pending-payouts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/transactions"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/admin/transactions/${variables.txId}/details`] });
       // Also refresh the withdrawals list so the pending row appears immediately
       // if the admin navigates there to watch the status update.
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/transactions", "withdrawals"] });
       toast({ title: "Payout soumis", description: data.message });
       setLoadingId(null);
     },
@@ -97,8 +98,10 @@ export default function AdminPendingPayoutsPage() {
       if (!res.ok) { const err = await res.json(); throw new Error(err.message || "Erreur"); }
       return res.json();
     },
-    onSuccess: (data) => {
+    onSuccess: (data, txId) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/pending-payouts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/transactions"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/admin/transactions/${txId}/details`] });
       toast({ title: "Confirmé", description: data.message });
       setLoadingId(null);
     },
@@ -114,8 +117,10 @@ export default function AdminPendingPayoutsPage() {
       if (!res.ok) { const err = await res.json(); throw new Error(err.message || "Erreur"); }
       return res.json();
     },
-    onSuccess: (data) => {
+    onSuccess: (data, txId) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/pending-payouts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/transactions"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/admin/transactions/${txId}/details`] });
       toast({ title: "Remboursé", description: data.message });
       setLoadingId(null);
     },

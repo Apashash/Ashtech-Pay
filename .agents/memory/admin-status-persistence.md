@@ -8,3 +8,9 @@ Admin success responses must mean the requested state was actually persisted. Tr
 **Why:** The UI previously showed generic success for provider reconciliation and asynchronous acknowledgments, while the backend could return a readback whose status did not match the requested status. Cached detail queries could also continue displaying the previous state.
 
 **How to apply:** For admin mutations, validate persisted readbacks before returning success, use conditional updates for state transitions, invalidate the affected list and detail queries, and give 202 responses an explicit in-progress message.
+
+Conversion execution and cancellation must commit the wallet credit/refund, conversion terminal state, and linked transaction state in one database transaction while serializing on the conversion row.
+
+**Why:** The admin, scheduled poller, and Telegram actions can target the same pending conversion; separate wallet and status writes can double-credit or both credit and refund it.
+
+**How to apply:** Route every conversion settlement entry point through the shared storage transaction; do not perform a wallet mutation before claiming/locking the pending request.

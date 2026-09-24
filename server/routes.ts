@@ -8220,27 +8220,14 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Impossible de calculer le montant reçu. Vérifiez les taux de change admin." });
       }
 
-      // Credit target wallet — each country currency has its own wallet
-      const requestUser = await storage.getUser(request.userId);
-      const requestUserPrimary = requestUser?.preferredCurrency || "XAF";
-      if (request.toCurrency === requestUserPrimary) {
-        await storage.updateUserBalance(request.userId, receivedAmount);
-      } else {
-        await storage.upsertWallet(request.userId, request.toCurrency, receivedAmount);
-      }
-
-      // Update request
-      await storage.updateConversionRequest(id, {
+      const execNotes = (() => { try { return JSON.parse(request.notes || "{}"); } catch { return {}; } })();
+      const settled = await storage.settleConversionRequest(id, {
         status: "completed",
-        toAmount: receivedAmount.toFixed(2),
-        executedAt: new Date(),
+        receivedAmount,
         executedById: adminId,
       });
-
-      // Mark the original transaction as completed (created when user initiated the conversion)
-      const execNotes = (() => { try { return JSON.parse(request.notes || "{}"); } catch { return {}; } })();
-      if (execNotes.txId) {
-        await storage.updateTransactionStatus(execNotes.txId, "completed").catch(() => {});
+      if (!settled) {
+        return res.status(409).json({ message: "Cette conversion a déjà été exécutée ou annulée." });
       }
 
       // Notify user
@@ -8252,6 +8239,8 @@ export async function registerRoutes(
         type: "success",
         transactionId: execTxId,
         isRead: false,
+      }).catch((notificationError: any) => {
+        console.error("[Admin] Conversion notification failed:", notificationError?.message || notificationError);
       });
 
       res.json({
@@ -8280,29 +8269,15 @@ export async function registerRoutes(
 
       const fromAmount = parseFloat(request.fromAmount);
 
-      // Refund source wallet — check user's primary currency, not hardcoded XAF
-      const cancelUser = await storage.getUser(request.userId);
-      const cancelUserPrimary = cancelUser?.preferredCurrency || "XAF";
-      if (request.fromCurrency === cancelUserPrimary) {
-        await storage.updateUserBalance(request.userId, fromAmount);
-      } else {
-        await storage.upsertWallet(request.userId, request.fromCurrency, fromAmount);
-      }
-
-      // Mark the original transaction as failed (preserve original notes, store cancel reason separately)
       const cancelNotes = (() => { try { return JSON.parse(request.notes || "{}"); } catch { return {}; } })();
-      if (cancelNotes.txId) {
-        await storage.updateTransactionStatus(cancelNotes.txId, "failed").catch(() => {});
-      }
-
-      // Update request status — preserve original notes, append cancel reason
-      const updatedNotes = JSON.stringify({ ...cancelNotes, cancelReason: reason || "Annulé par l'administration" });
-      await storage.updateConversionRequest(id, {
+      const settled = await storage.settleConversionRequest(id, {
         status: "cancelled",
-        notes: updatedNotes,
-        executedAt: new Date(),
         executedById: adminId,
+        cancelReason: reason || "Annulé par l'administration",
       });
+      if (!settled) {
+        return res.status(409).json({ message: "Cette conversion a déjà été exécutée ou annulée." });
+      }
 
       // Notify user
       const cancelTxId = cancelNotes.txId || null;
@@ -8313,6 +8288,8 @@ export async function registerRoutes(
         type: "warning",
         transactionId: cancelTxId,
         isRead: false,
+      }).catch((notificationError: any) => {
+        console.error("[Admin] Conversion cancellation notification failed:", notificationError?.message || notificationError);
       });
 
       res.json({ success: true, message: "Demande annulée et remboursée" });
@@ -12111,11 +12088,11 @@ export async function registerRoutes(
       const isPrimary = effectiveCurrency === (user.preferredCurrency || "XAF");
 
       // ── Capture BEFORE values for audit trail
-      const balanceBefore = isPrimary
+      let balanceBefore = isPrimary
         ? parseFloat(user.balance ?? "0")
         : parseFloat((await storage.getUserWallets(userId)).find(w => w.currency === effectiveCurrency)?.balance ?? "0");
 
-      let balanceAfter: number;
+      let balanceAfter: number = balanceBefore;
 
       if (isPrimary) {
         let updated: any;
@@ -12124,9 +12101,12 @@ export async function registerRoutes(
           balanceAfter = amountNum;
         } else {
           updated = await storage.updateUserBalance(userId, amountNum);
-          balanceAfter = balanceBefore + amountNum;
         }
         if (!updated) return res.status(500).json({ message: "Mise à jour échouée" });
+        if (type !== "set") {
+          balanceAfter = parseFloat(updated.balance || "0");
+          balanceBefore = balanceAfter - amountNum;
+        }
         const safeUser = (({ password: _pw, ...rest }) => rest)(updated as any);
 
         // ── Compensating transaction record — full audit trail in transactions table
@@ -12806,6 +12786,29 @@ export async function registerRoutes(
       if (!existingTx) {
         return res.status(404).json({ message: "Transaction non trouvée" });
       }
+
+      const payoutTransaction = existingTx.type === "withdrawal" || existingTx.type === "transfer_out";
+      if (
+        payoutTransaction &&
+        existingTx.status === "processing" &&
+        ["completed", "failed", "cancelled"].includes(status)
+      ) {
+        return res.status(409).json({
+          message: "Le paiement est déjà en cours de traitement; attendez le résultat du fournisseur.",
+          currentStatus: existingTx.status,
+        });
+      }
+      if (
+        payoutTransaction &&
+        ["pending", "pending_manual", "processing"].includes(existingTx.status) &&
+        existingTx.externalReference &&
+        ["completed", "failed", "cancelled"].includes(status)
+      ) {
+        return res.status(409).json({
+          message: "Une tentative fournisseur existe déjà. Rapprochez son résultat avant de modifier le statut ou de rembourser.",
+          currentStatus: existingTx.status,
+        });
+      }
       if (req.body?.bulkPendingOnly === true && existingTx.status !== "pending") {
         return res.status(409).json({ message: "Seules les transactions encore en attente peuvent être rejetées en groupe." });
       }
@@ -12937,6 +12940,10 @@ export async function registerRoutes(
       // Prevent double-crediting: only credit if moving from pending/processing to completed
       const wasNotCompleted = existingTx.status !== "completed";
       const isNowCompleted = status === "completed";
+      const startsProviderPayout = isNowCompleted && payoutTransaction && !forceComplete;
+      const claimedStatus = startsProviderPayout ? "processing" : status;
+      let providerPayoutSubmitted = false;
+      let submittedPayoutReference: string | undefined;
 
       let transaction: Transaction | undefined;
       if (isReopeningRejectedPayout) {
@@ -12963,13 +12970,13 @@ export async function registerRoutes(
       } else {
         // Compare-and-set: do not overwrite a provider callback or another
         // admin action that changed the row after existingTx was read.
-        transaction = await storage.claimTransactionStatus(id, status, [existingTx.status]);
+        transaction = await storage.claimTransactionStatus(id, claimedStatus, [existingTx.status]);
       }
-      if (!transaction || transaction.status !== status) {
+      if (!transaction || transaction.status !== claimedStatus) {
         return res.status(409).json({
           message: "Le statut demandé n'a pas été confirmé en base. Rechargez la transaction avant de réessayer.",
           currentStatus: transaction?.status,
-          requestedStatus: status,
+          requestedStatus: claimedStatus,
         });
       }
       
@@ -13028,7 +13035,13 @@ export async function registerRoutes(
           const operatorName = (operator?.name || "").toUpperCase();
           const adminPaymentProvider = ((operator as any)?.paymentProvider || (operator as any)?.depositPaymentProvider) as string | undefined;
           if (adminPaymentProvider !== "afribapay" && adminPaymentProvider !== "pixpay" && adminPaymentProvider !== "pawapay") {
-            await storage.updateTransactionStatus(id, "pending");
+             const reverted = await storage.claimTransactionStatus(id, existingTx.status, ["processing"]);
+             if (!reverted || reverted.status !== existingTx.status) {
+               return res.status(409).json({
+                 message: "Le statut de la transaction a changé pendant le traitement. Rechargez la page.",
+                 currentStatus: reverted?.status,
+               });
+             }
             return res.status(400).json({ message: "Aucun fournisseur de paiement valide n'est configuré pour cet opérateur." });
           }
 
@@ -13074,6 +13087,8 @@ export async function registerRoutes(
               notify_url:   callbackUrl,
             });
             if (afribaResult.success) {
+              providerPayoutSubmitted = true;
+              submittedPayoutReference = payoutRef;
               // Persist submitted order_id (= payoutRef) so restart recovery polls
               // the right AfribaPay reference (not transaction_id, which status API ignores).
               await storage.updateTransactionExternalReference(transaction.id, payoutRef);
@@ -13085,6 +13100,8 @@ export async function registerRoutes(
           }
 
           if (payoutResult.success) {
+            providerPayoutSubmitted = true;
+            submittedPayoutReference = pollerRef;
             console.log(`[Admin] Payout submitted OK for ${payoutRef} via ${pollerProvider} (ext: ${payoutResult.transaction_id})`);
             addPendingPayout({
               transactionId: transaction.id,
@@ -13113,13 +13130,21 @@ export async function registerRoutes(
               userId:        transaction.userId,
               type:          "withdrawal_confirmed",
               title:         transaction.type === "withdrawal" ? "Retrait approuvé" : "Transfert approuvé",
-              message:       `Votre ${transaction.type === "withdrawal" ? "retrait" : "transfert"} de ${transaction.amount} ${transaction.currency} a été validé.`,
+              message:       `Votre ${transaction.type === "withdrawal" ? "retrait" : "transfert"} de ${transaction.amount} ${transaction.currency} a été soumis au fournisseur et attend sa confirmation.`,
               transactionId: transaction.id,
               isRead:        false,
+            }).catch((notificationError: any) => {
+              console.error("[Admin] Payout notification failed:", notificationError?.message || notificationError);
             });
           } else {
             console.error(`[Admin] Payout failed for ${payoutRef} via ${pollerProvider}: ${payoutResult.message}`);
-            await storage.updateTransactionStatus(id, "pending");
+            const reverted = await storage.claimTransactionStatus(id, existingTx.status, ["processing"]);
+            if (!reverted || reverted.status !== existingTx.status) {
+              return res.status(409).json({
+                message: "Le résultat fournisseur et le statut enregistré se sont croisés. Rechargez et rapprochez la transaction.",
+                currentStatus: reverted?.status,
+              });
+            }
             const msg = (payoutResult.message || "").toLowerCase();
             const isInsufficientBalance = msg.includes("insuffi") || msg.includes("solde") || msg.includes("balance");
             if (isInsufficientBalance) {
@@ -13133,7 +13158,20 @@ export async function registerRoutes(
           }
         } catch (payoutErr: any) {
           console.error("[Admin] Payout error:", payoutErr.message);
-          await storage.updateTransactionStatus(id, "pending");
+          if (providerPayoutSubmitted) {
+            return res.status(202).json({
+              message: "Paiement soumis au fournisseur; confirmation en cours.",
+              status: "processing",
+              reference: submittedPayoutReference,
+            });
+          }
+          const reverted = await storage.claimTransactionStatus(id, existingTx.status, ["processing"]);
+          if (!reverted || reverted.status !== existingTx.status) {
+            return res.status(409).json({
+              message: "Le résultat fournisseur et le statut enregistré se sont croisés. Rechargez et rapprochez la transaction.",
+              currentStatus: reverted?.status,
+            });
+          }
           return res.status(500).json({ message: `Erreur lors du paiement: ${payoutErr.message}` });
         }
       }
@@ -13218,7 +13256,8 @@ export async function registerRoutes(
           targetId: id,
           details: JSON.stringify({
             from: existingTx.status,
-            to: status,
+            to: transaction.status,
+            requestedStatus: status,
             balanceUpdated: wasNotCompleted && isNowCompleted,
             walletDebited: isReopeningRejectedPayout,
             reason: reason.trim(),
@@ -13230,6 +13269,13 @@ export async function registerRoutes(
         console.error("[Admin] Failed to write admin log (non-fatal):", logErr?.message);
       }
       
+      if (providerPayoutSubmitted) {
+        return res.status(202).json({
+          message: "Paiement soumis au fournisseur; confirmation en cours.",
+          status: "processing",
+          reference: submittedPayoutReference,
+        });
+      }
       res.json(transaction);
     } catch (error) {
       console.error("Admin update transaction error:", error);
@@ -14548,6 +14594,8 @@ export async function registerRoutes(
         targetId: req.params.id,
         details: JSON.stringify({ note }),
         ipAddress: req.ip || null,
+      }).catch((logError: any) => {
+        console.error("Approve withdrawal-number admin-log failed:", logError?.message || logError);
       });
       
       res.json({ change, message: "Changement approuvé" });
@@ -14578,6 +14626,8 @@ export async function registerRoutes(
         targetId: req.params.id,
         details: JSON.stringify({ note }),
         ipAddress: req.ip || null,
+      }).catch((logError: any) => {
+        console.error("Reject withdrawal-number admin-log failed:", logError?.message || logError);
       });
       
       res.json({ change, message: "Changement rejeté" });
@@ -14943,9 +14993,26 @@ export async function registerRoutes(
         if (reconciled === "unresolved") {
           return res.status(409).json({ message: "Paiement encore en cours de rapprochement; confirmation manuelle interdite." });
         }
-        return res.json({ message: "Paiement rapproché avec le fournisseur.", status: reconciled });
+        if (reconciled !== "completed") {
+          return res.status(409).json({
+            message: "Le fournisseur a rejeté le paiement; il ne peut pas être confirmé comme effectué.",
+            status: reconciled,
+          });
+        }
+        return res.json({ message: "Paiement confirmé par le fournisseur.", status: reconciled });
       }
-      await storage.updateTransactionStatus(tx.id, "completed");
+      if (tx.externalReference) {
+        return res.status(409).json({
+          message: "Une tentative fournisseur existe déjà. Rapprochez son résultat avant toute confirmation manuelle.",
+        });
+      }
+      const confirmed = await storage.claimTransactionStatus(tx.id, "completed", ["pending_manual"]);
+      if (!confirmed || confirmed.status !== "completed") {
+        return res.status(409).json({
+          message: "Le statut a changé avant la confirmation. Rechargez la transaction.",
+          currentStatus: confirmed?.status,
+        });
+      }
       const txUser = await storage.getUser(tx.userId).catch(() => null);
       if (txUser?.email) {
         sendWithdrawalApprovedEmail(
@@ -14964,6 +15031,8 @@ export async function registerRoutes(
         message: `Votre ${tx.type === "withdrawal" ? "retrait" : "transfert"} de ${parseFloat(tx.amount).toLocaleString("fr-FR")} ${tx.currency} a été traité avec succès.`,
         transactionId: tx.id,
         isRead: false,
+      }).catch((notificationError: any) => {
+        console.error("Pending payout confirmation notification failed:", notificationError?.message || notificationError);
       });
       const adminUser = await storage.getUser(req.userId!).catch(() => null);
       notifyWithdrawalManuallyValidated({
@@ -14989,6 +15058,8 @@ export async function registerRoutes(
         targetId: tx.id,
         details: JSON.stringify({ amount: tx.amount, currency: tx.currency }),
         ipAddress: req.ip || null,
+      }).catch((logError: any) => {
+        console.error("Pending payout confirmation admin-log failed:", logError?.message || logError);
       });
       console.log(`[Admin] Manually confirmed pending_manual ${tx.reference} as completed`);
       res.json({ message: "Transaction confirmée comme effectuée" });
@@ -15005,10 +15076,35 @@ export async function registerRoutes(
       if (!tx || tx.status !== "pending_manual") {
         return res.status(404).json({ message: "Transaction non trouvée ou statut incorrect" });
       }
+      if (tx.externalReference && isPawaPayUuidV4(tx.externalReference)) {
+        const reconciled = await reconcilePawaPayPayoutAttempt(tx);
+        if (reconciled === "unresolved") {
+          return res.status(409).json({ message: "Paiement encore en cours de rapprochement; remboursement manuel interdit." });
+        }
+        if (reconciled === "failed") {
+          return res.json({
+            message: "Le fournisseur a rejeté le paiement; le remboursement a été traité automatiquement.",
+            status: "failed",
+          });
+        }
+        return res.status(409).json({
+          message: "Le paiement est confirmé par le fournisseur; remboursement manuel interdit.",
+          status: reconciled,
+        });
+      }
+      if (tx.externalReference) {
+        return res.status(409).json({
+          message: "Une tentative fournisseur existe déjà. Rapprochez son résultat avant tout remboursement.",
+        });
+      }
       const totalAmount = parseFloat(tx.totalAmount || tx.amount);
-      // Refund FIRST — if this throws, status stays pending_manual and money is safe
-      await storage.refundToOriginalWallet(tx.userId, tx.type, tx.currency || "XAF", totalAmount);
-      await storage.updateTransactionStatus(tx.id, "failed");
+      const refunded = await storage.refundPendingManualPayout(tx.id);
+      if (!refunded || refunded.status !== "failed") {
+        return res.status(409).json({
+          message: "Le statut a changé avant le remboursement. Rechargez la transaction.",
+          currentStatus: refunded?.status,
+        });
+      }
       setFailedCooldown(tx.userId); // Cooldown 5min avant la prochaine tentative
       await storage.createUserNotification({
         userId: tx.userId,
@@ -15017,6 +15113,8 @@ export async function registerRoutes(
         message: `Votre ${tx.type === "withdrawal" ? "retrait" : "transfert"} de ${parseFloat(tx.amount).toLocaleString("fr-FR")} ${tx.currency} a été annulé et remboursé sur votre compte.`,
         transactionId: tx.id,
         isRead: false,
+      }).catch((notificationError: any) => {
+        console.error("Pending payout refund notification failed:", notificationError?.message || notificationError);
       });
       await storage.createAdminLog({
         adminId: req.userId!,
@@ -15025,6 +15123,8 @@ export async function registerRoutes(
         targetId: tx.id,
         details: JSON.stringify({ totalAmount, currency: tx.currency }),
         ipAddress: req.ip || null,
+      }).catch((logError: any) => {
+        console.error("Pending payout refund admin-log failed:", logError?.message || logError);
       });
       console.log(`[Admin] Refunded pending_manual ${tx.reference} — ${totalAmount} ${tx.currency} to user ${tx.userId}`);
       res.json({ message: "Transaction annulée et remboursée" });
@@ -20038,24 +20138,15 @@ export async function registerRoutes(
                 return convertCurrency(fromAmount, req.fromCurrency, req.toCurrency, execFallbackRates);
               })();
           if (!receivedAmount || !isFinite(receivedAmount) || receivedAmount <= 0) return null;
-          const userPrimary = convUser.preferredCurrency || "XAF";
-
-          if (req.toCurrency === userPrimary) {
-            await storage.updateUserBalance(req.userId, receivedAmount);
-          } else {
-            await storage.upsertWallet(req.userId, req.toCurrency, receivedAmount);
-          }
-
-          await storage.updateConversionRequest(conversionId, {
+          const settled = await storage.settleConversionRequest(conversionId, {
             status: "completed",
-            toAmount: receivedAmount.toFixed(2),
-            executedAt: new Date(),
-            executedById: adminUser.id,
+            executedById: "telegram-admin",
+            receivedAmount,
           });
+          if (!settled) return null;
 
           // Update related transaction
           const meta = (() => { try { return JSON.parse(req.notes || "{}"); } catch { return {}; } })();
-          if (meta.txId) await storage.updateTransactionStatus(meta.txId, "completed").catch(() => {});
 
           await storage.createUserNotification({
             userId: req.userId,
@@ -20082,19 +20173,13 @@ export async function registerRoutes(
           if (!convUser) return null;
 
           const fromAmount = parseFloat(req.fromAmount);
-          const userPrimary = convUser.preferredCurrency || "XAF";
-
-          // Refund source wallet
-          if (req.fromCurrency === userPrimary) {
-            await storage.updateUserBalance(req.userId, fromAmount);
-          } else {
-            await storage.upsertWallet(req.userId, req.fromCurrency, fromAmount);
-          }
-
-          await storage.updateConversionRequest(conversionId, { status: "cancelled" });
-
           const meta = (() => { try { return JSON.parse(req.notes || "{}"); } catch { return {}; } })();
-          if (meta.txId) await storage.updateTransactionStatus(meta.txId, "failed").catch(() => {});
+          const settled = await storage.settleConversionRequest(conversionId, {
+            status: "cancelled",
+            executedById: "telegram-admin",
+            cancelReason: "Annulé depuis Telegram",
+          });
+          if (!settled) return null;
 
           await storage.createUserNotification({
             userId: req.userId,

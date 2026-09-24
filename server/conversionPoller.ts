@@ -71,42 +71,25 @@ export async function processPendingConversions() {
         if (!isFinite(receivedAmount) || receivedAmount <= 0) {
           // Still invalid — refund source wallet and cancel
           console.error(`[ConversionPoller] Invalid toAmount for conversion ${req.id} — refunding source`);
-          const primary2 = user.preferredCurrency || "XAF";
-          const refundAmount = parseFloat(req.fromAmount || "0");
-          if (isFinite(refundAmount) && refundAmount > 0) {
-            if (req.fromCurrency === primary2) {
-              await storage.updateUserBalance(req.userId, refundAmount);
-            } else {
-              await storage.upsertWallet(req.userId, req.fromCurrency, refundAmount);
-            }
-            console.log(`[ConversionPoller] Refunded ${refundAmount} ${req.fromCurrency} to user ${req.userId}`);
+          const cancelled = await storage.settleConversionRequest(req.id, {
+            status: "cancelled",
+            executedById: req.userId,
+            cancelReason: "Montant reçu invalide",
+          });
+          if (cancelled) {
+            console.log(`[ConversionPoller] Refunded ${req.fromAmount} ${req.fromCurrency} to user ${req.userId}`);
           }
-          await storage.updateConversionRequest(req.id, { status: "cancelled" });
-          const failTxId = meta?.txId;
-          if (failTxId) await storage.updateTransactionStatus(failTxId, "failed");
           continue;
         }
 
-        const userPrimary = user.preferredCurrency || "XAF";
-
-        // Credit the correct wallet
-        if (req.toCurrency === userPrimary) {
-          await storage.updateUserBalance(req.userId, receivedAmount);
-        } else {
-          await storage.upsertWallet(req.userId, req.toCurrency, receivedAmount);
-        }
-
-        await storage.updateConversionRequest(req.id, {
+        const settled = await storage.settleConversionRequest(req.id, {
           status: "completed",
-          toAmount: receivedAmount.toFixed(2),
-          executedAt: new Date(),
           executedById: req.userId,
+          receivedAmount,
         });
+        if (!settled) continue;
 
         const txId = meta?.txId;
-        if (txId) {
-          await storage.updateTransactionStatus(txId, "completed");
-        }
 
         await storage.createUserNotification({
           userId: req.userId,

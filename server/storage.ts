@@ -128,6 +128,7 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
   updateUserBalance(id: string, amount: number): Promise<User | undefined>;
   refundToOriginalWallet(userId: string, txType: string, txCurrency: string, amount: number): Promise<void>;
+  refundPendingManualPayout(id: string): Promise<Transaction | undefined>;
   updateUserCurrency(id: string, currency: SupportedCurrency): Promise<User | undefined>;
   setResetToken(id: string, token: string, expiry: Date): Promise<User | undefined>;
   updatePassword(id: string, hashedPassword: string): Promise<User | undefined>;
@@ -373,6 +374,15 @@ export interface IStorage {
   getPendingConversionRequests(): Promise<(ConversionRequest & { userFullName: string; userEmail: string })[]>;
   getAllConversionRequests(): Promise<(ConversionRequest & { userFullName: string; userEmail: string })[]>;
   updateConversionRequest(id: string, data: Partial<ConversionRequest>): Promise<ConversionRequest>;
+  settleConversionRequest(
+    id: string,
+    data: {
+      status: "completed" | "cancelled";
+      executedById: string;
+      receivedAmount?: number;
+      cancelReason?: string;
+    },
+  ): Promise<ConversionRequest | undefined>;
   countPendingConversions(): Promise<number>;
 
   // Auto-conversion rules
@@ -502,31 +512,50 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateUserBalance(id: string, amount: number): Promise<User | undefined> {
+    if (!Number.isFinite(amount)) throw new Error("Montant invalide");
+    const delta = Number(amount.toFixed(2));
     invalidateUserCache(id);
-    const [user] = await db.select().from(users).where(eq(users.id, id));
-    if (!user) return undefined;
-    
-    const currentBalance = parseFloat(user.balance || "0") || 0;
-    const newBalance = currentBalance + amount;
-    
-    if (newBalance < 0) {
-      throw new Error("Solde insuffisant");
-    }
-    
+    if (delta === 0) return this.getUser(id);
+
+    const balanceCondition = delta < 0
+      ? isMysqlDialect
+        ? sql`CAST(${users.balance} AS DECIMAL(30, 10)) >= ${Math.abs(delta).toFixed(2)}`
+        : sql`${users.balance}::numeric >= ${Math.abs(delta).toFixed(2)}::numeric`
+      : undefined;
+    const whereClause = balanceCondition
+      ? and(eq(users.id, id), balanceCondition)
+      : eq(users.id, id);
+
     let updatedUser: User | undefined;
     if (isMysqlDialect) {
-      await db.update(users)
-        .set({ balance: newBalance.toFixed(2) })
-        .where(eq(users.id, id));
+      const result = await db.update(users)
+        .set({ balance: sql`CAST(${users.balance} AS DECIMAL(30, 10)) + ${delta.toFixed(2)}` })
+        .where(whereClause);
+      const header = Array.isArray(result) ? result[0] : result;
+      const affectedRows = Number((header as any)?.affectedRows ?? (header as any)?.rowCount);
+      if (!Number.isFinite(affectedRows)) throw new Error("USER_BALANCE_UPDATE_UNCONFIRMED");
+      if (affectedRows === 0) {
+        const current = await this.getUser(id);
+        if (!current) return undefined;
+        if (delta < 0) throw new Error("Solde insuffisant");
+        throw new Error("USER_BALANCE_UPDATE_UNCONFIRMED");
+      }
       updatedUser = await this.getUser(id);
     } else {
       [updatedUser] = await db
         .update(users)
-        .set({ balance: newBalance.toFixed(2) })
-        .where(eq(users.id, id))
+        .set({ balance: sql`${users.balance}::numeric + ${delta.toFixed(2)}::numeric` })
+        .where(whereClause)
         .returning();
+      if (!updatedUser) {
+        const current = await this.getUser(id);
+        if (!current) return undefined;
+        if (delta < 0) throw new Error("Solde insuffisant");
+        throw new Error("USER_BALANCE_UPDATE_UNCONFIRMED");
+      }
     }
-    
+
+    if (!updatedUser) throw new Error("USER_BALANCE_UPDATE_READBACK_FAILED");
     if (updatedUser) setCachedUser(updatedUser);
     return updatedUser;
   }
@@ -965,6 +994,69 @@ export class DatabaseStorage implements IStorage {
     });
     if (claimed) invalidateUserCache(claimed.userId);
     return claimed;
+  }
+
+  async refundPendingManualPayout(id: string): Promise<Transaction | undefined> {
+    const refunded = await db.transaction(async (trx) => {
+      const claimWhere = and(
+        eq(transactions.id, id),
+        eq(transactions.status, "pending_manual"),
+        inArray(transactions.type, ["withdrawal", "transfer_out"]),
+      );
+      let transaction: Transaction | undefined;
+      if (isMysqlDialect) {
+        const result = await trx.update(transactions).set({ status: "failed" }).where(claimWhere);
+        const header = Array.isArray(result) ? result[0] : result;
+        const affectedRows = Number((header as any)?.affectedRows ?? (header as any)?.rowCount);
+        if (!Number.isFinite(affectedRows)) throw new Error("PAYOUT_REFUND_CLAIM_UNCONFIRMED");
+        if (affectedRows === 0) return undefined;
+        [transaction] = await trx.select().from(transactions).where(eq(transactions.id, id)).limit(1);
+      } else {
+        [transaction] = await trx.update(transactions)
+          .set({ status: "failed" })
+          .where(claimWhere)
+          .returning();
+      }
+      if (!transaction) return undefined;
+
+      const [user] = await trx.select({ preferredCurrency: users.preferredCurrency })
+        .from(users)
+        .where(eq(users.id, transaction.userId))
+        .limit(1);
+      if (!user) throw new Error("PAYOUT_REFUND_USER_NOT_FOUND");
+
+      const { sameCfaFamily } = await import("./walletHelper");
+      const metadata = (transaction.metadata || {}) as Record<string, unknown>;
+      const walletCurrency = typeof metadata.walletCurrency === "string"
+        ? metadata.walletCurrency
+        : transaction.currency || "XAF";
+      const primaryCurrency = user.preferredCurrency || "XAF";
+      const amount = Number.parseFloat(transaction.totalAmount || transaction.amount);
+      if (!Number.isFinite(amount) || amount <= 0) throw new Error("PAYOUT_REFUND_AMOUNT_INVALID");
+
+      if (sameCfaFamily(walletCurrency, primaryCurrency)) {
+        await trx.update(users)
+          .set({ balance: sql`${users.balance} + ${amount}` })
+          .where(eq(users.id, transaction.userId));
+      } else if (isMysqlDialect) {
+        await (trx as any).insert(wallets)
+          .values({ id: randomUUID(), userId: transaction.userId, currency: walletCurrency, balance: amount.toFixed(2) })
+          .onDuplicateKeyUpdate({
+            set: { balance: sql`${wallets.balance} + ${amount}`, updatedAt: new Date() },
+          });
+      } else {
+        await trx.insert(wallets)
+          .values({ userId: transaction.userId, currency: walletCurrency, balance: amount.toFixed(2) })
+          .onConflictDoUpdate({
+            target: [wallets.userId, wallets.currency],
+            set: { balance: sql`${wallets.balance} + ${amount}`, updatedAt: new Date() },
+          });
+      }
+      return transaction;
+    });
+
+    if (refunded) invalidateUserCache(refunded.userId);
+    return refunded;
   }
 
   async updateTransactionMetadata(id: string, metadata: Record<string, unknown>): Promise<void> {
@@ -2381,66 +2473,95 @@ export class DatabaseStorage implements IStorage {
   }
 
   async approveWithdrawalNumberChange(id: string, adminId: string, note?: string): Promise<WithdrawalNumberChange | undefined> {
-    const change = await this.getWithdrawalNumberChange(id);
-    if (!change) return undefined;
-    
-    if (change.action === "add") {
-      await this.createWithdrawalNumber({
-        userId: change.userId,
-        phoneNumber: change.newPhoneNumber!,
-        operatorName: change.newOperatorName!,
-        label: change.newLabel,
-        isActive: true,
-      });
-    } else if (change.action === "update") {
-      await this.updateWithdrawalNumber(change.withdrawalNumberId!, {
-        phoneNumber: change.newPhoneNumber!,
-        operatorName: change.newOperatorName!,
-        label: change.newLabel,
-      });
-    } else if (change.action === "delete") {
-      const numberToDelete = change.withdrawalNumberId;
-      // Nullify the FK reference in ALL change records pointing to this number
-      // (not just this one) to avoid FK constraint violation on deletion
-      if (numberToDelete) {
-        await db.update(withdrawalNumberChanges)
+    return db.transaction(async (trx) => {
+      const [change] = await trx.select()
+        .from(withdrawalNumberChanges)
+        .where(eq(withdrawalNumberChanges.id, id))
+        .limit(1)
+        .for("update");
+      if (!change || change.status !== "pending") return undefined;
+
+      if (change.action === "add") {
+        if (!change.newPhoneNumber || !change.newOperatorName) throw new Error("WITHDRAWAL_NUMBER_CHANGE_DATA_INVALID");
+        await trx.insert(withdrawalNumbers).values({
+          id: randomUUID(),
+          userId: change.userId,
+          phoneNumber: change.newPhoneNumber,
+          operatorName: change.newOperatorName,
+          label: change.newLabel,
+          isActive: true,
+        });
+      } else if (change.action === "update") {
+        if (!change.withdrawalNumberId || !change.newPhoneNumber || !change.newOperatorName) {
+          throw new Error("WITHDRAWAL_NUMBER_CHANGE_DATA_INVALID");
+        }
+        const [existingNumber] = await trx.select()
+          .from(withdrawalNumbers)
+          .where(and(
+            eq(withdrawalNumbers.id, change.withdrawalNumberId),
+            eq(withdrawalNumbers.userId, change.userId),
+          ))
+          .limit(1)
+          .for("update");
+        if (!existingNumber) throw new Error("WITHDRAWAL_NUMBER_NOT_FOUND");
+        await trx.update(withdrawalNumbers)
+          .set({
+            phoneNumber: change.newPhoneNumber,
+            operatorName: change.newOperatorName,
+            label: change.newLabel,
+          })
+          .where(eq(withdrawalNumbers.id, change.withdrawalNumberId));
+      } else if (change.action === "delete") {
+        const numberToDelete = change.withdrawalNumberId;
+        if (!numberToDelete) throw new Error("WITHDRAWAL_NUMBER_NOT_FOUND");
+        const [existingNumber] = await trx.select()
+          .from(withdrawalNumbers)
+          .where(and(
+            eq(withdrawalNumbers.id, numberToDelete),
+            eq(withdrawalNumbers.userId, change.userId),
+          ))
+          .limit(1)
+          .for("update");
+        if (!existingNumber) throw new Error("WITHDRAWAL_NUMBER_NOT_FOUND");
+        await trx.update(withdrawalNumberChanges)
           .set({ withdrawalNumberId: null })
           .where(eq(withdrawalNumberChanges.withdrawalNumberId, numberToDelete));
-        await this.deleteWithdrawalNumber(numberToDelete);
+        await trx.delete(withdrawalNumbers).where(eq(withdrawalNumbers.id, numberToDelete));
+      } else {
+        throw new Error("WITHDRAWAL_NUMBER_CHANGE_ACTION_INVALID");
       }
-    }
-    
-    const updates = { status: "approved", adminId, adminNote: note, processedAt: new Date() };
-    if (isMysqlDialect) {
-      return mysqlUpdateAndRead(
-        withdrawalNumberChanges,
-        eq(withdrawalNumberChanges.id, id),
-        updates,
-        () => this.getWithdrawalNumberChange(id),
-      );
-    }
-    const [updated] = await db.update(withdrawalNumberChanges)
-      .set(updates)
-      .where(eq(withdrawalNumberChanges.id, id))
-      .returning();
-    return updated;
+
+      await trx.update(withdrawalNumberChanges)
+        .set({ status: "approved", adminId, adminNote: note, processedAt: new Date() })
+        .where(and(eq(withdrawalNumberChanges.id, id), eq(withdrawalNumberChanges.status, "pending")));
+      const [updated] = await trx.select()
+        .from(withdrawalNumberChanges)
+        .where(eq(withdrawalNumberChanges.id, id))
+        .limit(1);
+      if (!updated || updated.status !== "approved") throw new Error("WITHDRAWAL_NUMBER_APPROVAL_READBACK_FAILED");
+      return updated;
+    });
   }
 
   async rejectWithdrawalNumberChange(id: string, adminId: string, note?: string): Promise<WithdrawalNumberChange | undefined> {
-    const updates = { status: "rejected", adminId, adminNote: note, processedAt: new Date() };
-    if (isMysqlDialect) {
-      return mysqlUpdateAndRead(
-        withdrawalNumberChanges,
-        eq(withdrawalNumberChanges.id, id),
-        updates,
-        () => this.getWithdrawalNumberChange(id),
-      );
-    }
-    const [updated] = await db.update(withdrawalNumberChanges)
-      .set(updates)
-      .where(eq(withdrawalNumberChanges.id, id))
-      .returning();
-    return updated;
+    return db.transaction(async (trx) => {
+      const [change] = await trx.select()
+        .from(withdrawalNumberChanges)
+        .where(eq(withdrawalNumberChanges.id, id))
+        .limit(1)
+        .for("update");
+      if (!change || change.status !== "pending") return undefined;
+
+      await trx.update(withdrawalNumberChanges)
+        .set({ status: "rejected", adminId, adminNote: note, processedAt: new Date() })
+        .where(and(eq(withdrawalNumberChanges.id, id), eq(withdrawalNumberChanges.status, "pending")));
+      const [updated] = await trx.select()
+        .from(withdrawalNumberChanges)
+        .where(eq(withdrawalNumberChanges.id, id))
+        .limit(1);
+      if (!updated || updated.status !== "rejected") throw new Error("WITHDRAWAL_NUMBER_REJECTION_READBACK_FAILED");
+      return updated;
+    });
   }
   
   // User notifications
@@ -3051,20 +3172,125 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateConversionRequest(id: string, data: Partial<ConversionRequest>): Promise<ConversionRequest> {
+    const whereClause = data.status
+      ? and(eq(conversionRequests.id, id), eq(conversionRequests.status, "pending"))
+      : eq(conversionRequests.id, id);
     if (isMysqlDialect) {
       await db.update(conversionRequests)
         .set(data)
-        .where(eq(conversionRequests.id, id));
+        .where(whereClause);
       const updated = await this.getConversionRequest(id);
       if (!updated) throw new Error("CONVERSION_UPDATE_READBACK_FAILED");
+      if (data.status && updated.status !== data.status) throw new Error("CONVERSION_STATUS_CONFLICT");
       return updated;
     }
     const [updated] = await db
       .update(conversionRequests)
       .set(data)
-      .where(eq(conversionRequests.id, id))
+      .where(whereClause)
       .returning();
+    if (!updated) throw new Error(data.status ? "CONVERSION_STATUS_CONFLICT" : "CONVERSION_UPDATE_READBACK_FAILED");
     return updated;
+  }
+
+  async settleConversionRequest(
+    id: string,
+    data: {
+      status: "completed" | "cancelled";
+      executedById: string;
+      receivedAmount?: number;
+      cancelReason?: string;
+    },
+  ): Promise<ConversionRequest | undefined> {
+    const settlement = await db.transaction(async (trx) => {
+      const [request] = await trx.select()
+        .from(conversionRequests)
+        .where(eq(conversionRequests.id, id))
+        .limit(1)
+        .for("update");
+      if (!request || request.status !== "pending") return undefined;
+
+      const [user] = await trx.select({ preferredCurrency: users.preferredCurrency })
+        .from(users)
+        .where(eq(users.id, request.userId))
+        .limit(1);
+      if (!user) throw new Error("CONVERSION_USER_NOT_FOUND");
+
+      const fromAmount = Number.parseFloat(request.fromAmount);
+      const amount = data.status === "completed" ? data.receivedAmount : fromAmount;
+      if (!Number.isFinite(amount) || amount! <= 0) throw new Error("CONVERSION_SETTLEMENT_AMOUNT_INVALID");
+      const currency = data.status === "completed" ? request.toCurrency : request.fromCurrency;
+      const primaryCurrency = user.preferredCurrency || "XAF";
+
+      if (currency === primaryCurrency) {
+        await trx.update(users)
+          .set({ balance: sql`${users.balance} + ${amount}` })
+          .where(eq(users.id, request.userId));
+      } else if (isMysqlDialect) {
+        await (trx as any).insert(wallets)
+          .values({ id: randomUUID(), userId: request.userId, currency, balance: amount!.toFixed(2) })
+          .onDuplicateKeyUpdate({
+            set: { balance: sql`${wallets.balance} + ${amount}`, updatedAt: new Date() },
+          });
+      } else {
+        await trx.insert(wallets)
+          .values({ userId: request.userId, currency, balance: amount!.toFixed(2) })
+          .onConflictDoUpdate({
+            target: [wallets.userId, wallets.currency],
+            set: { balance: sql`${wallets.balance} + ${amount}`, updatedAt: new Date() },
+          });
+      }
+
+      let notes = request.notes;
+      let txId: string | undefined;
+      try {
+        const parsed = JSON.parse(request.notes || "{}");
+        txId = typeof parsed?.txId === "string" ? parsed.txId : undefined;
+        if (data.status === "cancelled") {
+          notes = JSON.stringify({
+            ...parsed,
+            cancelReason: data.cancelReason || "Annulé par l'administration",
+          });
+        }
+      } catch {
+        if (data.status === "cancelled") {
+          notes = JSON.stringify({ cancelReason: data.cancelReason || "Annulé par l'administration" });
+        }
+      }
+
+      if (txId) {
+        const [originalTransaction] = await trx.select()
+          .from(transactions)
+          .where(eq(transactions.id, txId))
+          .limit(1)
+          .for("update");
+        if (!originalTransaction || originalTransaction.status !== "pending") {
+          throw new Error("CONVERSION_TRANSACTION_STATE_CONFLICT");
+        }
+        await trx.update(transactions)
+          .set({ status: data.status === "completed" ? "completed" : "failed" })
+          .where(and(eq(transactions.id, txId), eq(transactions.status, "pending")));
+      }
+
+      const updates: Partial<ConversionRequest> = {
+        status: data.status,
+        executedAt: new Date(),
+        executedById: data.executedById,
+        ...(data.status === "completed" ? { toAmount: amount!.toFixed(2) } : { notes }),
+      };
+      await trx.update(conversionRequests)
+        .set(updates)
+        .where(and(eq(conversionRequests.id, id), eq(conversionRequests.status, "pending")));
+      const [updated] = await trx.select()
+        .from(conversionRequests)
+        .where(eq(conversionRequests.id, id))
+        .limit(1);
+      if (!updated || updated.status !== data.status) throw new Error("CONVERSION_SETTLEMENT_READBACK_FAILED");
+      return { request: updated, userId: request.userId };
+    });
+
+    if (settlement) invalidateUserCache(settlement.userId);
+    return settlement?.request;
   }
 
   async countPendingConversions(): Promise<number> {

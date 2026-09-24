@@ -146,16 +146,21 @@ export default function AdminTransactionDetail() {
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ status, reason, forceComplete }: { status: string; reason?: string; forceComplete?: boolean }) => {
-      await apiRequest("PATCH", `/api/admin/transactions/${id}`, {
+      const response = await apiRequest("PATCH", `/api/admin/transactions/${id}`, {
         status,
         reason: reason || "Action admin",
         ...(forceComplete ? { forceComplete: true } : {}),
       });
+      const data = await response.json().catch(() => ({}));
+      return { status: response.status, message: data.message as string | undefined };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: [`/api/admin/transactions/${id}/details`] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/transactions"] });
-      toast({ title: "Statut mis à jour" });
+      toast({
+        title: result.status === 202 ? "Paiement en cours" : "Statut mis à jour",
+        description: result.message || (result.status === 202 ? "Le fournisseur doit encore confirmer le paiement." : undefined),
+      });
       refetch();
       setModalReason("");
       setModalStatus("");
