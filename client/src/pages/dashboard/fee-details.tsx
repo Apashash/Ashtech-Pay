@@ -1,4 +1,5 @@
 import { DashboardLayout } from "@/components/dashboard-layout";
+import { CryptoNetworkLogo } from "@/components/crypto-network-logo";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
@@ -236,7 +237,8 @@ export default function FeeDetailsPage() {
                           >
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="text-sm font-medium text-foreground">{fp.cryptoWithdrawal}</span>
-                              <span className="text-xs text-muted-foreground">
+                              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                <CryptoNetworkLogo networkId={network.id} />
                                 {network.label} · {assetCode}
                               </span>
                               {globalRule && countryRules.length > 0 && (
