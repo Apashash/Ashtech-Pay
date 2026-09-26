@@ -11,7 +11,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { withdrawSchema, type SupportedCurrency, type WithdrawalNumber } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { User } from "@shared/schema";
-import { Smartphone, Wallet, Loader2, CheckCircle, AlertCircle, Plus, Settings, Shield, Info, CreditCard, X, RefreshCw, Clock } from "lucide-react";
+import { Smartphone, SmartphoneNfc, Coins, Loader2, CheckCircle, AlertCircle, Plus, Settings, Shield, Info, CreditCard, X, RefreshCw, Clock } from "lucide-react";
 import { useLanguage } from "@/lib/language";
 import { BottomSheet, BottomSheetContent, BottomSheetHeader, BottomSheetTitle, BottomSheetFooter } from "@/components/ui/bottom-sheet";
 import { getOperatorLogo } from "@/lib/operator-logos";
@@ -53,8 +53,8 @@ interface WalletBalance {
 }
 
 const withdrawMethods = [
-  { id: "mobile_money", name: "Mobile Money", icon: Smartphone, description: "Orange, MTN, Wave, Airtel..." },
-  { id: "crypto", name: "Crypto", icon: Wallet, description: "Retrait en USDT" },
+  { id: "mobile_money", name: "Mobile Money", icon: SmartphoneNfc, description: "Orange, MTN, Wave, Airtel..." },
+  { id: "crypto", name: "Crypto", icon: Coins, description: "Retrait en USDT" },
 ];
 
 const OTP_LOCK_KEY = "atp_otp_lock";
