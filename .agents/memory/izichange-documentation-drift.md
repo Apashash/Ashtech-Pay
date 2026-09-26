@@ -26,3 +26,11 @@ IziChange's payout guide and its generic test/live quickstart describe different
 **Why:** Reusing the general API host for payouts can send requests to the wrong API service even when the credentials and endpoint path look valid.
 
 **How to apply:** Keep separate host resolution for payout create/status calls; reconfirm the endpoint-specific host before changing it.
+
+## Payout scope and structured rejection codes
+
+The direct payout endpoint requires the API-key scope `payouts:write`. A missing scope returns HTTP 403 with code `INSUFFICIENT_SCOPE`; IP allowlist failures can also return 403. IziChange documents `ASSET_DISABLED_PLATFORM` and `ASSET_DISABLED_MERCHANT` as explicit 400 payout rejections.
+
+**Why:** A rejected payout can leave the user's wallet debit reserved while no payout record exists at IziChange. Authentication and allowlist errors are not proof that a payout was created, but the project's payout policy keeps those cases in manual review rather than risking an automatic refund.
+
+**How to apply:** When a payout is pending without an IziChange ID, verify the deployed key's `payouts:write` scope and server IP allowlist, and inspect the provider status/code. Treat the documented asset-disabled codes as definitive; keep scope, auth, rate-limit, insufficient-provider-balance, and ambiguous errors out of automatic refund handling.

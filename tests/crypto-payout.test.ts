@@ -78,6 +78,8 @@ test("payout calculation accepts ordinary two-decimal values and rejects excess 
 test("only explicit invalid payout requests are eligible for immediate refund", () => {
   assert.equal(isDefinitiveIziPayoutRejection({ status: 400, code: "INVALID_ADDRESS" }), true);
   assert.equal(isDefinitiveIziPayoutRejection({ status: 422, code: "MEMO_REQUIRED" }), true);
+  assert.equal(isDefinitiveIziPayoutRejection({ status: 400, code: "ASSET_DISABLED_PLATFORM" }), true);
+  assert.equal(isDefinitiveIziPayoutRejection({ status: 400, code: "ASSET_DISABLED_MERCHANT" }), true);
   assert.equal(isDefinitiveIziPayoutRejection({ status: 503, code: "INVALID_ADDRESS" }), false);
   assert.equal(isDefinitiveIziPayoutRejection({ status: 400, code: "INSUFFICIENT_BALANCE" }), false);
 });

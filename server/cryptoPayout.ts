@@ -151,5 +151,7 @@ export function isDefinitiveIziPayoutRejection(error: unknown): boolean {
     "ASSET_UNSUPPORTED",
     "ASSET_NOT_SUPPORTED",
     "ASSET_DISABLED",
+    "ASSET_DISABLED_PLATFORM",
+    "ASSET_DISABLED_MERCHANT",
   ]).has(code);
 }
