@@ -41,6 +41,7 @@ import {
   Megaphone,
   Zap,
   Camera,
+  Upload,
 } from "lucide-react";
 import { useRef, useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -277,6 +278,7 @@ export default function SettingsPage() {
   const [editingName, setEditingName] = useState(false);
   const profilePhotoInputRef = useRef<HTMLInputElement>(null);
   const [profilePhotoPreview, setProfilePhotoPreview] = useState<string | null>(null);
+  const [showProfilePhotoOptions, setShowProfilePhotoOptions] = useState(false);
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteConfirmUsername, setDeleteConfirmUsername] = useState("");
@@ -383,6 +385,31 @@ export default function SettingsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard"] });
       toast({ title: "Photo de profil mise à jour" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Erreur", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const resetProfilePhotoMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch("/api/user/profile-photo", {
+        method: "DELETE",
+        headers: getAuthHeaders(),
+        credentials: "include",
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || data.message || "Impossible de rétablir la photo par défaut.");
+      }
+      return data;
+    },
+    onSuccess: () => {
+      setProfilePhotoPreview(null);
+      setShowProfilePhotoOptions(false);
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard"] });
+      toast({ title: "Photo par défaut activée" });
     },
     onError: (error: Error) => {
       toast({ title: "Erreur", description: error.message, variant: "destructive" });
@@ -508,14 +535,16 @@ export default function SettingsPage() {
         <SettingsCard>
           {/* Avatar + nom */}
           <div className="flex items-center gap-4 px-4 py-4">
-            <button
-              type="button"
-              className="relative w-14 h-14 rounded-full overflow-hidden shrink-0 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              onClick={() => profilePhotoInputRef.current?.click()}
-              disabled={uploadProfilePhotoMutation.isPending}
-              aria-label="Modifier la photo de profil"
-              data-testid="button-profile-photo"
-            >
+            <div className="relative w-14 h-14 shrink-0">
+              <button
+                type="button"
+                className="relative w-full h-full rounded-full overflow-hidden group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                onClick={() => setShowProfilePhotoOptions(true)}
+                disabled={uploadProfilePhotoMutation.isPending || resetProfilePhotoMutation.isPending}
+                aria-label="Modifier la photo de profil"
+                aria-haspopup="dialog"
+                data-testid="button-profile-photo"
+              >
                 {profilePhotoPreview ? (
                   <img
                     src={profilePhotoPreview}
@@ -533,7 +562,8 @@ export default function SettingsPage() {
                 {uploadProfilePhotoMutation.isPending
                   ? <Loader2 className="w-5 h-5 animate-spin" />
                   : <Camera className="w-5 h-5" />}
-              </span>
+                </span>
+              </button>
               <input
                 ref={profilePhotoInputRef}
                 type="file"
@@ -545,7 +575,7 @@ export default function SettingsPage() {
                   if (file) handleProfilePhotoChange(file);
                 }}
               />
-            </button>
+            </div>
             <div className="flex-1 min-w-0">
               {editingName ? (
                 <div className="flex items-center gap-2">
@@ -818,6 +848,59 @@ export default function SettingsPage() {
 
         <div className="h-8" />
       </div>
+
+      <BottomSheet open={showProfilePhotoOptions} onOpenChange={setShowProfilePhotoOptions}>
+        <BottomSheetContent>
+          <BottomSheetHeader>
+            <BottomSheetTitle className="flex items-center gap-2">
+              <Camera className="w-5 h-5 text-primary" />
+              Photo de profil
+            </BottomSheetTitle>
+            <BottomSheetDescription>
+              Choisissez la photo par défaut ou importez une image depuis votre appareil.
+            </BottomSheetDescription>
+          </BottomSheetHeader>
+          <div className="space-y-3 py-3">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-auto w-full justify-start gap-3 py-3 text-left"
+              onClick={() => resetProfilePhotoMutation.mutate()}
+              disabled={!user?.profileImagePath || resetProfilePhotoMutation.isPending || uploadProfilePhotoMutation.isPending}
+              data-testid="button-profile-photo-default"
+            >
+              {resetProfilePhotoMutation.isPending ? (
+                <Loader2 className="w-5 h-5 shrink-0 animate-spin" />
+              ) : (
+                <ProfileImage profileImagePath={null} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover" />
+              )}
+              <span className="flex-1">
+                <span className="block text-sm font-medium">Photo par défaut</span>
+                <span className="block text-xs text-muted-foreground">
+                  {user?.profileImagePath ? "Rétablir l’image standard" : "Déjà sélectionnée"}
+                </span>
+              </span>
+              {!user?.profileImagePath && <Check className="w-4 h-4 shrink-0 text-green-600" />}
+            </Button>
+            <Button
+              type="button"
+              className="h-auto w-full justify-start gap-3 py-3 text-left"
+              onClick={() => {
+                setShowProfilePhotoOptions(false);
+                profilePhotoInputRef.current?.click();
+              }}
+              disabled={uploadProfilePhotoMutation.isPending || resetProfilePhotoMutation.isPending}
+              data-testid="button-profile-photo-upload"
+            >
+              <Upload className="w-5 h-5 shrink-0" />
+              <span className="flex flex-col items-start">
+                <span className="text-sm font-medium">Importer une photo</span>
+                <span className="text-xs opacity-80">JPG, PNG, GIF ou WebP · 5 Mo maximum</span>
+              </span>
+            </Button>
+          </div>
+        </BottomSheetContent>
+      </BottomSheet>
 
       <BottomSheet open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <BottomSheetContent>

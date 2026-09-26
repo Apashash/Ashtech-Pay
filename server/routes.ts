@@ -3256,6 +3256,17 @@ export async function registerRoutes(
     }
   });
 
+  app.delete("/api/user/profile-photo", requireAuth, async (req, res) => {
+    try {
+      const user = await storage.updateUser(req.userId!, { profileImagePath: null } as any);
+      if (!user) return res.status(404).json({ error: "Utilisateur non trouvé" });
+      res.json({ success: true, profileImagePath: null });
+    } catch (error) {
+      console.error("[ProfilePhoto] Reset error:", error);
+      res.status(500).json({ error: "Impossible de rétablir la photo par défaut." });
+    }
+  });
+
   // ─── Geo Check Endpoint ──────────────────────────────────────────────────────
   // GET /api/img — public image redirect to Supabase CDN (no auth required).
   // Since the Supabase "uploads" bucket is PUBLIC, we redirect directly to the CDN URL.
