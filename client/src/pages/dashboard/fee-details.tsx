@@ -57,8 +57,10 @@ function fmtCryptoWithdrawalFee(rule: CryptoWithdrawalFeeRule): string {
   return parts.length ? parts.join(" + ") : "Gratuit";
 }
 
+const CRYPTO_SECTION_ID = "__crypto-fees__";
+
 export default function FeeDetailsPage() {
-  const [openCountry, setOpenCountry] = useState<string | null>(null);
+  const [openSection, setOpenSection] = useState<string | null>(null);
   const { t } = useLanguage();
   const fp = t.feePage;
 
@@ -154,6 +156,7 @@ export default function FeeDetailsPage() {
   const hasCryptoFeeInfo = cryptoFeeSettings !== undefined && (
     typeof cryptoFeeSettings.cryptoFeePercent === "number" || usdtNetworks.length > 0
   );
+  const isCryptoOpen = openSection === CRYPTO_SECTION_ID;
   const countriesWithFees = countries.filter(c =>
     TX_TYPES.some(t => resolvedFee(t.key, c.id) !== null)
   );
@@ -177,94 +180,113 @@ export default function FeeDetailsPage() {
           </h1>
         </div>
 
-        {hasCryptoFeeInfo && cryptoFeeSettings && (
-          <section className="space-y-3" data-testid="section-crypto-fees">
-            <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-widest text-muted-foreground px-1">
-              <Coins className="w-4 h-4 text-violet-500" />
-              {fp.cryptoSection}
-            </h2>
-            <Card className="border border-border overflow-hidden">
-              {typeof cryptoFeeSettings.cryptoFeePercent === "number" && (
-                <div
-                  className="flex flex-wrap items-center justify-between gap-2 px-5 py-3 bg-violet-500/10"
-                  data-testid="row-crypto-deposit-fee"
+        {(countriesWithFees.length > 0 || hasCryptoFeeInfo) && (
+          <div className="space-y-3">
+            {countriesWithFees.length > 0 && (
+              <h2 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground px-1">
+                {fp.byCountry}
+              </h2>
+            )}
+            <div className="space-y-2">
+              {hasCryptoFeeInfo && cryptoFeeSettings && (
+                <Card
+                  className="border border-border overflow-hidden"
+                  data-testid="card-crypto-fees"
                 >
-                  <span className="text-sm font-medium text-foreground">{fp.cryptoDeposit}</span>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary" className="text-xs">
-                      {fp.cryptoGlobalBadge}
-                    </Badge>
-                    <Badge variant="outline" className="text-xs font-semibold border-green-500/30 text-green-700 dark:text-green-400">
-                      {cryptoFeeSettings.cryptoFeePercent.toFixed(2)}%
-                    </Badge>
-                  </div>
-                </div>
-              )}
-
-              {configuredCryptoWithdrawalNetworks.map(({ network, assetCode, globalRule, countryRules }) => (
-                <div key={assetCode} className="border-t border-border/60 first:border-t-0">
-                  <div
-                    className="flex flex-wrap items-center justify-between gap-2 px-5 py-3 bg-background/40"
-                    data-testid={`row-crypto-withdrawal-fee-${assetCode}`}
+                  <button
+                    type="button"
+                    className="w-full text-left"
+                    aria-expanded={isCryptoOpen}
+                    aria-controls="crypto-fee-details"
+                    onClick={() => setOpenSection(isCryptoOpen ? null : CRYPTO_SECTION_ID)}
+                    data-testid="btn-crypto-fees"
                   >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-medium text-foreground">{fp.cryptoWithdrawal}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {network.label} · {assetCode}
-                      </span>
-                      {globalRule && (
-                        <Badge variant="secondary" className="text-xs py-0 h-5">
-                          {countryRules.length > 0 ? fp.defaultBadge : fp.cryptoGlobalBadge}
-                        </Badge>
+                    <div className="flex items-center justify-between px-5 py-4 hover:bg-muted/30 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <Coins className="w-7 h-7 text-violet-500" />
+                        <p className="font-semibold text-foreground">{fp.cryptoSection}</p>
+                      </div>
+                      {isCryptoOpen ? (
+                        <ChevronDown className="w-4 h-4 text-muted-foreground ml-1" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4 text-muted-foreground ml-1" />
                       )}
                     </div>
-                    {globalRule && (
-                      <Badge variant="outline" className="text-xs font-semibold border-orange-500/30 text-orange-700 dark:text-orange-400">
-                        {fmtCryptoWithdrawalFee(globalRule)}
-                      </Badge>
-                    )}
-                  </div>
-                  {countryRules.map(({ countryId, countryName, countryFlag, rule }) => (
-                    <div
-                      key={countryId}
-                      className="flex flex-wrap items-center justify-between gap-2 px-6 py-2.5 border-t border-border/60"
-                      data-testid={`row-crypto-withdrawal-fee-${countryId}-${assetCode}`}
-                    >
-                      <span className="flex items-center gap-2 text-sm text-foreground">
-                        <span>{countryFlag}</span>
-                        {countryName}
-                      </span>
-                      <Badge variant="outline" className="text-xs font-semibold border-orange-500/30 text-orange-700 dark:text-orange-400">
-                        {fmtCryptoWithdrawalFee(rule)}
-                      </Badge>
+                  </button>
+
+                  {isCryptoOpen && (
+                    <div id="crypto-fee-details" className="border-t border-border">
+                      {typeof cryptoFeeSettings.cryptoFeePercent === "number" && (
+                        <div
+                          className="flex flex-wrap items-center justify-between gap-2 px-5 py-3 bg-violet-500/10"
+                          data-testid="row-crypto-deposit-fee"
+                        >
+                          <span className="text-sm font-medium text-foreground">{fp.cryptoDeposit}</span>
+                          <Badge variant="outline" className="text-xs font-semibold border-green-500/30 text-green-700 dark:text-green-400">
+                            {cryptoFeeSettings.cryptoFeePercent.toFixed(2)}%
+                          </Badge>
+                        </div>
+                      )}
+
+                      {configuredCryptoWithdrawalNetworks.map(({ network, assetCode, globalRule, countryRules }) => (
+                        <div key={assetCode} className="border-t border-border/60 first:border-t-0">
+                          <div
+                            className="flex flex-wrap items-center justify-between gap-2 px-5 py-3 bg-background/40"
+                            data-testid={`row-crypto-withdrawal-fee-${assetCode}`}
+                          >
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-sm font-medium text-foreground">{fp.cryptoWithdrawal}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {network.label} · {assetCode}
+                              </span>
+                              {globalRule && countryRules.length > 0 && (
+                                <Badge variant="secondary" className="text-xs py-0 h-5">
+                                  {fp.defaultBadge}
+                                </Badge>
+                              )}
+                            </div>
+                            {globalRule && (
+                              <Badge variant="outline" className="text-xs font-semibold border-orange-500/30 text-orange-700 dark:text-orange-400">
+                                {fmtCryptoWithdrawalFee(globalRule)}
+                              </Badge>
+                            )}
+                          </div>
+                          {countryRules.map(({ countryId, countryName, countryFlag, rule }) => (
+                            <div
+                              key={countryId}
+                              className="flex flex-wrap items-center justify-between gap-2 px-6 py-2.5 border-t border-border/60"
+                              data-testid={`row-crypto-withdrawal-fee-${countryId}-${assetCode}`}
+                            >
+                              <span className="flex items-center gap-2 text-sm text-foreground">
+                                <span>{countryFlag}</span>
+                                {countryName}
+                              </span>
+                              <Badge variant="outline" className="text-xs font-semibold border-orange-500/30 text-orange-700 dark:text-orange-400">
+                                {fmtCryptoWithdrawalFee(rule)}
+                              </Badge>
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+
+                      {usdtNetworks.length > 0 && configuredCryptoWithdrawalNetworks.length === 0 && (
+                        <div
+                          className="flex items-center justify-between gap-2 px-5 py-3 border-t border-border/60"
+                          data-testid="row-crypto-withdrawal-fee-unconfigured"
+                        >
+                          <span className="text-sm text-foreground">{fp.cryptoWithdrawal}</span>
+                          <Badge variant="secondary" className="text-xs">
+                            {fp.cryptoWithdrawalUnconfigured}
+                          </Badge>
+                        </div>
+                      )}
                     </div>
-                  ))}
-                </div>
-              ))}
-
-              {usdtNetworks.length > 0 && configuredCryptoWithdrawalNetworks.length === 0 && (
-                <div
-                  className="flex items-center justify-between gap-2 px-5 py-3 border-t border-border/60"
-                  data-testid="row-crypto-withdrawal-fee-unconfigured"
-                >
-                  <span className="text-sm text-foreground">{fp.cryptoWithdrawal}</span>
-                  <Badge variant="secondary" className="text-xs">
-                    {fp.cryptoWithdrawalUnconfigured}
-                  </Badge>
-                </div>
+                  )}
+                </Card>
               )}
-            </Card>
-          </section>
-        )}
 
-        {countriesWithFees.length > 0 && (
-          <div className="space-y-3">
-            <h2 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground px-1">
-              {fp.byCountry}
-            </h2>
-            <div className="space-y-2">
               {countriesWithFees.map(country => {
-                const isOpen = openCountry === country.id;
+                const isOpen = openSection === country.id;
                 const countryOperators = operators.filter(op => op.countryId === country.id);
 
                 return (
@@ -275,7 +297,7 @@ export default function FeeDetailsPage() {
                   >
                     <button
                       className="w-full text-left"
-                      onClick={() => setOpenCountry(isOpen ? null : country.id)}
+                       onClick={() => setOpenSection(isOpen ? null : country.id)}
                       data-testid={`btn-country-${country.id}`}
                     >
                       <div className="flex items-center justify-between px-5 py-4 hover:bg-muted/30 transition-colors">

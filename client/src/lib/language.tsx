@@ -384,7 +384,6 @@ const translations = {
       cryptoSection: "Crypto",
       cryptoDeposit: "Dépôt crypto (USDT)",
       cryptoWithdrawal: "Retrait USDT",
-      cryptoGlobalBadge: "identique dans tous les pays",
       cryptoWithdrawalUnconfigured: "tarifs de retrait non configurés",
     },
     deposit: {
@@ -1820,7 +1819,6 @@ const translations = {
       cryptoSection: "Crypto",
       cryptoDeposit: "Crypto deposit (USDT)",
       cryptoWithdrawal: "USDT withdrawal",
-      cryptoGlobalBadge: "same in every country",
       cryptoWithdrawalUnconfigured: "withdrawal fees not configured",
     },
     deposit: {
