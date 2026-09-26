@@ -8969,6 +8969,9 @@ export async function registerRoutes(
       const cryptoProviderFeePercent = cryptoPreview.providerFeePercent;
       const cryptoFeePercent = cryptoPreview.totalFeePercent;
       const cryptoMinDeposit = parseFloat(settings.find(s => s.key === "izichange_min_deposit_usd")?.value || "5");
+      const cryptoWithdrawalFeeConfig = parseCryptoPayoutFeeConfig(
+        settings.find(s => s.key === "crypto_withdrawal_fees")?.value,
+      );
       res.json({
         conversionFeePercent,
         // Intra-famille
@@ -8998,6 +9001,7 @@ export async function registerRoutes(
         cryptoProviderFeePercent,
         cryptoFeePercent,           // total déduit = AshtechPay + fournisseur
         cryptoMinDeposit,
+        cryptoWithdrawalFeeConfig,
       });
     } catch (error) {
       console.error("Get fee settings error:", error);

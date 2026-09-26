@@ -381,6 +381,11 @@ const translations = {
       typeDeposit: "Dépôt",
       typeWithdrawal: "Retrait",
       typeTransfer: "Transfert",
+      cryptoSection: "Crypto",
+      cryptoDeposit: "Dépôt crypto (USDT)",
+      cryptoWithdrawal: "Retrait USDT",
+      cryptoGlobalBadge: "identique dans tous les pays",
+      cryptoWithdrawalUnconfigured: "tarifs de retrait non configurés",
     },
     deposit: {
       title: "Recharger mon compte",
@@ -1812,6 +1817,11 @@ const translations = {
       typeDeposit: "Deposit",
       typeWithdrawal: "Withdrawal",
       typeTransfer: "Transfer",
+      cryptoSection: "Crypto",
+      cryptoDeposit: "Crypto deposit (USDT)",
+      cryptoWithdrawal: "USDT withdrawal",
+      cryptoGlobalBadge: "same in every country",
+      cryptoWithdrawalUnconfigured: "withdrawal fees not configured",
     },
     deposit: {
       title: "Top up my account",

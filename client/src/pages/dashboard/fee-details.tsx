@@ -12,9 +12,11 @@ import {
   ChevronRight,
   Smartphone,
   Building2,
+  Coins,
 } from "lucide-react";
 import { useState } from "react";
 import { useLanguage } from "@/lib/language";
+import { useIziAssets } from "@/lib/use-crypto-assets";
 
 interface PublicOperator {
   id: string;
@@ -22,6 +24,19 @@ interface PublicOperator {
   type: string;
   countryId: string;
   logoUrl: string | null;
+}
+
+interface CryptoWithdrawalFeeRule {
+  fixedUsdt: number;
+  percentage: number;
+}
+
+interface PublicCryptoFeeSettings {
+  cryptoFeePercent?: number;
+  cryptoWithdrawalFeeConfig?: {
+    global: Record<string, CryptoWithdrawalFeeRule>;
+    countries: Record<string, Record<string, CryptoWithdrawalFeeRule>>;
+  };
 }
 
 function fmtFee(fee: Fee | null | undefined, currency?: string): string {
@@ -33,6 +48,13 @@ function fmtFee(fee: Fee | null | undefined, currency?: string): string {
 function fmtMin(fee: Fee | null | undefined, currency?: string): string | null {
   if (!fee || !fee.minFee || parseFloat(fee.minFee) === 0) return null;
   return `min ${parseFloat(fee.minFee).toLocaleString()} ${currency || ""}`.trim();
+}
+
+function fmtCryptoWithdrawalFee(rule: CryptoWithdrawalFeeRule): string {
+  const parts: string[] = [];
+  if (rule.percentage > 0) parts.push(`${rule.percentage.toFixed(2)}%`);
+  if (rule.fixedUsdt > 0) parts.push(`${rule.fixedUsdt.toFixed(2)} USDT`);
+  return parts.length ? parts.join(" + ") : "Gratuit";
 }
 
 export default function FeeDetailsPage() {
@@ -82,6 +104,12 @@ export default function FeeDetailsPage() {
     queryKey: ["/api/public/operators"],
   });
 
+  const { data: cryptoFeeSettings } = useQuery<PublicCryptoFeeSettings>({
+    queryKey: ["/api/public/fee-settings"],
+  });
+  const { coins: cryptoCoins } = useIziAssets();
+  const usdtNetworks = cryptoCoins.USDT?.networks ?? [];
+
   const activeFees = fees.filter(f => f.isActive);
 
   function getGlobalFee(type: string): Fee | null {
@@ -100,8 +128,11 @@ export default function FeeDetailsPage() {
     return getCountryFee(type, countryId) ?? getGlobalFee(type);
   }
 
+  const hasCryptoFeeInfo = cryptoFeeSettings !== undefined && (
+    typeof cryptoFeeSettings.cryptoFeePercent === "number" || usdtNetworks.length > 0
+  );
   const countriesWithFees = countries.filter(c =>
-    TX_TYPES.some(t => resolvedFee(t.key, c.id) !== null)
+    TX_TYPES.some(t => resolvedFee(t.key, c.id) !== null) || hasCryptoFeeInfo
   );
 
   if (isLoading) {
@@ -132,6 +163,12 @@ export default function FeeDetailsPage() {
               {countriesWithFees.map(country => {
                 const isOpen = openCountry === country.id;
                 const countryOperators = operators.filter(op => op.countryId === country.id);
+                const cryptoWithdrawalConfig = cryptoFeeSettings?.cryptoWithdrawalFeeConfig;
+                const countryCryptoWithdrawalRules = cryptoWithdrawalConfig?.countries[country.id] ?? {};
+                const configuredUsdtNetworks = usdtNetworks.filter(network => {
+                  const assetCode = network.assetCode.toUpperCase();
+                  return !!countryCryptoWithdrawalRules[assetCode] || !!cryptoWithdrawalConfig?.global[assetCode];
+                });
 
                 return (
                   <Card
@@ -265,6 +302,78 @@ export default function FeeDetailsPage() {
                             </div>
                           );
                         })}
+                        {cryptoFeeSettings && (
+                          (typeof cryptoFeeSettings.cryptoFeePercent === "number" || usdtNetworks.length > 0) && (
+                            <div className="border-b border-border last:border-0">
+                              <div className="flex items-center px-5 py-3 bg-violet-500/10">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-6 h-6 rounded-md flex items-center justify-center bg-white/60 dark:bg-black/20">
+                                    <Coins className="w-3.5 h-3.5 text-violet-500" />
+                                  </div>
+                                  <span className="text-sm font-semibold">{fp.cryptoSection}</span>
+                                </div>
+                              </div>
+
+                              {typeof cryptoFeeSettings.cryptoFeePercent === "number" && (
+                                <div
+                                  className="flex flex-wrap items-center justify-between gap-2 px-6 py-2.5 bg-background/60"
+                                  data-testid={`row-crypto-deposit-fee-${country.id}`}
+                                >
+                                  <span className="text-sm text-foreground">{fp.cryptoDeposit}</span>
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant="secondary" className="text-xs">
+                                      {fp.cryptoGlobalBadge}
+                                    </Badge>
+                                    <Badge variant="outline" className="text-xs font-semibold border-green-500/30 text-green-700 dark:text-green-400">
+                                      {cryptoFeeSettings.cryptoFeePercent.toFixed(2)}%
+                                    </Badge>
+                                  </div>
+                                </div>
+                              )}
+
+                              {configuredUsdtNetworks.map(network => {
+                                const assetCode = network.assetCode.toUpperCase();
+                                const countryRule = countryCryptoWithdrawalRules[assetCode];
+                                const globalRule = cryptoWithdrawalConfig?.global[assetCode];
+                                const rule = countryRule ?? globalRule;
+                                if (!rule) return null;
+                                const isGlobalFallback = !countryRule && !!globalRule;
+
+                                return (
+                                  <div
+                                    key={network.assetCode}
+                                    className="flex flex-wrap items-center justify-between gap-2 px-6 py-2.5 bg-background/40 border-t border-border/60"
+                                    data-testid={`row-crypto-withdrawal-fee-${country.id}-${network.assetCode}`}
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-sm text-foreground">{fp.cryptoWithdrawal}</span>
+                                      <span className="text-xs text-muted-foreground">{network.label}</span>
+                                      {isGlobalFallback && (
+                                        <Badge variant="secondary" className="text-xs py-0 h-5">
+                                          {fp.defaultBadge}
+                                        </Badge>
+                                      )}
+                                    </div>
+                                    <Badge variant="outline" className="text-xs font-semibold border-orange-500/30 text-orange-700 dark:text-orange-400">
+                                      {fmtCryptoWithdrawalFee(rule)}
+                                    </Badge>
+                                  </div>
+                                );
+                              })}
+                              {usdtNetworks.length > 0 && configuredUsdtNetworks.length === 0 && (
+                                <div
+                                  className="flex items-center justify-between gap-2 px-6 py-2.5 bg-background/40 border-t border-border/60"
+                                  data-testid={`row-crypto-withdrawal-fee-unconfigured-${country.id}`}
+                                >
+                                  <span className="text-sm text-foreground">{fp.cryptoWithdrawal}</span>
+                                  <Badge variant="secondary" className="text-xs">
+                                    {fp.cryptoWithdrawalUnconfigured}
+                                  </Badge>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        )}
                       </div>
                     )}
                   </Card>

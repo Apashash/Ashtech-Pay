@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ArrowLeft, ArrowRight, Loader2, Save, ShieldCheck, Trash2, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -158,6 +158,25 @@ export function CryptoPayoutPanel({ flow, onBack, embedded = false, amount: cont
     () => config?.networks.find(item => item.assetCode.toUpperCase() === assetCode.toUpperCase()),
     [config?.networks, assetCode],
   );
+
+  useEffect(() => {
+    if (
+      flow !== "withdrawal" ||
+      !network ||
+      selectedSavedAddressId ||
+      destinationAddress.trim()
+    ) return;
+
+    const saved = savedAddresses.find(
+      item => item.assetCode.toUpperCase() === assetCode.toUpperCase(),
+    );
+    if (!saved) return;
+
+    setDestinationAddress(saved.address);
+    setDestinationMemo(saved.memo || "");
+    setSelectedSavedAddressId(saved.id);
+  }, [assetCode, destinationAddress, flow, network, savedAddresses, selectedSavedAddressId]);
+
   const feeRule = config?.fees?.[assetCode] || { fixedUsdt: 0, percentage: 0 };
   const amountValue = Number(amount);
   const enteredCents = Number.isFinite(amountValue) ? Math.round(amountValue * 100) : 0;
@@ -371,12 +390,21 @@ export function CryptoPayoutPanel({ flow, onBack, embedded = false, amount: cont
       <div className="space-y-2">
         <Label htmlFor="crypto-payout-network">Réseau</Label>
         <Select value={assetCode} onValueChange={value => {
-          if (selectedSavedAddressId) {
-            setDestinationAddress("");
-            setDestinationMemo("");
-          }
+          const savedForNetwork = flow === "withdrawal"
+            ? savedAddresses.find(item => item.assetCode.toUpperCase() === value.toUpperCase())
+            : undefined;
           setAssetCode(value);
-          setSelectedSavedAddressId("");
+          if (savedForNetwork) {
+            setDestinationAddress(savedForNetwork.address);
+            setDestinationMemo(savedForNetwork.memo || "");
+            setSelectedSavedAddressId(savedForNetwork.id);
+          } else {
+            if (selectedSavedAddressId) {
+              setDestinationAddress("");
+              setDestinationMemo("");
+            }
+            setSelectedSavedAddressId("");
+          }
         }} disabled={configLoading || !config?.networks?.length}>
           <SelectTrigger id="crypto-payout-network" className="gap-2">
             <SelectValue placeholder={configLoading ? "Chargement..." : "Choisir un réseau"} />
