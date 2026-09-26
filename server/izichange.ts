@@ -19,7 +19,7 @@ function getIziPayBaseUrl(): string {
 export function getIziPayPayoutBaseUrlForMode(mode: "test" | "live"): string {
   return mode === "test"
     ? "https://api.sandbox-pay.izichange.com"
-    : "https://api.izichangepay.com";
+    : "https://api.pay.izichange.com";
 }
 function getIziPayPayoutBaseUrl(): string {
   return getIziPayPayoutBaseUrlForMode(getIziPayApiKey().startsWith("sk_test_") ? "test" : "live");

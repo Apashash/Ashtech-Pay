@@ -120,5 +120,5 @@ test("IziChange payout response normalizes the documented data.object envelope",
 
 test("IziChange payout API selects the documented test and live hosts", () => {
   assert.equal(getIziPayPayoutBaseUrlForMode("test"), "https://api.sandbox-pay.izichange.com");
-  assert.equal(getIziPayPayoutBaseUrlForMode("live"), "https://api.izichangepay.com");
+  assert.equal(getIziPayPayoutBaseUrlForMode("live"), "https://api.pay.izichange.com");
 });
