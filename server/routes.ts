@@ -9297,7 +9297,10 @@ export async function registerRoutes(
         ashtechFeeFixedUsdt: feeRule.fixedUsdt,
         providerFeeBearer: "merchant",
         iziPayoutRequest: payoutRequest,
-        iziRetrySafe: true,
+        // If the process stops after debiting but before saving IziChange's
+        // response, the payout outcome is ambiguous. Startup recovery must not
+        // submit the same payout again without a provider ID.
+        iziRetrySafe: false,
       };
       const transaction = await storage.createCryptoPayoutAndDebit({
         userId,
@@ -9390,33 +9393,21 @@ export async function registerRoutes(
           });
         }
 
-        const statusCode = Number(providerError?.status);
-        const retrySafe = !Number.isFinite(statusCode) || statusCode >= 500;
+        const initiationError = String(
+          providerError?.code ||
+          providerError?.cause?.code ||
+          providerError?.message ||
+          "unknown",
+        ).slice(0, 120);
         await storage.updateTransaction(transaction.id, {
-          status: retrySafe ? "pending" : "pending_manual",
-          metadata: { ...metadata, iziRetrySafe: retrySafe, iziInitiationError: String(providerError?.code || providerError?.message || "unknown").slice(0, 120) },
+          status: "pending_manual",
+          metadata: { ...metadata, iziRetrySafe: false, iziInitiationError: initiationError },
         } as any);
-        if (retrySafe) {
-          addPendingPayout({
-            transactionId: transaction.id,
-            reference,
-            userId,
-            amount: calculation.payoutAmount,
-            totalDebited: calculation.totalDebit,
-            provider: "izichange",
-            countryCode,
-            txType,
-            txCurrency: "USDT",
-            walletCurrency: "USDT",
-          });
-        }
-        console.error(`[crypto/payout] IziChange initiation unresolved ref=${reference} retrySafe=${retrySafe}:`, providerError?.message);
+        console.error(`[crypto/payout] IziChange initiation unresolved ref=${reference}; manual review required:`, initiationError);
         return res.status(202).json({
           reference,
-          status: retrySafe ? "pending" : "pending_manual",
-          message: retrySafe
-            ? "Votre envoi est en cours de vérification. Ne le soumettez pas une seconde fois."
-            : "Votre demande nécessite une vérification. Le solde reste réservé jusqu'à sa résolution.",
+          status: "pending_manual",
+          message: "Votre demande doit être vérifiée avant tout nouvel envoi. Le solde reste réservé jusqu'à sa résolution.",
           amount: calculation.payoutAmount,
           fee: calculation.ashtechFee,
           totalDebited: calculation.totalDebit,

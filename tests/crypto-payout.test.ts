@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   calculateCryptoPayout,
+  getIziPayoutIdForPolling,
   isDefinitiveIziPayoutRejection,
   parseCryptoPayoutFeeConfig,
   parseCryptoWithdrawalLimits,
@@ -82,6 +83,17 @@ test("only explicit invalid payout requests are eligible for immediate refund", 
   assert.equal(isDefinitiveIziPayoutRejection({ status: 400, code: "ASSET_DISABLED_MERCHANT" }), true);
   assert.equal(isDefinitiveIziPayoutRejection({ status: 503, code: "INVALID_ADDRESS" }), false);
   assert.equal(isDefinitiveIziPayoutRejection({ status: 400, code: "INSUFFICIENT_BALANCE" }), false);
+  assert.equal(isDefinitiveIziPayoutRejection(new TypeError("fetch failed")), false);
+  assert.equal(isDefinitiveIziPayoutRejection({ status: 503, code: "UPSTREAM_ERROR" }), false);
+});
+
+test("IziChange payout polling requires a provider ID, never just an old retry flag", () => {
+  assert.equal(getIziPayoutIdForPolling(undefined, {
+    iziRetrySafe: true,
+    iziPayoutRequest: { assetCode: "USDT.TRC20", amount: "2.00" },
+  }), undefined);
+  assert.equal(getIziPayoutIdForPolling(" payout-external-1 ", {}), "payout-external-1");
+  assert.equal(getIziPayoutIdForPolling(undefined, { iziPayoutId: " payout-external-2 " }), "payout-external-2");
 });
 
 test("IziChange payout response normalizes the documented data.object envelope", () => {

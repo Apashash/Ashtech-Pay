@@ -155,3 +155,15 @@ export function isDefinitiveIziPayoutRejection(error: unknown): boolean {
     "ASSET_DISABLED_MERCHANT",
   ]).has(code);
 }
+
+/** Status polling is safe only when IziChange has supplied a payout ID.
+ * A retry flag alone cannot prove that a previous POST was not accepted.
+ */
+export function getIziPayoutIdForPolling(externalReference: unknown, metadata: unknown): string | undefined {
+  const externalId = typeof externalReference === "string" ? externalReference.trim() : "";
+  if (externalId) return externalId;
+
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return undefined;
+  const metadataId = (metadata as Record<string, unknown>).iziPayoutId;
+  return typeof metadataId === "string" && metadataId.trim() ? metadataId.trim() : undefined;
+}
