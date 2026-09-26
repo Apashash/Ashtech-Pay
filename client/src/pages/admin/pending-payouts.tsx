@@ -35,12 +35,16 @@ interface PendingPayout {
   userFullName: string;
   userEmail: string;
   operatorName: string | null;
-  originalProvider: string;
+  originalProvider: string | null;
+  externalReference?: string | null;
+  metadata?: Record<string, any> | null;
 }
 
 const PROVIDER_LABELS: Record<string, { label: string; color: string }> = {
   afribapay: { label: "AfribaPay", color: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400" },
   pixpay:    { label: "PixPay",    color: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400" },
+  pawapay:   { label: "PawaPay",   color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
+  izichange: { label: "IziChange", color: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400" },
 };
 
 type Action = { txId: string; type: "execute" | "confirm" | "refund"; provider?: "afribapay" | "pixpay" };
@@ -190,8 +194,9 @@ export default function AdminPendingPayoutsPage() {
               {payouts.map((payout) => {
                 const isExpanded = expandedId === payout.id;
                 const isBusy = loadingId === payout.id;
-                const providerInfo = PROVIDER_LABELS[payout.originalProvider] || {
-                  label: "Fournisseur invalide",
+                const isIziChange = payout.metadata?.paymentProvider === "izichange" || payout.originalProvider === "izichange";
+                const providerInfo = PROVIDER_LABELS[payout.originalProvider || ""] || {
+                  label: "Fournisseur non identifié",
                   color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
                 };
 
@@ -289,25 +294,39 @@ export default function AdminPendingPayoutsPage() {
                           </div>
                         </div>
 
-                        <div className="mb-3">
-                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Exécuter via :</p>
-                          <div className="grid grid-cols-2 gap-2">
-                            {(["afribapay", "pixpay"] as const).map((p) => (
-                              <Button
-                                key={p}
-                                size="sm"
-                                variant="outline"
-                                disabled={isBusy}
-                                onClick={() => setConfirmAction({ txId: payout.id, type: "execute", provider: p })}
-                                className={`gap-1.5 text-xs ${PROVIDER_LABELS[p].color} border-current/20`}
-                                data-testid={`btn-execute-${p}-${payout.id}`}
-                              >
-                                {isBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Banknote className="w-3 h-3" />}
-                                {PROVIDER_LABELS[p].label}
-                              </Button>
-                            ))}
+                        {isIziChange ? (
+                          <div className="mb-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/20 dark:text-amber-300">
+                            <p className="font-semibold">Vérification IziChange requise — ne pas renvoyer ce paiement.</p>
+                            {payout.metadata?.iziInitiationError && (
+                              <p className="mt-1">Erreur enregistrée : {String(payout.metadata.iziInitiationError)}</p>
+                            )}
+                            {(payout.externalReference || payout.metadata?.iziPayoutId) && (
+                              <p className="mt-1 font-mono break-all">
+                                ID IziChange : {String(payout.externalReference || payout.metadata?.iziPayoutId)}
+                              </p>
+                            )}
                           </div>
-                        </div>
+                        ) : (
+                          <div className="mb-3">
+                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Exécuter via :</p>
+                            <div className="grid grid-cols-2 gap-2">
+                              {(["afribapay", "pixpay"] as const).map((p) => (
+                                <Button
+                                  key={p}
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={isBusy}
+                                  onClick={() => setConfirmAction({ txId: payout.id, type: "execute", provider: p })}
+                                  className={`gap-1.5 text-xs ${PROVIDER_LABELS[p].color} border-current/20`}
+                                  data-testid={`btn-execute-${p}-${payout.id}`}
+                                >
+                                  {isBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Banknote className="w-3 h-3" />}
+                                  {PROVIDER_LABELS[p].label}
+                                </Button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
 
                         <div className="grid grid-cols-2 gap-2 pt-2 border-t border-amber-200/60 dark:border-amber-800/30">
                           <Button

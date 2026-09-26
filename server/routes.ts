@@ -15051,12 +15051,16 @@ export async function registerRoutes(
       const enriched = await Promise.all(txs.map(async (t) => {
         const user = await storage.getUser(t.userId).catch(() => null);
         const operator = t.operatorId ? await storage.getOperator(t.operatorId).catch(() => null) : null;
+        const metadata = ((t as any).metadata || {}) as Record<string, any>;
         return {
           ...t,
           userFullName: (user as any)?.fullName || (user as any)?.username || "Inconnu",
           userEmail: (user as any)?.email || "",
           operatorName: (operator as any)?.name || null,
-          originalProvider: (operator as any)?.paymentProvider || (operator as any)?.depositPaymentProvider || null,
+          originalProvider: metadata.paymentProvider ||
+            (operator as any)?.paymentProvider ||
+            (operator as any)?.depositPaymentProvider ||
+            null,
         };
       }));
       res.json(enriched);
