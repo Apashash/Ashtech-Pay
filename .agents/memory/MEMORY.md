@@ -78,3 +78,4 @@
 - [Local MySQL workflow](local-mysql-workflow.md) — auxiliary MariaDB startup must use a dedicated port variable and preserve Replit's HTTP `PORT`.
 - [MySQL timestamp timezone](mysql-timestamp-timezone.md) — force MySQL sessions to UTC and display user-facing dates in the user's real device timezone.
 - [MySQL crypto-address FK compatibility](mysql-crypto-address-fk.md) — keep saved-address user IDs indexed without a physical FK; legacy Plesk user schemas can reject the constraint.
+- [Isolated preview capture](isolated-preview-capture.md) — app screenshots target the main app, not the mockup artifact route; use the canvas iframe for isolated previews.
