@@ -323,7 +323,7 @@ export function CryptoPayoutPanel({ flow, onBack, embedded = false, showBalance 
         if (event.key === "Enter" && event.target instanceof HTMLInputElement) event.preventDefault();
       }}
     >
-      {!embedded && showBalance && (
+      {flow === "withdrawal" && !embedded && showBalance && (
         <div className="flex items-start gap-3">
           {onBack && (
             <Button type="button" variant="ghost" size="icon" onClick={onBack} aria-label="Retour">
