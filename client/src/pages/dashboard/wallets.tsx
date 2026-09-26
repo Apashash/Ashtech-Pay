@@ -160,10 +160,10 @@ export default function WalletsPage() {
                     {flag}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-foreground text-sm">{wallet.currency}</span>
+                    <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="shrink-0 font-bold text-foreground text-sm">{wallet.currency}</span>
                       {isMain && (
-                        <span className="text-[10px] font-semibold bg-primary/15 text-primary px-2 py-0.5 rounded-full">
+                        <span className="shrink-0 whitespace-nowrap text-[10px] font-semibold bg-primary/15 text-primary px-2 py-0.5 rounded-full">
                           {t.wallets.principal}
                         </span>
                       )}
@@ -172,7 +172,7 @@ export default function WalletsPage() {
                   </div>
                   {/* Balance */}
                   <div className="text-right shrink-0">
-                    <p className="font-bold text-foreground tabular-nums text-sm">
+                    <p className="font-bold text-foreground tabular-nums text-sm whitespace-nowrap">
                       {balance.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </p>
                     <p className="text-xs text-muted-foreground">{sym}</p>
