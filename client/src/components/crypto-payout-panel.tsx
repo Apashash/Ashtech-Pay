@@ -61,6 +61,7 @@ interface Props {
   flow: CryptoPayoutFlow;
   onBack?: () => void;
   embedded?: boolean;
+  showBalance?: boolean;
   amount?: string;
   onAmountChange?: (value: string) => void;
   onSuccess?: () => void;
@@ -78,7 +79,7 @@ function networkIdForAssetCode(assetCode: string, networks: CryptoNetwork[]): st
   return assetCode.split(".").slice(1).join(".") || assetCode;
 }
 
-export function CryptoPayoutPanel({ flow, onBack, embedded = false, amount: controlledAmount, onAmountChange, onSuccess }: Props) {
+export function CryptoPayoutPanel({ flow, onBack, embedded = false, showBalance = true, amount: controlledAmount, onAmountChange, onSuccess }: Props) {
   const { toast } = useToast();
   const [assetCode, setAssetCode] = useState("USDT.TRC20");
   const [localAmount, setLocalAmount] = useState("");
@@ -322,7 +323,7 @@ export function CryptoPayoutPanel({ flow, onBack, embedded = false, amount: cont
         if (event.key === "Enter" && event.target instanceof HTMLInputElement) event.preventDefault();
       }}
     >
-      {!embedded && (
+      {!embedded && showBalance && (
         <div className="flex items-start gap-3">
           {onBack && (
             <Button type="button" variant="ghost" size="icon" onClick={onBack} aria-label="Retour">

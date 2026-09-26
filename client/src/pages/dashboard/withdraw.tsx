@@ -745,21 +745,22 @@ export default function WithdrawPage() {
             </div>
 
             {/* ── Submit ── */}
-            <button
-              hidden={isCryptoWithdrawal}
-              type="button"
-              disabled={isSubmitDisabled}
-              data-testid="button-withdraw-confirm"
-              onClick={() => setShowConfirmDialog(true)}
-              className={`w-full flex items-center justify-center gap-2 h-14 rounded-2xl font-semibold text-base transition-all ${
-                isSubmitDisabled
-                  ? "bg-muted text-muted-foreground cursor-not-allowed"
-                  : "bg-primary text-primary-foreground hover:opacity-90 shadow-lg shadow-primary/25"
-              }`}
-            >
-              <CreditCard className="w-5 h-5" />
-              {t.withdraw.submitButton}
-            </button>
+            {!isCryptoWithdrawal && (
+              <button
+                type="button"
+                disabled={isSubmitDisabled}
+                data-testid="button-withdraw-confirm"
+                onClick={() => setShowConfirmDialog(true)}
+                className={`w-full flex items-center justify-center gap-2 h-14 rounded-2xl font-semibold text-base transition-all ${
+                  isSubmitDisabled
+                    ? "bg-muted text-muted-foreground cursor-not-allowed"
+                    : "bg-primary text-primary-foreground hover:opacity-90 shadow-lg shadow-primary/25"
+                }`}
+              >
+                <CreditCard className="w-5 h-5" />
+                {t.withdraw.submitButton}
+              </button>
+            )}
           </div>
         </form>
       </Form>

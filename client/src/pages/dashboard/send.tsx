@@ -147,6 +147,9 @@ export default function SendMoneyPage() {
 
   const isInternal = destination === INTERNAL_KEY;
   const balance = parseFloat(wallets.find(w => w.currency === selectedWallet)?.balance || "0");
+  const cryptoBalance = primaryCurrency === "USDT"
+    ? parseFloat(user?.balance || "0")
+    : parseFloat(wallets.find(w => w.currency === "USDT")?.balance || "0");
   const localCurrency = primaryCurrency;
   const currencyOptions = useMemo(() => {
     const walletBalances = new Map(wallets.map(wallet => [wallet.currency, wallet.balance || "0"]));
@@ -548,18 +551,23 @@ export default function SendMoneyPage() {
         </div>
 
         {/* Wallet selector + balance */}
-        {!isCryptoSend && (
-          <div className="flex items-center gap-3 bg-[#1A237E] border border-[#1A237E] rounded-2xl px-4 py-3">
-            <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center shrink-0">
-              <WalletIcon className="w-4 h-4 text-white" />
+        <div className="flex items-center gap-3 bg-[#1A237E] border border-[#1A237E] rounded-2xl px-4 py-3">
+          <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center shrink-0">
+            <WalletIcon className="w-4 h-4 text-white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-white/75">{t.send.yourBalance}</p>
+            <p className="text-base font-bold text-white tabular-nums truncate">
+              {isCryptoSend
+                ? formatWalletBalance(cryptoBalance, "USDT")
+                : formatWalletBalance(balance, selectedWallet)}
+            </p>
+          </div>
+          {isCryptoSend ? (
+            <div className="h-8 shrink-0 flex items-center rounded-lg border border-white/30 bg-white/10 px-3 text-xs font-semibold text-white">
+              USDT
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs text-white/75">{t.send.yourBalance}</p>
-              <p className="text-base font-bold text-white tabular-nums">
-                {formatWalletBalance(balance, selectedWallet)}
-              </p>
-            </div>
-            {currencyOptions.length > 1 && (
+          ) : currencyOptions.length > 1 ? (
               <Select value={selectedWallet} onValueChange={setSelectedWallet}>
                 <SelectTrigger className="h-8 w-auto border-white/30 rounded-lg text-xs font-semibold bg-white/10 text-white gap-1">
                   <span className="flex items-center gap-1.5">
@@ -573,9 +581,8 @@ export default function SendMoneyPage() {
                   emptyMessage={t.send.noCurrencyResults}
                 />
               </Select>
-            )}
-          </div>
-        )}
+          ) : null}
+        </div>
 
         {/* Tab switcher */}
         <div className="flex gap-2 p-1 bg-muted rounded-xl">
@@ -616,7 +623,7 @@ export default function SendMoneyPage() {
           </button>
         </div>
 
-        {isCryptoSend && <CryptoPayoutPanel flow="send" />}
+        {isCryptoSend && <CryptoPayoutPanel flow="send" showBalance={false} />}
 
         {/* INTERNAL TRANSFER */}
         {!isCryptoSend && isInternal && (
