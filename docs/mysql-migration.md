@@ -96,6 +96,14 @@ le watchdog PL/pgSQL désactivé. La table `session` est créée idempotemment p
 le store MySQL. Les tables métier doivent déjà provenir de l'import vérifié ;
 le démarrage ne doit jamais tenter une traduction destructive improvisée.
 
+Pour une installation MySQL dont l'import précède l'enregistrement des adresses
+crypto, appliquer manuellement
+`scripts/migrations/mysql/2026-09-26-create-crypto-withdrawal-addresses.sql`
+dans la base de l'application via phpMyAdmin. Cette migration idempotente crée
+uniquement la nouvelle table vide ; elle ne modifie ni ne supprime les données
+existantes. Ne relancez pas l'import complet sur la base de production pour
+ajouter cette table.
+
 Le chemin de rollback est donc réversible :
 
 1. remettre `DB_DIALECT=postgres` ;
