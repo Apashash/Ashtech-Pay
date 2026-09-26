@@ -491,12 +491,6 @@ export default function SendMoneyPage() {
   // True when the destination country's wallet doesn't exist yet or has no funds at all.
   const destinationWallet = selectedCountry ? wallets.find(w => w.currency === selectedCountry.currency) : undefined;
   const needsConversion = !isInternal && !!selectedCountry && parseFloat(destinationWallet?.balance || "0") <= 0;
-  // Suggest converting from the wallet with the highest balance (excluding the destination currency).
-  const bestSourceWallet = useMemo(() => {
-    return [...wallets]
-      .filter(w => w.currency !== selectedCountry?.currency)
-      .sort((a, b) => parseFloat(b.balance || "0") - parseFloat(a.balance || "0"))[0];
-  }, [wallets, selectedCountry]);
 
   // When sender pays fees: total deducted = amount + fee
   const totalDebitedBySender = feeBearer === "sender"
@@ -949,29 +943,6 @@ export default function SendMoneyPage() {
                           </span>
                         </div>
                       </div>
-                    )}
-
-                    {needsConversion && selectedCountry && (
-                      <Alert variant="destructive" className="rounded-xl">
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertDescription>
-                          <p>
-                            Vous n'avez pas encore de fonds sur le portefeuille <strong>{selectedCountry.currency}</strong> ({selectedCountry.name}). Convertissez d'abord vos fonds vers ce portefeuille pour pouvoir envoyer.
-                          </p>
-                          <Button
-                            type="button"
-                            size="sm"
-                            className="mt-3 rounded-lg"
-                            onClick={() => setLocation(
-                              `/dashboard/convert?to=${encodeURIComponent(selectedCountry.currency)}${bestSourceWallet ? `&from=${encodeURIComponent(bestSourceWallet.currency)}` : ""}`
-                            )}
-                            data-testid="button-convert-first"
-                          >
-                            <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
-                            Convertir vers {selectedCountry.currency}
-                          </Button>
-                        </AlertDescription>
-                      </Alert>
                     )}
 
                     {!needsConversion && amountValue > balance && (
