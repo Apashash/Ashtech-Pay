@@ -40,7 +40,6 @@ import {
   Zap,
   CreditCard,
   FileText,
-  Smartphone,
   Globe,
   Coins
 } from "lucide-react";
@@ -145,6 +144,40 @@ export default function AdminWithdrawals() {
     return match ? match[1].trim() : "-";
   };
 
+  const getPaymentAddress = (transaction: Transaction): string => {
+    const metadata = transaction.metadata || {};
+    const candidates = [
+      metadata.iziPayoutRequest?.destinationAddress,
+      metadata.destinationAddress,
+      transaction.recipientPhone,
+      extractPhoneNumber(transaction.description),
+    ];
+    const address = candidates.find(
+      (value): value is string => typeof value === "string" && value.trim() !== "" && value.trim() !== "-",
+    );
+    return address?.trim() || "—";
+  };
+
+  const getPaymentNetwork = (transaction: Transaction): string => {
+    const metadata = transaction.metadata || {};
+    const assetCode = metadata.iziPayoutRequest?.assetCode || metadata.assetCode;
+    if (typeof assetCode === "string" && assetCode.trim()) {
+      const assetParts = assetCode.trim().split(".");
+      const networkCode = assetParts.length > 1 ? assetParts.slice(1).join(".") : assetParts[0];
+      const networkLabels: Record<string, string> = {
+        BEP20: "BNB Smart Chain (BEP20)",
+        ERC20: "Ethereum (ERC20)",
+        POLYGON: "Polygon",
+        TRC20: "TRON (TRC20)",
+      };
+      return networkLabels[networkCode.toUpperCase()] || networkCode;
+    }
+
+    const network = metadata.networkName || metadata.network;
+    if (typeof network === "string" && network.trim()) return network.trim();
+    return transaction.operatorId ? operatorMap[transaction.operatorId] || "—" : "—";
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "completed":
@@ -220,7 +253,7 @@ export default function AdminWithdrawals() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
-              placeholder="Référence, nom ou numéro (+237, 237 ou local)..."
+              placeholder="Référence, nom ou adresse de paiement..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-10"
@@ -247,8 +280,8 @@ export default function AdminWithdrawals() {
                 <TableRow>
                   <TableHead>Référence</TableHead>
                   <TableHead>Utilisateur</TableHead>
-                  <TableHead>Opérateur</TableHead>
-                  <TableHead>Numéro de Retrait</TableHead>
+                  <TableHead>Réseau de paiement</TableHead>
+                  <TableHead>Adresse de paiement</TableHead>
                   <TableHead>Montant Net</TableHead>
                   <TableHead>Frais</TableHead>
                   <TableHead>Total Débité</TableHead>
@@ -279,20 +312,19 @@ export default function AdminWithdrawals() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        {tx.operatorId && operatorMap[tx.operatorId] ? (
+                        {getPaymentNetwork(tx) !== "—" ? (
                           <div className="flex items-center gap-1.5 text-primary font-medium text-sm">
-                            <Smartphone className="w-3.5 h-3.5 flex-shrink-0" />
-                            {operatorMap[tx.operatorId]}
+                            <Globe className="w-3.5 h-3.5 flex-shrink-0" />
+                            {getPaymentNetwork(tx)}
                           </div>
                         ) : (
                           <span className="text-muted-foreground text-sm">—</span>
                         )}
                       </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Phone className="w-4 h-4 text-muted-foreground" />
-                          <span className="font-medium">{extractPhoneNumber(tx.description)}</span>
-                        </div>
+                      <TableCell className="max-w-[280px]">
+                        <span className="block max-w-[280px] whitespace-normal break-all font-mono text-xs" title={getPaymentAddress(tx)}>
+                          {getPaymentAddress(tx)}
+                        </span>
                       </TableCell>
                       <TableCell className="font-bold text-red-500">
                         -{formatCurrency(tx.amount, (tx.currency || "XAF") as SupportedCurrency)}
@@ -415,25 +447,25 @@ export default function AdminWithdrawals() {
                     </div>
                   )}
 
-                  {tx.description && (
+                  {getPaymentAddress(tx) !== "—" && (
                     <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 text-primary">
-                          <Phone className="w-4 h-4" />
-                          <span className="text-sm font-medium">Numéro de Retrait</span>
+                          <CreditCard className="w-4 h-4" />
+                          <span className="text-sm font-medium">Adresse de paiement</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-lg font-bold text-primary">{extractPhoneNumber(tx.description)}</span>
-                          {extractPhoneNumber(tx.description) && (
+                          <span className="max-w-[260px] break-all text-right font-mono text-sm font-bold text-primary">{getPaymentAddress(tx)}</span>
+                          {getPaymentAddress(tx) !== "—" && (
                             <button
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                navigator.clipboard.writeText(extractPhoneNumber(tx.description)!);
-                                toast({ title: "Numéro copié !" });
+                                navigator.clipboard.writeText(getPaymentAddress(tx));
+                                toast({ title: "Adresse copiée !" });
                               }}
                               className="text-primary/60 hover:text-primary transition-colors p-0.5 rounded"
-                              title="Copier le numéro"
+                              title="Copier l’adresse"
                             >
                               <Copy className="w-3.5 h-3.5" />
                             </button>
@@ -488,11 +520,11 @@ export default function AdminWithdrawals() {
                   </>
                 )}
 
-                {txDetails?.operator && (
+                {txDetails && (txDetails.operator || txDetails.recipientCountry || txDetails.paymentIntent?.payerCountry || txDetails.currency || getPaymentNetwork(txDetails) !== "—") && (
                   <>
                     <Separator />
                     <div className="space-y-3">
-                      <p className="text-sm font-semibold text-muted-foreground">Fournisseur</p>
+                      <p className="text-sm font-semibold text-muted-foreground">Informations de paiement</p>
                       {(txDetails.recipientCountry || txDetails.paymentIntent?.payerCountry) && (
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2 text-muted-foreground">
@@ -511,20 +543,24 @@ export default function AdminWithdrawals() {
                           <span className="text-sm font-mono font-semibold">{txDetails.currency}</span>
                         </div>
                       )}
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <CreditCard className="w-4 h-4" />
-                          <span className="text-sm">Opérateur</span>
+                      {getPaymentNetwork(txDetails) !== "—" && (
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Globe className="w-4 h-4" />
+                            <span className="text-sm">Réseau de paiement</span>
+                          </div>
+                          <span className="text-sm font-medium">{getPaymentNetwork(txDetails)}</span>
                         </div>
-                        <span className="text-sm font-medium">{txDetails.operator.name}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <Zap className="w-4 h-4" />
-                          <span className="text-sm">Fournisseur</span>
+                      )}
+                      {txDetails.operator?.paymentProvider && (
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Zap className="w-4 h-4" />
+                            <span className="text-sm">Fournisseur</span>
+                          </div>
+                          <span className="text-sm font-medium capitalize">{txDetails.operator.paymentProvider}</span>
                         </div>
-                        <span className="text-sm font-medium capitalize">{txDetails.operator.paymentProvider}</span>
-                      </div>
+                      )}
                     </div>
                   </>
                 )}
