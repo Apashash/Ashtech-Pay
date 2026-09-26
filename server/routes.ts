@@ -2784,7 +2784,8 @@ export async function registerRoutes(
       }
       if (isRelativePath && storagePath.startsWith("profile-avatars/")) {
         const requestingUser = await storage.getUser(req.userId!);
-        if (!requestingUser || requestingUser.profileImagePath !== storagePath) {
+        const isAdminRole = requestingUser?.role === "admin";
+        if (!requestingUser || (!isAdminRole && requestingUser.profileImagePath !== storagePath)) {
           return res.status(403).send("Accès refusé");
         }
       }
@@ -2806,8 +2807,8 @@ export async function registerRoutes(
         return res.end(buffer);
       }
 
-      // Local fallback profile avatars are kept outside the public uploads
-      // directory and still require the same authenticated ownership check.
+      // Local fallback profile avatars stay private and require authenticated
+      // ownership or admin access, matching the check above.
       if (isRelativePath && storagePath.startsWith("profile-avatars/")) {
         const localFilename = storagePath.slice("profile-avatars/".length);
         const localPath = path.resolve(privateProfileUploadsDir, localFilename);

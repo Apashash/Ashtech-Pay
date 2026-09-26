@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
+import { ProfileImage } from "@/components/profile-image";
 import { 
   Table, 
   TableBody, 
@@ -84,6 +85,7 @@ interface User {
   withdrawalBlockReason: string | null;
   role: string;
   createdAt: string;
+  profileImagePath?: string | null;
 }
 
 export default function AdminUsers() {
@@ -588,7 +590,7 @@ export default function AdminUsers() {
                       aria-label="Sélectionner les utilisateurs de cette page"
                     />
                   </TableHead>
-                  <TableHead className="min-w-[140px]">Utilisateur</TableHead>
+                  <TableHead className="min-w-[190px]">Utilisateur</TableHead>
                   <TableHead className="min-w-[160px]">Contact</TableHead>
                   <TableHead className="min-w-[70px]">Pays</TableHead>
                   <TableHead className="min-w-[130px]">Solde total XAF</TableHead>
@@ -629,10 +631,18 @@ export default function AdminUsers() {
                           aria-label={`Sélectionner ${user.fullName}`}
                         />
                       </TableCell>
-                      <TableCell className="max-w-[160px]">
-                        <div className="space-y-0.5">
-                          <p className="font-medium text-sm truncate">{user.fullName}</p>
-                          <p className="text-xs text-muted-foreground truncate">@{user.username}</p>
+                      <TableCell className="max-w-[220px]">
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          <ProfileImage
+                            profileImagePath={user.profileImagePath}
+                            alt={`Photo de profil de ${user.fullName || user.username}`}
+                            loading="lazy"
+                            className="h-10 w-10 shrink-0 rounded-full border border-border object-cover"
+                          />
+                          <div className="min-w-0 space-y-0.5">
+                            <p className="truncate text-sm font-medium">{user.fullName}</p>
+                            <p className="truncate text-xs text-muted-foreground">@{user.username}</p>
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell className="max-w-[180px]">
