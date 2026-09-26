@@ -40,7 +40,7 @@ function Row({ label, value }: RowProps) {
   return (
     <div className="flex items-center justify-between py-3 border-b border-border last:border-0">
       <span className="text-sm text-muted-foreground">{label}</span>
-      <span className="text-sm font-semibold text-foreground text-right max-w-[55%]">{value}</span>
+      <span className="text-sm font-semibold text-foreground text-right max-w-[55%] min-w-0 break-all">{value}</span>
     </div>
   );
 }
