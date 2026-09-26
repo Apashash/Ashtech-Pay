@@ -175,6 +175,9 @@ When crypto is requested or is the appropriate method:
     do not apply that rule to Mobile Money.
 11. Test pending, completed, failed, expired, invalid-input, and duplicate
     webhook paths when supported by the current documentation.
+12. Use the exact HTTP 202 response contract documented on
+    `/docs/direct-api/crypto`. Do not ask the merchant for a real successful
+    response or create a live payment just to discover response fields.
 
 Never invent crypto wallet parameters, exchange-rate logic, confirmation
 counts, expiry rules, memo/tag formats, addresses, or webhook payloads.

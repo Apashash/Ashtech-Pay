@@ -191,6 +191,55 @@ curl_close($ch);
   </Tab>
 </Tabs>
 
+### Réponse de création (HTTP 202)
+
+Une nouvelle collecte renvoie `202 Accepted` avec une transaction en attente.
+Voici le contrat de réponse exact. Les valeurs ci-dessous indiquent les types,
+pas un paiement ni une adresse réels :
+
+```ts
+type CryptoCollectResponse = {
+  transaction_id: string;
+  reference: string;
+  merchant_reference: string | null;
+  status: "pending";
+  payment_method: "crypto";
+  asset_code: string;
+  network: string;
+  address: string;
+  memo: string | null;
+  memo_type: string | null;
+  amount: number;
+  currency: string;
+  amount_usdt: number;
+  credited_amount: number;
+  fee_amount: number;
+  gross_amount_usdt: number;
+  provider_fee_percent: number;
+  provider_fee_amount_usdt: number;
+  ashtech_fee_percent: number;
+  ashtech_fee_amount_usdt: number;
+  total_fee_percent: number;
+  total_fee_amount_usdt: number;
+  credited_amount_usdt: number;
+  fee_amount_usdt: number;
+  fee_percent: number;
+  expires_at: string | null;
+  created_at: string | null;
+};
+```
+
+`network` est l'identifiant du réseau retourné par `/v1/crypto/assets`.
+`amount` et `currency` reprennent le montant demandé; les champs `*_usdt`,
+`credited_amount` et `fee_amount` contiennent les montants calculés par
+l'API en USDT. L'adresse, le memo/tag, les frais et l'expiration sont des
+valeurs produites à l'exécution : ne les inventez pas et ne lancez pas un
+paiement réel uniquement pour découvrir la structure de la réponse.
+
+Un nouvel appel avec la même `merchant_reference` et les mêmes paramètres peut
+renvoyer `200 OK` avec `idempotent_replay: true`. Dans ce cas, `status` reflète
+l'état déjà enregistré et peut différer de `pending`.
+
 ### Champ `customer`
 
 `customer` doit être un objet JSON, jamais une chaîne ou un tableau :
