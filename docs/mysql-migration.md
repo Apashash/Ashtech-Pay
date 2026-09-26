@@ -101,8 +101,10 @@ crypto, appliquer manuellement
 `scripts/migrations/mysql/2026-09-26-create-crypto-withdrawal-addresses.sql`
 dans la base de l'application via phpMyAdmin. Cette migration idempotente crée
 uniquement la nouvelle table vide ; elle ne modifie ni ne supprime les données
-existantes. Ne relancez pas l'import complet sur la base de production pour
-ajouter cette table.
+existantes. Elle conserve l'index `user_id` sans contrainte FK physique, car
+les schémas `users` importés sur Plesk peuvent différer; la suppression d'un
+utilisateur efface explicitement ses adresses enregistrées. Ne relancez pas
+l'import complet sur la base de production pour ajouter cette table.
 
 Le chemin de rollback est donc réversible :
 

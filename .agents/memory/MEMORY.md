@@ -77,3 +77,4 @@
 - [Supabase Node WebSocket transport](supabase-node-websocket.md) — Node.js 20 needs the installed `ws` constructor passed as Supabase Realtime transport before the Storage client can initialize.
 - [Local MySQL workflow](local-mysql-workflow.md) — auxiliary MariaDB startup must use a dedicated port variable and preserve Replit's HTTP `PORT`.
 - [MySQL timestamp timezone](mysql-timestamp-timezone.md) — force MySQL sessions to UTC and display user-facing dates in the user's real device timezone.
+- [MySQL crypto-address FK compatibility](mysql-crypto-address-fk.md) — keep saved-address user IDs indexed without a physical FK; legacy Plesk user schemas can reject the constraint.

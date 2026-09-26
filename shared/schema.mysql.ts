@@ -140,7 +140,10 @@ export const withdrawalNumbers = mysqlTable("withdrawal_numbers", {
   operatorName: text("operator_name").notNull(), label: text("label"), isActive: boolean("is_active").default(true), createdAt: dt("created_at"),
 });
 export const cryptoWithdrawalAddresses = mysqlTable("crypto_withdrawal_addresses", {
-  id: id(), userId: varchar("user_id", { length: 191 }).notNull().references(() => users.id),
+  id: id(),
+  // Legacy Plesk users tables may not be compatible with a physical FK.
+  // User deletion explicitly removes saved addresses before deleting the user.
+  userId: varchar("user_id", { length: 191 }).notNull(),
   label: text("label").notNull(), assetCode: text("asset_code").notNull(), address: text("address").notNull(),
   memo: text("memo"), createdAt: dt("created_at"),
 }, t => ({ userIdx: index("crypto_withdrawal_addresses_user_id_idx").on(t.userId) }));
