@@ -74,8 +74,9 @@ import {
 } from "./supabase";
 import { decryptField, encryptField, isFieldEncryptionConfigured } from "./fieldEncryption";
 import { isAdminPinProtectionEnabled, requireAdminPin, verifyAdminPinCode } from "./adminPin";
-import { createPaymentIntent, createDirectCharge, validateWebhook, getIziPayWebhookSecret, toIziPayCurrency, isIziPayConfigured } from "./izichange";
+import { createPaymentIntent, createDirectCharge, createIziPayout, validateWebhook, getIziPayWebhookSecret, toIziPayCurrency, isIziPayConfigured } from "./izichange";
 import { fetchCryptoAssets, filterCryptoAssets, parseDisabledCryptoAssets, getStaticCryptoAssets } from "./cryptoAssets";
+import { calculateCryptoPayout, isDefinitiveIziPayoutRejection, parseCryptoPayoutFeeConfig, resolveCryptoPayoutFee } from "./cryptoPayout";
 import {
   buildDirectCryptoCustomer,
   computeDirectCryptoFeeBreakdown,
@@ -94,7 +95,7 @@ import { assertPawaPayProviderActive, classifyPawaPayControlledTransaction, crea
 import { addPendingPayment, removePendingPayment, expireCryptoPaymentIfNeeded } from "./paymentPoller";
 import { processPawaPayDepositCallback } from "./paymentPoller";
 import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserWallet, sameCfaFamily, getConversionPairKey, maybeAutoConvert } from "./walletHelper";
-import { addPendingPayout, removePendingPayout } from "./payoutPoller";
+import { addPendingPayout, removePendingPayout, processIziPayPayoutCallback } from "./payoutPoller";
 import { processPendingConversions } from "./conversionPoller";
 import { processPawaPayPayoutCallback } from "./payoutPoller";
 import {
@@ -9025,6 +9026,324 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/crypto/payout/config", requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.userId!);
+      if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
+      const userCountry = String((user as any).country || "").trim();
+      const countries = await storage.getAllCountries();
+      const country = countries.find(item =>
+        String(item.code || "").toUpperCase() === userCountry.toUpperCase() ||
+        String(item.id) === userCountry ||
+        String(item.name || "").toLowerCase() === userCountry.toLowerCase()
+      );
+      const disabledSetting = await storage.getSetting("crypto_disabled_assets");
+      const disabled = parseDisabledCryptoAssets(disabledSetting?.value);
+      const allAssets = isIziPayConfigured()
+        ? await fetchCryptoAssets().catch(() => getStaticCryptoAssets())
+        : getStaticCryptoAssets();
+      const usdtNetworks = filterCryptoAssets(allAssets, disabled).USDT?.networks || [];
+      const setting = await storage.getSetting("crypto_withdrawal_fees");
+      const feeConfig = parseCryptoPayoutFeeConfig(setting?.value);
+      const fees = Object.fromEntries(usdtNetworks.map(network => [
+        network.assetCode,
+        resolveCryptoPayoutFee(feeConfig, country?.id, network.assetCode),
+      ]));
+      return res.json({
+        enabled: isIziPayConfigured(),
+        countryCode: country?.code || userCountry || "CM",
+        networks: usdtNetworks,
+        fees,
+      });
+    } catch (error: any) {
+      console.error("[crypto/payout/config]", error.message);
+      return res.status(500).json({ message: "Impossible de charger la configuration crypto" });
+    }
+  });
+
+  app.post("/api/crypto/payouts", requireAuth, withdrawalLimiter, async (req, res) => {
+    const userId = req.userId!;
+    let payoutLockUntil: number | null = null;
+    try {
+      if (!isIziPayConfigured()) {
+        return res.status(503).json({ message: "Les retraits crypto ne sont pas disponibles pour le moment." });
+      }
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
+      if (!(user as any).isVerified) {
+        return res.status(403).json({ message: "Votre compte doit être vérifié avant un retrait crypto." });
+      }
+      if ((user as any).withdrawalBlockReason) {
+        return res.status(403).json({ message: (user as any).withdrawalBlockReason });
+      }
+
+      const flow = req.body?.flow === "send" ? "send" : req.body?.flow === "withdrawal" ? "withdrawal" : "";
+      const feeBearer = req.body?.feeBearer;
+      const assetCode = typeof req.body?.assetCode === "string" ? req.body.assetCode.trim().toUpperCase() : "";
+      const destinationAddress = typeof req.body?.destinationAddress === "string" ? req.body.destinationAddress.trim() : "";
+      const destinationMemo = typeof req.body?.destinationMemo === "string" ? req.body.destinationMemo.trim() : "";
+      const amountRaw = String(req.body?.amount ?? "").trim();
+      if (!flow || (feeBearer !== "sender" && feeBearer !== "recipient")) {
+        return res.status(400).json({ message: "Type de retrait ou prise en charge des frais invalide." });
+      }
+      if (!/^USDT\.[A-Z0-9_-]+$/.test(assetCode)) {
+        return res.status(400).json({ message: "Sélectionnez un réseau USDT valide." });
+      }
+      if (destinationAddress.length < 8 || destinationAddress.length > 256) {
+        return res.status(400).json({ message: "Adresse de destination invalide." });
+      }
+      if (destinationMemo.length > 128) {
+        return res.status(400).json({ message: "Le memo ou tag est trop long." });
+      }
+      if (!/^\d{1,12}(?:\.\d{1,2})?$/.test(amountRaw)) {
+        return res.status(400).json({ message: "Le montant doit être positif et limité à deux décimales." });
+      }
+      const enteredAmount = Number(amountRaw);
+      if (!Number.isFinite(enteredAmount) || enteredAmount <= 0) {
+        return res.status(400).json({ message: "Montant invalide." });
+      }
+
+      const disabledSetting = await storage.getSetting("crypto_disabled_assets");
+      const disabled = parseDisabledCryptoAssets(disabledSetting?.value);
+      const allAssets = await fetchCryptoAssets().catch(() => getStaticCryptoAssets());
+      const network = filterCryptoAssets(allAssets, disabled).USDT?.networks
+        .find(item => item.assetCode.toUpperCase() === assetCode);
+      if (!network) return res.status(400).json({ message: "Ce réseau crypto est indisponible." });
+      if (network.memoRequired && !destinationMemo) {
+        return res.status(400).json({ message: `Le memo ${network.memoType || "ou tag"} est requis pour ce réseau.` });
+      }
+
+      const userCountry = String((user as any).country || "").trim();
+      const countries = await storage.getAllCountries();
+      const country = countries.find(item =>
+        String(item.code || "").toUpperCase() === userCountry.toUpperCase() ||
+        String(item.id) === userCountry ||
+        String(item.name || "").toLowerCase() === userCountry.toLowerCase()
+      );
+      const feeSetting = await storage.getSetting("crypto_withdrawal_fees");
+      const feeRule = resolveCryptoPayoutFee(
+        parseCryptoPayoutFeeConfig(feeSetting?.value),
+        country?.id,
+        assetCode,
+      );
+      let calculation;
+      try {
+        calculation = calculateCryptoPayout(enteredAmount, feeRule, feeBearer);
+      } catch (error: any) {
+        return res.status(400).json({
+          message: error.message === "CRYPTO_PAYOUT_FEE_EXCEEDS_AMOUNT"
+            ? "Les frais sont supérieurs au montant à envoyer."
+            : "Montant invalide.",
+        });
+      }
+
+      const cooldown = getFailedCooldown(userId);
+      if (cooldown.active) {
+        return res.status(429).json({
+          message: "Votre dernière opération a été rejetée. Veuillez patienter avant de réessayer.",
+          waitUntil: cooldown.waitUntilMs,
+        });
+      }
+
+      if (await isOtpEmailEnabled()) {
+        const otpRef = typeof req.body?.otpRef === "string" ? req.body.otpRef : "";
+        const otpCode = typeof req.body?.otp === "string" ? req.body.otp.trim() : "";
+        const otpEntry = txOtpStore.get(otpRef);
+        const expectedType = flow === "withdrawal" ? "withdrawal" : "transfer_external";
+        if (!otpEntry || otpEntry.userId !== userId || otpEntry.type !== expectedType || otpEntry.expiresAt <= Date.now()) {
+          if (otpEntry?.expiresAt && otpEntry.expiresAt <= Date.now()) txOtpStore.delete(otpRef);
+          return res.status(400).json({ message: "Code de vérification expiré ou invalide." });
+        }
+        const expectedHash = Buffer.from(otpEntry.otpHash);
+        const actualHash = Buffer.from(hashOtp(otpCode));
+        if (expectedHash.length !== actualHash.length || !crypto.timingSafeEqual(expectedHash, actualHash)) {
+          return res.status(401).json({ message: "Code de vérification incorrect." });
+        }
+        txOtpStore.delete(otpRef);
+        await clearOtpOpLock(userId);
+      }
+
+      payoutLockUntil = await acquirePayoutOperationLock(userId);
+      if (!payoutLockUntil) {
+        const remaining = await getOtpOpLockRemaining(userId);
+        return res.status(429).json({
+          message: "Une autre opération est déjà en cours. Veuillez réessayer.",
+          remainingSeconds: remaining,
+        });
+      }
+
+      const txType = flow === "withdrawal" ? "withdrawal" : "transfer_out";
+      const operatorKey = `crypto:${assetCode}`;
+      const duplicate = await findRecentActivePayoutDuplicate({
+        userId,
+        type: txType,
+        recipientPhone: destinationAddress,
+        operatorId: operatorKey,
+        totalAmount: Number(calculation.totalDebit),
+      });
+      if (duplicate) {
+        return res.status(409).json({
+          message: "Un envoi identique est déjà en cours de traitement.",
+          reference: duplicate.reference,
+          status: duplicate.status,
+        });
+      }
+
+      const reference = generateTransactionReference(flow === "withdrawal" ? "withdrawal" : "transfer_out");
+      const countryCode = country?.code || userCountry || "CM";
+      const payoutRequest = {
+        assetCode,
+        amount: calculation.payoutAmount,
+        destinationAddress,
+        ...(destinationMemo ? { destinationMemo } : {}),
+      };
+      const metadata = {
+        paymentProvider: "izichange",
+        walletCurrency: "USDT",
+        assetCode,
+        feeBearer,
+        ashtechFeeAmountUsdt: calculation.ashtechFee,
+        ashtechFeePercent: feeRule.percentage,
+        ashtechFeeFixedUsdt: feeRule.fixedUsdt,
+        providerFeeBearer: "merchant",
+        iziPayoutRequest: payoutRequest,
+        iziRetrySafe: true,
+      };
+      const transaction = await storage.createCryptoPayoutAndDebit({
+        userId,
+        type: txType,
+        amount: calculation.payoutAmount,
+        currency: "USDT",
+        status: "pending",
+        description: flow === "withdrawal" ? `Retrait crypto vers ${assetCode}` : `Envoi crypto vers ${assetCode}`,
+        paymentMethod: "crypto",
+        reference,
+        feeAmount: calculation.ashtechFee,
+        ashtechFeeAmount: calculation.ashtechFee,
+        totalAmount: calculation.totalDebit,
+        recipientName: "Destinataire crypto",
+        recipientPhone: destinationAddress,
+        recipientCountry: countryCode,
+        operatorId: operatorKey,
+        metadata,
+      } as any, Number(calculation.totalDebit));
+
+      try {
+        const providerPayout = await createIziPayout({
+          ...payoutRequest,
+          merchantReference: reference,
+          idempotencyKey: reference,
+          // With "merchant", IziChange debits its service fee from AshTechPay's
+          // provider balance and sends the requested amount unchanged.
+          feeBearer: "merchant",
+        });
+        await storage.updateTransaction(transaction.id, {
+          externalReference: providerPayout.id,
+          metadata: {
+            ...metadata,
+            iziPayoutId: providerPayout.id,
+            iziRetrySafe: false,
+            providerFeeAmountUsdt: providerPayout.feeAmount,
+          },
+        } as any);
+
+        const pending = {
+          transactionId: transaction.id,
+          reference,
+          externalReference: providerPayout.id,
+          userId,
+          amount: calculation.payoutAmount,
+          totalDebited: calculation.totalDebit,
+          provider: "izichange" as const,
+          countryCode,
+          txType,
+          txCurrency: "USDT",
+          walletCurrency: "USDT",
+        };
+        addPendingPayout(pending);
+        if (providerPayout.status === "confirmed") {
+          await processIziPayPayoutCallback(
+            { ...transaction, externalReference: providerPayout.id, metadata },
+            "success",
+            providerPayout.id,
+          );
+        } else if (providerPayout.status === "failed" || providerPayout.status === "refunded" || providerPayout.status === "cancelled") {
+          await processIziPayPayoutCallback(
+            { ...transaction, externalReference: providerPayout.id, metadata },
+            "failed",
+            providerPayout.id,
+          );
+        }
+        const initialStatus = providerPayout.status === "confirmed"
+          ? "completed"
+          : providerPayout.status === "failed" || providerPayout.status === "refunded" || providerPayout.status === "cancelled"
+            ? "failed"
+            : "pending";
+        return res.status(202).json({
+          reference,
+          payoutId: providerPayout.id,
+          status: initialStatus,
+          message: initialStatus === "failed" ? "Le retrait a été refusé et le montant recrédité." : undefined,
+          amount: calculation.payoutAmount,
+          fee: calculation.ashtechFee,
+          totalDebited: calculation.totalDebit,
+          currency: "USDT",
+        });
+      } catch (providerError: any) {
+        const definitive = isDefinitiveIziPayoutRejection(providerError);
+        if (definitive) {
+          await storage.claimIziPayPayoutFailedAndRefund(transaction.id, ["pending", "processing", "pending_manual"]);
+          setFailedCooldown(userId);
+          return res.status(400).json({
+            message: providerError.message || "Le réseau a refusé cette adresse ou ce montant.",
+            reference,
+          });
+        }
+
+        const statusCode = Number(providerError?.status);
+        const retrySafe = !Number.isFinite(statusCode) || statusCode >= 500;
+        await storage.updateTransaction(transaction.id, {
+          status: retrySafe ? "pending" : "pending_manual",
+          metadata: { ...metadata, iziRetrySafe: retrySafe, iziInitiationError: String(providerError?.code || providerError?.message || "unknown").slice(0, 120) },
+        } as any);
+        if (retrySafe) {
+          addPendingPayout({
+            transactionId: transaction.id,
+            reference,
+            userId,
+            amount: calculation.payoutAmount,
+            totalDebited: calculation.totalDebit,
+            provider: "izichange",
+            countryCode,
+            txType,
+            txCurrency: "USDT",
+            walletCurrency: "USDT",
+          });
+        }
+        console.error(`[crypto/payout] IziChange initiation unresolved ref=${reference} retrySafe=${retrySafe}:`, providerError?.message);
+        return res.status(202).json({
+          reference,
+          status: retrySafe ? "pending" : "pending_manual",
+          message: retrySafe
+            ? "Votre envoi est en cours de vérification. Ne le soumettez pas une seconde fois."
+            : "Votre demande nécessite une vérification. Le solde reste réservé jusqu'à sa résolution.",
+          amount: calculation.payoutAmount,
+          fee: calculation.ashtechFee,
+          totalDebited: calculation.totalDebit,
+          currency: "USDT",
+        });
+      }
+    } catch (error: any) {
+      if (error?.message === "INSUFFICIENT_WALLET_BALANCE") {
+        return res.status(400).json({ message: "Solde USDT insuffisant pour couvrir le montant et les frais." });
+      }
+      console.error("[crypto/payout]", error?.message || error);
+      return res.status(500).json({ message: "Impossible de traiter le retrait crypto pour le moment." });
+    } finally {
+      await releasePayoutOperationLock(userId, payoutLockUntil);
+    }
+  });
+
   app.get("/api/crypto/disabled-assets", publicInfoLimiter, async (_req, res) => {
     try {
       const setting = await storage.getSetting("crypto_disabled_assets");
@@ -15878,6 +16197,57 @@ export async function registerRoutes(
       const eventData: any = body.data ?? body.object ?? body.paymentIntent ?? body;
 
       console.log(`[IziChange Webhook] event=${eventType}`);
+
+      if (eventType === "payout.confirmed" || eventType === "payout.failed") {
+        const payoutData = eventData?.object ?? eventData?.payout ?? eventData;
+        const payoutReference = String(
+          payoutData?.merchantReference ??
+          payoutData?.merchant_reference ??
+          eventData?.merchantReference ??
+          eventData?.merchant_reference ??
+          body.merchantReference ??
+          body.merchant_reference ??
+          "",
+        );
+        const payoutId = String(
+          payoutData?.id ??
+          payoutData?.payoutId ??
+          payoutData?.payout_id ??
+          eventData?.payoutId ??
+          eventData?.payout_id ??
+          "",
+        ) || undefined;
+        let payoutTransaction = payoutReference
+          ? await storage.getTransactionByReference(payoutReference)
+          : undefined;
+        if (!payoutTransaction && payoutId) {
+          payoutTransaction = await storage.getTransactionByExternalReference(payoutId);
+        }
+        if (!payoutTransaction) {
+          console.warn(`[IziChange Webhook] Payout transaction not found ref=${payoutReference || "none"} id=${payoutId || "none"}`);
+          return res.status(200).json({ received: true });
+        }
+        if ((payoutTransaction as any).metadata?.paymentProvider !== "izichange") {
+          console.warn(`[IziChange Webhook] Ignoring payout event for non-IziChange transaction ${payoutTransaction.reference}`);
+          return res.status(200).json({ received: true });
+        }
+        if (payoutId && !payoutTransaction.externalReference) {
+          const metadata = ((payoutTransaction as any).metadata || {}) as Record<string, unknown>;
+          await storage.updateTransaction(payoutTransaction.id, {
+            externalReference: payoutId,
+            metadata: { ...metadata, iziPayoutId: payoutId, iziRetrySafe: false },
+          } as any);
+        }
+        await processIziPayPayoutCallback(
+          payoutTransaction,
+          eventType === "payout.confirmed" ? "success" : "failed",
+          payoutId,
+        );
+        return res.json({ received: true });
+      }
+
+      // Other payout lifecycle notifications are informational, not settlement.
+      if (eventType.startsWith("payout.")) return res.json({ received: true });
 
       // ── Process payment confirmation and failure events ──────────────────────
       // payment_intent.completed = Direct Charge fully confirmed

@@ -2,6 +2,7 @@ import { storage } from "./storage";
 import { checkAfribaPayStatus, checkAfribaPayoutStatus, isAfribaPayConfigured } from "./afribapay";
 import { checkPixPayStatus } from "./pixpay";
 import { getPawaPayPayout, isPawaPayUuidV4 } from "./pawapay";
+import { createIziPayout, getIziPayout, isIziPayConfigured } from "./izichange";
 import { sendWithdrawalApprovedEmail } from "./email";
 import { notifyWithdrawalAutoValidated, notifyWithdrawalFailed } from "./telegram";
 import { setFailedCooldown } from "./failedCooldown";
@@ -20,7 +21,7 @@ interface PendingPayout {
   amount:         string;
   totalDebited:   string;
   attempts:       number;
-  provider:       "afribapay" | "pixpay" | "pawapay";
+  provider:       "afribapay" | "pixpay" | "pawapay" | "izichange";
   /** PawaPay UUID; distinct from the internal transaction reference. */
   externalReference?: string;
   countryCode:    string;
@@ -62,15 +63,22 @@ export async function recoverPendingPayouts() {
       const internalRef = t.reference ?? "";
       if (!internalRef) continue;
       const operator = t.operatorId ? await storage.getOperator(t.operatorId).catch(() => null) : null;
+      const metadata = ((t as any).metadata || {}) as Record<string, any>;
       const configuredProvider = (operator as any)?.paymentProvider as "afribapay" | "pixpay" | "pawapay" | undefined;
-      const provider = t.externalReference && isPawaPayUuidV4(t.externalReference) ? "pawapay" : configuredProvider;
-      if (provider !== "afribapay" && provider !== "pixpay" && provider !== "pawapay") {
+      const provider = metadata.paymentProvider === "izichange"
+        ? "izichange"
+        : t.externalReference && isPawaPayUuidV4(t.externalReference) ? "pawapay" : configuredProvider;
+      if (provider !== "afribapay" && provider !== "pixpay" && provider !== "pawapay" && provider !== "izichange") {
         console.warn(`[PayoutPoller] Skipping pending payout ${internalRef}: no supported provider`);
+        continue;
+      }
+      if (provider === "izichange" && !t.externalReference && metadata.iziRetrySafe !== true) {
+        console.warn(`[PayoutPoller] IziChange payout ${internalRef} has no provider ID and is not safe to retry; awaiting webhook/manual review`);
         continue;
       }
       const countryCode = (t as any).recipientCountry || "CM";
 
-      let pollerRef = (t as any).externalReference || internalRef;
+      let pollerRef = provider === "izichange" ? internalRef : (t as any).externalReference || internalRef;
       if (provider === "afribapay") {
         // For retries, externalReference holds the submitted order_id (retry ref).
         // For original submissions without an externalReference, fall back to internalRef.
@@ -89,7 +97,7 @@ export async function recoverPendingPayouts() {
         totalDebited:  t.totalAmount ?? t.amount ?? "0",
         attempts:      0,
         provider,
-        externalReference: (t as any).externalReference || undefined,
+        externalReference: (t as any).externalReference || metadata.iziPayoutId || undefined,
         countryCode,
         txType:        t.type,
         txCurrency:    t.currency || "XAF",
@@ -109,7 +117,10 @@ export async function processPayout(payout: PendingPayout, apiStatus: string) {
       !!transaction?.externalReference &&
       isPawaPayUuidV4(transaction.externalReference) &&
       transaction.status === "pending_manual";
-    if (!transaction || (transaction.status !== "pending" && transaction.status !== "processing" && !pawaManual)) {
+    const iziManual = payout.provider === "izichange" &&
+      transaction?.status === "pending_manual" &&
+      (transaction as any)?.metadata?.paymentProvider === "izichange";
+    if (!transaction || (transaction.status !== "pending" && transaction.status !== "processing" && !pawaManual && !iziManual)) {
       removePendingPayout(payout.reference);
       return;
     }
@@ -170,14 +181,16 @@ export async function processPayout(payout: PendingPayout, apiStatus: string) {
       // handled separately as pending_manual by the route.
       const claimed = payout.provider === "pawapay"
         ? await storage.claimPawaPayoutFailedAndRefund(payout.transactionId, ["pending", "processing", "pending_manual"])
-        : await storage.claimTransactionStatus(payout.transactionId, "failed", ["pending", "processing", "pending_manual"]);
+        : payout.provider === "izichange"
+          ? await storage.claimIziPayPayoutFailedAndRefund(payout.transactionId, ["pending", "processing", "pending_manual"])
+          : await storage.claimTransactionStatus(payout.transactionId, "failed", ["pending", "processing", "pending_manual"]);
       if (!claimed) {
         removePendingPayout(payout.reference);
         return;
       }
       setFailedCooldown(payout.userId);
       const refundAmount = parseFloat(payout.totalDebited || payout.amount);
-      if (payout.provider !== "pawapay") {
+      if (payout.provider !== "pawapay" && payout.provider !== "izichange") {
         await storage.refundToOriginalWallet(payout.userId, payout.txType, payout.walletCurrency || payout.txCurrency, refundAmount);
       }
       await storage.createUserNotification({
@@ -239,6 +252,34 @@ export async function processPawaPayPayoutCallback(
   }, status);
 }
 
+/** Complete a signed IziChange payout webhook through the idempotent settlement path. */
+export async function processIziPayPayoutCallback(
+  transaction: { id: string; reference: string | null; externalReference: string | null; userId: string; amount: string; totalAmount?: string | null; type: string; currency?: string | null; recipientCountry?: string | null; metadata?: unknown },
+  status: "success" | "failed",
+  payoutId?: string,
+): Promise<void> {
+  const metadata = (transaction.metadata || {}) as Record<string, any>;
+  if (metadata.paymentProvider !== "izichange") return;
+  if (payoutId && transaction.externalReference && transaction.externalReference !== payoutId) {
+    console.warn(`[PayoutPoller] Ignoring mismatched IziChange payout ID for ${transaction.reference || transaction.id}`);
+    return;
+  }
+  await processPayout({
+    transactionId: transaction.id,
+    reference: transaction.reference || payoutId || transaction.id,
+    externalReference: payoutId || transaction.externalReference || undefined,
+    userId: transaction.userId,
+    amount: transaction.amount,
+    totalDebited: transaction.totalAmount || transaction.amount,
+    attempts: 0,
+    provider: "izichange",
+    countryCode: transaction.recipientCountry || "CM",
+    txType: transaction.type,
+    txCurrency: transaction.currency || "USDT",
+    walletCurrency: metadata.walletCurrency || "USDT",
+  }, status);
+}
+
 async function checkProviderStatus(payout: PendingPayout): Promise<{ status: string; shouldRemove?: boolean }> {
   try {
     if (payout.provider === "afribapay") {
@@ -262,10 +303,43 @@ async function checkProviderStatus(payout: PendingPayout): Promise<{ status: str
       return { status: result.status };
     }
 
+    if (payout.provider === "izichange") {
+      if (!isIziPayConfigured()) return { status: "pending" };
+
+      let result;
+      if (payout.externalReference) {
+        result = await getIziPayout(payout.externalReference);
+      } else {
+        const transaction = await storage.getTransactionById(payout.transactionId);
+        const metadata = ((transaction as any)?.metadata || {}) as Record<string, any>;
+        const request = metadata.iziPayoutRequest;
+        if (!transaction || metadata.iziRetrySafe !== true || !request) return { status: "pending" };
+        result = await createIziPayout({
+          assetCode: String(request.assetCode || ""),
+          amount: String(request.amount || ""),
+          destinationAddress: String(request.destinationAddress || ""),
+          destinationMemo: request.destinationMemo ? String(request.destinationMemo) : undefined,
+          merchantReference: transaction.reference || payout.reference,
+          idempotencyKey: transaction.reference || payout.reference,
+          feeBearer: "merchant",
+        });
+        payout.externalReference = result.id;
+        await storage.updateTransaction(transaction.id, {
+          externalReference: result.id,
+          metadata: { ...metadata, iziPayoutId: result.id, iziRetrySafe: false },
+        } as any);
+      }
+
+      const status = String(result.status || "").toLowerCase();
+      if (status === "confirmed") return { status: "success" };
+      if (status === "failed" || status === "refunded" || status === "cancelled") return { status: "failed" };
+      return { status: "pending" };
+    }
+
     return { status: "pending" };
   } catch (err: any) {
     console.error(`[PayoutPoller] checkProviderStatus error for ${payout.reference}:`, err?.message);
-    if (providerResponseIndicatesNotFound(err?.message)) return { status: "failed" };
+    if (Number(err?.status) === 404 || providerResponseIndicatesNotFound(err?.message)) return { status: "failed" };
     return { status: "pending" };
   }
 }

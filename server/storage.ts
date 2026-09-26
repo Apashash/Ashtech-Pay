@@ -145,11 +145,13 @@ export interface IStorage {
   getApiTransactionByMerchantReference(userId: string, reference: string): Promise<Transaction | undefined>;
   getLastIncomingTransactionByCurrency(userId: string, currency: string): Promise<Transaction | undefined>;
   createTransaction(transaction: InsertTransaction): Promise<Transaction>;
+  createCryptoPayoutAndDebit(transaction: InsertTransaction, debitAmount: number): Promise<Transaction>;
   updateTransactionStatus(id: string, status: string): Promise<Transaction | undefined>;
   claimTransactionStatus(id: string, status: string, allowedFrom?: string[]): Promise<Transaction | undefined>;
   reopenRejectedPayoutAndDebit(id: string, amount: number, walletCurrency: string, allowedFrom?: string[]): Promise<Transaction | undefined>;
   claimPawaIncomingAndCredit(id: string, allowedFrom?: string[]): Promise<Transaction | undefined>;
   claimPawaPayoutFailedAndRefund(id: string, allowedFrom?: string[]): Promise<Transaction | undefined>;
+  claimIziPayPayoutFailedAndRefund(id: string, allowedFrom?: string[]): Promise<Transaction | undefined>;
   updateTransactionMetadata(id: string, metadata: Record<string, unknown>): Promise<void>;
   updateTransaction(id: string, updates: Partial<InsertTransaction>): Promise<Transaction | undefined>;
   updateTransactionExternalReference(id: string, externalReference: string): Promise<Transaction | undefined>;
@@ -774,6 +776,99 @@ export class DatabaseStorage implements IStorage {
     return transaction;
   }
 
+  async createCryptoPayoutAndDebit(
+    insertTransaction: InsertTransaction,
+    debitAmount: number,
+  ): Promise<Transaction> {
+    if (!Number.isFinite(debitAmount) || debitAmount <= 0 || insertTransaction.currency !== "USDT") {
+      throw new Error("INVALID_CRYPTO_PAYOUT_DEBIT");
+    }
+
+    const transactionId = (insertTransaction as any).id || randomUUID();
+    const walletCurrency = String((insertTransaction.metadata as any)?.walletCurrency || "USDT");
+    const created = await db.transaction(async (trx) => {
+      const [user] = await trx.select({ preferredCurrency: users.preferredCurrency })
+        .from(users)
+        .where(eq(users.id, insertTransaction.userId))
+        .limit(1);
+      if (!user) throw new Error("USER_NOT_FOUND");
+
+      const usesPrimaryWallet = (user.preferredCurrency || "XAF") === walletCurrency;
+      const sufficientBalance = isMysqlDialect
+        ? sql`CAST(${usesPrimaryWallet ? users.balance : wallets.balance} AS DECIMAL(30, 10)) >= ${debitAmount.toFixed(2)}`
+        : sql`${usesPrimaryWallet ? users.balance : wallets.balance}::numeric >= ${debitAmount.toFixed(2)}::numeric`;
+
+      let debitConfirmed = false;
+      if (usesPrimaryWallet) {
+        if (isMysqlDialect) {
+          const result = await trx.update(users)
+            .set({ balance: sql`CAST(${users.balance} AS DECIMAL(30, 10)) - ${debitAmount.toFixed(2)}` })
+            .where(and(eq(users.id, insertTransaction.userId), sufficientBalance));
+          const header = Array.isArray(result) ? result[0] : result;
+          const affectedRows = Number((header as any)?.affectedRows ?? (header as any)?.rowCount ?? (header as any)?.changes);
+          if (!Number.isFinite(affectedRows)) throw new Error("CRYPTO_PAYOUT_DEBIT_UNCONFIRMED");
+          debitConfirmed = affectedRows > 0;
+        } else {
+          const [updated] = await trx.update(users)
+            .set({ balance: sql`${users.balance}::numeric - ${debitAmount.toFixed(2)}::numeric` })
+            .where(and(eq(users.id, insertTransaction.userId), sufficientBalance))
+            .returning({ id: users.id });
+          debitConfirmed = !!updated;
+        }
+      } else if (isMysqlDialect) {
+        const result = await trx.update(wallets)
+          .set({
+            balance: sql`CAST(${wallets.balance} AS DECIMAL(30, 10)) - ${debitAmount.toFixed(2)}`,
+            updatedAt: new Date(),
+          })
+          .where(and(
+            eq(wallets.userId, insertTransaction.userId),
+            eq(wallets.currency, walletCurrency),
+            sufficientBalance,
+          ));
+        const header = Array.isArray(result) ? result[0] : result;
+        const affectedRows = Number((header as any)?.affectedRows ?? (header as any)?.rowCount ?? (header as any)?.changes);
+        if (!Number.isFinite(affectedRows)) throw new Error("CRYPTO_PAYOUT_DEBIT_UNCONFIRMED");
+        debitConfirmed = affectedRows > 0;
+      } else {
+        const [updated] = await trx.update(wallets)
+          .set({
+            balance: sql`${wallets.balance}::numeric - ${debitAmount.toFixed(2)}::numeric`,
+            updatedAt: new Date(),
+          })
+          .where(and(
+            eq(wallets.userId, insertTransaction.userId),
+            eq(wallets.currency, walletCurrency),
+            sufficientBalance,
+          ))
+          .returning({ id: wallets.id });
+        debitConfirmed = !!updated;
+      }
+
+      if (!debitConfirmed) throw new Error("INSUFFICIENT_WALLET_BALANCE");
+
+      const transactionValues = {
+        ...insertTransaction,
+        id: transactionId,
+        status: insertTransaction.status || "pending",
+      } as any;
+      if (isMysqlDialect) {
+        await trx.insert(transactions).values(transactionValues);
+        const [transaction] = await trx.select().from(transactions)
+          .where(eq(transactions.id, transactionId))
+          .limit(1);
+        if (!transaction) throw new Error("TRANSACTION_INSERT_READBACK_FAILED");
+        return transaction;
+      }
+      const [transaction] = await trx.insert(transactions).values(transactionValues).returning();
+      if (!transaction) throw new Error("TRANSACTION_INSERT_READBACK_FAILED");
+      return transaction;
+    });
+
+    invalidateUserCache(insertTransaction.userId);
+    return created;
+  }
+
   async updateTransactionStatus(id: string, status: string): Promise<Transaction | undefined> {
     const updateData: Record<string, any> = { status };
     if (status === "completed") updateData.confirmedAt = new Date();
@@ -994,6 +1089,68 @@ export class DatabaseStorage implements IStorage {
     });
     if (claimed) invalidateUserCache(claimed.userId);
     return claimed;
+  }
+
+  async claimIziPayPayoutFailedAndRefund(
+    id: string,
+    allowedFrom: string[] = ["pending", "processing", "pending_manual"],
+  ): Promise<Transaction | undefined> {
+    const refunded = await db.transaction(async (trx) => {
+      const claimWhere = and(
+        eq(transactions.id, id),
+        inArray(transactions.status, allowedFrom),
+        inArray(transactions.type, ["withdrawal", "transfer_out"]),
+      );
+      let transaction: Transaction | undefined;
+      if (isMysqlDialect) {
+        const result = await trx.update(transactions).set({ status: "failed" }).where(claimWhere);
+        const header = Array.isArray(result) ? result[0] : result;
+        const affectedRows = Number((header as any)?.affectedRows ?? (header as any)?.rowsAffected ?? (header as any)?.rowCount ?? (header as any)?.changes);
+        if (!Number.isFinite(affectedRows)) throw new Error("IZIPAY_PAYOUT_REFUND_CLAIM_UNCONFIRMED");
+        if (affectedRows === 0) return undefined;
+        [transaction] = await trx.select().from(transactions).where(eq(transactions.id, id)).limit(1);
+      } else {
+        [transaction] = await trx.update(transactions)
+          .set({ status: "failed" })
+          .where(claimWhere)
+          .returning();
+      }
+      if (!transaction) return undefined;
+
+      const [user] = await trx.select({ preferredCurrency: users.preferredCurrency })
+        .from(users)
+        .where(eq(users.id, transaction.userId))
+        .limit(1);
+      if (!user) throw new Error("IZIPAY_PAYOUT_REFUND_USER_NOT_FOUND");
+      const metadata = (transaction.metadata || {}) as Record<string, unknown>;
+      const walletCurrency = typeof metadata.walletCurrency === "string"
+        ? metadata.walletCurrency
+        : transaction.currency || "USDT";
+      const amount = Number.parseFloat(transaction.totalAmount || transaction.amount);
+      if (!Number.isFinite(amount) || amount <= 0) throw new Error("IZIPAY_PAYOUT_REFUND_AMOUNT_INVALID");
+
+      if ((user.preferredCurrency || "XAF") === walletCurrency) {
+        await trx.update(users)
+          .set({ balance: sql`${users.balance} + ${amount.toFixed(2)}` })
+          .where(eq(users.id, transaction.userId));
+      } else if (isMysqlDialect) {
+        await (trx as any).insert(wallets)
+          .values({ id: randomUUID(), userId: transaction.userId, currency: walletCurrency, balance: amount.toFixed(2) })
+          .onDuplicateKeyUpdate({
+            set: { balance: sql`${wallets.balance} + ${amount.toFixed(2)}`, updatedAt: new Date() },
+          });
+      } else {
+        await trx.insert(wallets)
+          .values({ userId: transaction.userId, currency: walletCurrency, balance: amount.toFixed(2) })
+          .onConflictDoUpdate({
+            target: [wallets.userId, wallets.currency],
+            set: { balance: sql`${wallets.balance} + ${amount.toFixed(2)}`, updatedAt: new Date() },
+          });
+      }
+      return transaction;
+    });
+    if (refunded) invalidateUserCache(refunded.userId);
+    return refunded;
   }
 
   async refundPendingManualPayout(id: string): Promise<Transaction | undefined> {
@@ -1432,9 +1589,14 @@ export class DatabaseStorage implements IStorage {
             eq(transactions.status, "processing"),
             and(
               eq(transactions.status, "pending_manual"),
-              isMysqlDialect
-                ? sql`${transactions.externalReference} REGEXP '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'`
-                : sql`${transactions.externalReference} ~* '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'`,
+              or(
+                isMysqlDialect
+                  ? sql`${transactions.externalReference} REGEXP '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'`
+                  : sql`${transactions.externalReference} ~* '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'`,
+                isMysqlDialect
+                  ? sql`JSON_UNQUOTE(JSON_EXTRACT(${transactions.metadata}, '$.paymentProvider')) = 'izichange'`
+                  : sql`${transactions.metadata}->>'paymentProvider' = 'izichange'`,
+              ),
             ),
           )
         )

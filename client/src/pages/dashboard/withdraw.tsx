@@ -1,5 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/dashboard-layout";
+import { CryptoPayoutPanel } from "@/components/crypto-payout-panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
@@ -77,6 +78,7 @@ function clearOtpLock() {
 
 export default function WithdrawPage() {
   const [selectedMethod, setSelectedMethod] = useState<string>("mobile_money");
+  const [showCryptoPayout, setShowCryptoPayout] = useState(false);
   const [selectedNumber, setSelectedNumber] = useState<string>("");
   const [selectedCountry, setSelectedCountry] = useState<string>("");
   const [selectedOperator, setSelectedOperator] = useState<string>("");
@@ -382,6 +384,29 @@ export default function WithdrawPage() {
 
   return (
     <DashboardLayout>
+      <div className="mx-auto max-w-lg px-4 pt-4">
+        <div className="grid grid-cols-2 gap-2 rounded-xl bg-muted p-1">
+          <Button
+            type="button"
+            variant={!showCryptoPayout ? "default" : "ghost"}
+            onClick={() => setShowCryptoPayout(false)}
+          >
+            Mobile Money / Banque
+          </Button>
+          <Button
+            type="button"
+            variant={showCryptoPayout ? "default" : "ghost"}
+            onClick={() => setShowCryptoPayout(true)}
+          >
+            Retrait crypto
+          </Button>
+        </div>
+      </div>
+      {showCryptoPayout ? (
+        <div className="px-4 py-4">
+          <CryptoPayoutPanel flow="withdrawal" onBack={() => setShowCryptoPayout(false)} />
+        </div>
+      ) : (
       <Form {...form}>
         <form onSubmit={form.handleSubmit((d) => withdrawMutation.mutate(d))}>
           <div className="space-y-4 pb-6">
@@ -710,7 +735,10 @@ export default function WithdrawPage() {
           </div>
         </form>
       </Form>
+      )}
 
+      {!showCryptoPayout && (
+      <>
       {/* ── Confirm bottom sheet ── */}
       <BottomSheet open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
         <BottomSheetContent>
@@ -957,6 +985,8 @@ export default function WithdrawPage() {
             </Button>
           </div>
         </div>
+      )}
+      </>
       )}
     </DashboardLayout>
   );

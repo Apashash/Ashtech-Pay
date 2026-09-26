@@ -53,6 +53,16 @@ interface AdminCryptoResponse {
   disabled: string[];
 }
 
+interface CryptoWithdrawalFeeRule {
+  fixedUsdt: number;
+  percentage: number;
+}
+
+interface CryptoWithdrawalFeeConfig {
+  global: Record<string, CryptoWithdrawalFeeRule>;
+  countries: Record<string, Record<string, CryptoWithdrawalFeeRule>>;
+}
+
 export default function AdminCountries() {
   const { toast } = useToast();
   const [showCountryModal, setShowCountryModal] = useState(false);
@@ -83,6 +93,47 @@ export default function AdminCountries() {
   const { data: adminCryptoAssets, isLoading: loadingCryptoAssets } = useQuery<AdminCryptoResponse>({
     queryKey: ["/api/admin/crypto/assets"],
   });
+  const [payoutFeeScope, setPayoutFeeScope] = useState("global");
+  const [payoutFeeConfig, setPayoutFeeConfig] = useState<CryptoWithdrawalFeeConfig>({
+    global: {},
+    countries: {},
+  });
+  useEffect(() => {
+    const setting = savedSettings?.find(item => item.key === "crypto_withdrawal_fees");
+    if (!setting) return;
+    try {
+      const parsed = JSON.parse(setting.value);
+      if (parsed && typeof parsed === "object") {
+        setPayoutFeeConfig({
+          global: parsed.global && typeof parsed.global === "object" ? parsed.global : {},
+          countries: parsed.countries && typeof parsed.countries === "object" ? parsed.countries : {},
+        });
+      }
+    } catch {
+      setPayoutFeeConfig({ global: {}, countries: {} });
+    }
+  }, [savedSettings]);
+
+  const updatePayoutFee = (assetCode: string, key: keyof CryptoWithdrawalFeeRule, value: number) => {
+    setPayoutFeeConfig(current => {
+      const existing = payoutFeeScope === "global"
+        ? current.global[assetCode]
+        : current.countries[payoutFeeScope]?.[assetCode] || current.global[assetCode];
+      const rule = { fixedUsdt: existing?.fixedUsdt ?? 0, percentage: existing?.percentage ?? 0 };
+      rule[key] = Number.isFinite(value) && value >= 0 ? value : 0;
+      if (payoutFeeScope === "global") {
+        return { ...current, global: { ...current.global, [assetCode]: rule } };
+      }
+      return {
+        ...current,
+        countries: {
+          ...current.countries,
+          [payoutFeeScope]: { ...(current.countries[payoutFeeScope] || {}), [assetCode]: rule },
+        },
+      };
+    });
+  };
+
   const toggleCryptoMutation = useMutation({
     mutationFn: async ({ assetCode, enabled }: { assetCode: string; enabled: boolean }) => {
       const response = await apiRequest("POST", "/api/admin/crypto/assets/toggle", { assetCode, enabled });
@@ -578,6 +629,92 @@ export default function AdminCountries() {
                   ))}
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Retraits crypto</p>
+            <CardTitle className="text-base">Frais USDT par pays et réseau</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Configurez un montant fixe et un pourcentage. Sans règle propre au pays, le tarif global s’applique.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="max-w-sm space-y-2">
+              <Label>Pays de la grille tarifaire</Label>
+              <Select value={payoutFeeScope} onValueChange={setPayoutFeeScope}>
+                <SelectTrigger><SelectValue placeholder="Choisir un pays" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="global">Tarif global</SelectItem>
+                  {countries?.map(country => (
+                    <SelectItem key={country.id} value={country.id}>{country.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {!adminCryptoAssets?.coins?.USDT?.networks?.length ? (
+              <p className="rounded-md border border-dashed p-5 text-sm text-muted-foreground">
+                Les réseaux USDT ne sont pas encore disponibles dans le catalogue.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {adminCryptoAssets.coins.USDT.networks.map(network => {
+                  const localRule = payoutFeeScope === "global"
+                    ? payoutFeeConfig.global[network.assetCode]
+                    : payoutFeeConfig.countries[payoutFeeScope]?.[network.assetCode];
+                  const displayRule = localRule || payoutFeeConfig.global[network.assetCode] || { fixedUsdt: 0, percentage: 0 };
+                  return (
+                    <div key={network.assetCode} className="grid gap-3 rounded-lg border p-3 sm:grid-cols-[minmax(0,1fr)_160px_160px] sm:items-end">
+                      <div className="min-w-0">
+                        <p className="font-medium">{network.label}</p>
+                        <p className="truncate font-mono text-xs text-muted-foreground">{network.assetCode}</p>
+                        {payoutFeeScope !== "global" && !localRule && (
+                          <Badge variant="outline" className="mt-2">Tarif global utilisé</Badge>
+                        )}
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor={`crypto-fee-fixed-${network.assetCode}`}>Fixe (USDT)</Label>
+                        <Input
+                          id={`crypto-fee-fixed-${network.assetCode}`}
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={String(displayRule.fixedUsdt)}
+                          onChange={event => updatePayoutFee(network.assetCode, "fixedUsdt", Number(event.target.value))}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor={`crypto-fee-percent-${network.assetCode}`}>Pourcentage (%)</Label>
+                        <Input
+                          id={`crypto-fee-percent-${network.assetCode}`}
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          value={String(displayRule.percentage)}
+                          onChange={event => updatePayoutFee(network.assetCode, "percentage", Number(event.target.value))}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <Button
+              onClick={() => saveSettingMutation.mutate({
+                key: "crypto_withdrawal_fees",
+                value: JSON.stringify(payoutFeeConfig),
+              })}
+              disabled={saveSettingMutation.isPending}
+              className="gap-2"
+            >
+              <Save className="h-4 w-4" />
+              Enregistrer les tarifs crypto
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              Les frais IziChange sont payés séparément par le compte marchand. Cette grille définit uniquement les frais AshTechPay facturés à l’utilisateur.
+            </p>
           </CardContent>
         </Card>
 

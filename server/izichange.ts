@@ -16,6 +16,14 @@ function getIziPayBaseUrl(): string {
     ? "https://api.sandbox-pay.izichange.com"
     : "https://api.pay.izichange.com";
 }
+export function getIziPayPayoutBaseUrlForMode(mode: "test" | "live"): string {
+  return mode === "test"
+    ? "https://api.sandbox-pay.izichange.com"
+    : "https://api.izichangepay.com";
+}
+function getIziPayPayoutBaseUrl(): string {
+  return getIziPayPayoutBaseUrlForMode(getIziPayApiKey().startsWith("sk_test_") ? "test" : "live");
+}
 
 // Back-compat aliases used in routes.ts (keep so import doesn't break)
 /** @deprecated use getIziPayApiKey() */
@@ -50,6 +58,7 @@ async function iziRequest(
   path: string,
   body?: Record<string, unknown>,
   idempotencyKey?: string,
+  baseUrl = getIziPayBaseUrl(),
 ): Promise<any> {
   const headers: Record<string, string> = {
     Authorization:  `Bearer ${getIziPayApiKey()}`,
@@ -57,7 +66,7 @@ async function iziRequest(
   };
   if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
 
-  const res = await fetch(`${getIziPayBaseUrl()}${path}`, {
+  const res = await fetch(`${baseUrl}${path}`, {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,
@@ -280,6 +289,68 @@ export async function createDirectCharge(
   console.log("[IziChange/DirectCharge] raw response:", JSON.stringify(raw));
 
   return normalizeDirectChargeResponse(raw, params.requestedCoin, params.amount);
+}
+
+// ── Crypto payouts (`POST /v1/payouts`) ───────────────────────────────────────
+export interface CreateIziPayoutParams {
+  assetCode: string;
+  amount: string;
+  destinationAddress: string;
+  destinationMemo?: string;
+  merchantReference: string;
+  idempotencyKey: string;
+  /** IziChange's own service fee bearer; the end-user AshTechPay fee is separate. */
+  feeBearer: "merchant" | "customer";
+}
+
+export interface IziPayoutResult {
+  id: string;
+  status: string;
+  assetCode: string;
+  amount: string;
+  feeAmount?: string;
+  merchantReference?: string;
+}
+
+export function normalizeIziPayoutResponse(raw: any): IziPayoutResult {
+  const payload = raw?.data?.object ?? raw?.data ?? raw?.object ?? raw;
+  return {
+    id: String(payload?.id ?? payload?.payoutId ?? payload?.payout_id ?? raw?.id ?? ""),
+    status: String(payload?.status ?? raw?.status ?? "created").toLowerCase(),
+    assetCode: String(payload?.assetCode ?? payload?.asset_code ?? ""),
+    amount: String(payload?.amount ?? ""),
+    feeAmount: payload?.feeAmount == null ? undefined : String(payload.feeAmount),
+    merchantReference: payload?.merchantReference ?? payload?.merchant_reference,
+  };
+}
+
+export async function createIziPayout(params: CreateIziPayoutParams): Promise<IziPayoutResult> {
+  const body: Record<string, unknown> = {
+    assetCode: params.assetCode,
+    amount: params.amount,
+    destinationAddress: params.destinationAddress,
+    feeBearer: params.feeBearer,
+    merchantReference: params.merchantReference,
+    idempotencyKey: params.idempotencyKey,
+  };
+  if (params.destinationMemo) body.destinationMemo = params.destinationMemo;
+
+  const raw = await iziRequest("POST", "/v1/payouts", body, params.idempotencyKey, getIziPayPayoutBaseUrl());
+  const payout = normalizeIziPayoutResponse(raw);
+  if (!payout.id) {
+    const error = new Error("IziChange a répondu sans identifiant de retrait.") as Error & { code?: string };
+    error.name = "IziPayResponseError";
+    error.code = "provider_invalid_response";
+    throw error;
+  }
+  return payout;
+}
+
+export async function getIziPayout(id: string): Promise<IziPayoutResult> {
+  const raw = await iziRequest("GET", `/v1/payouts/${encodeURIComponent(id)}`, undefined, undefined, getIziPayPayoutBaseUrl());
+  const payout = normalizeIziPayoutResponse(raw);
+  if (!payout.id) payout.id = id;
+  return payout;
 }
 
 // ── Webhook validation (manual HMAC-SHA256, toleranceSeconds = 5 min) ────────

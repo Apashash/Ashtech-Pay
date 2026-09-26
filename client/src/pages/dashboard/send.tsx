@@ -2,6 +2,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CryptoPayoutPanel } from "@/components/crypto-payout-panel";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
@@ -134,6 +135,7 @@ export default function SendMoneyPage() {
   const primaryCurrency = user?.preferredCurrency || "XAF";
   const [selectedWallet, setSelectedWallet] = useState<string>(primaryCurrency);
   const [destination, setDestination] = useState<string>("");
+  const [isCryptoSend, setIsCryptoSend] = useState(false);
   const [internalIdentifier, setInternalIdentifier] = useState("");
   const [internalAmount, setInternalAmount] = useState("");
 
@@ -552,40 +554,42 @@ export default function SendMoneyPage() {
         </div>
 
         {/* Wallet selector + balance */}
-        <div className="flex items-center gap-3 bg-[#1A237E] border border-[#1A237E] rounded-2xl px-4 py-3">
-          <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center shrink-0">
-            <WalletIcon className="w-4 h-4 text-white" />
+        {!isCryptoSend && (
+          <div className="flex items-center gap-3 bg-[#1A237E] border border-[#1A237E] rounded-2xl px-4 py-3">
+            <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center shrink-0">
+              <WalletIcon className="w-4 h-4 text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-white/75">{t.send.yourBalance}</p>
+              <p className="text-base font-bold text-white tabular-nums">
+                {formatWalletBalance(balance, selectedWallet)}
+              </p>
+            </div>
+            {currencyOptions.length > 1 && (
+              <Select value={selectedWallet} onValueChange={setSelectedWallet}>
+                <SelectTrigger className="h-8 w-auto border-white/30 rounded-lg text-xs font-semibold bg-white/10 text-white gap-1">
+                  <span className="flex items-center gap-1.5">
+                    <span aria-hidden="true">{selectedCurrencyOption?.flag || "🌍"}</span>
+                    <span>{selectedWallet} {balance.toLocaleString("fr-FR")}</span>
+                  </span>
+                </SelectTrigger>
+                <SearchableSelectContent
+                  options={currencyOptions}
+                  searchPlaceholder={t.send.searchCurrency}
+                  emptyMessage={t.send.noCurrencyResults}
+                />
+              </Select>
+            )}
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs text-white/75">{t.send.yourBalance}</p>
-            <p className="text-base font-bold text-white tabular-nums">
-              {formatWalletBalance(balance, selectedWallet)}
-            </p>
-          </div>
-          {currencyOptions.length > 1 && (
-            <Select value={selectedWallet} onValueChange={setSelectedWallet}>
-              <SelectTrigger className="h-8 w-auto border-white/30 rounded-lg text-xs font-semibold bg-white/10 text-white gap-1">
-                <span className="flex items-center gap-1.5">
-                  <span aria-hidden="true">{selectedCurrencyOption?.flag || "🌍"}</span>
-                  <span>{selectedWallet} {balance.toLocaleString("fr-FR")}</span>
-                </span>
-              </SelectTrigger>
-              <SearchableSelectContent
-                options={currencyOptions}
-                searchPlaceholder={t.send.searchCurrency}
-                emptyMessage={t.send.noCurrencyResults}
-              />
-            </Select>
-          )}
-        </div>
+        )}
 
-        {/* Tab switcher: Mobile Money first, Internal second */}
+        {/* Tab switcher */}
         <div className="flex gap-2 p-1 bg-muted rounded-xl">
           <button
             type="button"
-            onClick={() => { if (isInternal) setDestination(""); }}
+            onClick={() => { setIsCryptoSend(false); if (isInternal) setDestination(""); }}
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-              !isInternal
+              !isInternal && !isCryptoSend
                 ? "bg-card shadow text-foreground"
                 : "text-muted-foreground hover:text-foreground"
             }`}
@@ -595,19 +599,33 @@ export default function SendMoneyPage() {
           </button>
           <button
             type="button"
-            onClick={() => setDestination(INTERNAL_KEY)}
+            onClick={() => { setIsCryptoSend(false); setDestination(INTERNAL_KEY); }}
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-              isInternal
+              isInternal && !isCryptoSend
                 ? "bg-card shadow text-foreground"
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
             {t.send.internalTransfer}
           </button>
+          <button
+            type="button"
+            onClick={() => { setDestination(""); setIsCryptoSend(true); }}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+              isCryptoSend
+                ? "bg-card shadow text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <WalletIcon className="w-4 h-4" />
+            Crypto
+          </button>
         </div>
 
+        {isCryptoSend && <CryptoPayoutPanel flow="send" />}
+
         {/* INTERNAL TRANSFER */}
-        {isInternal && (
+        {!isCryptoSend && isInternal && (
           <div className="bg-card border border-border rounded-2xl overflow-hidden">
             <div className="px-5 pt-5 pb-2">
               <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
@@ -679,7 +697,7 @@ export default function SendMoneyPage() {
         )}
 
         {/* EXTERNAL TRANSFER */}
-        {!isInternal && (
+        {!isCryptoSend && !isInternal && (
           <div className="bg-card border border-border rounded-2xl overflow-hidden">
             <div className="px-5 pt-5 pb-5 space-y-5">
 
@@ -1021,7 +1039,7 @@ export default function SendMoneyPage() {
         )}
 
         {/* Internal advantages */}
-        {isInternal && (
+        {!isCryptoSend && isInternal && (
           <div className="rounded-xl border border-green-500/20 bg-green-500/5 divide-y divide-green-500/10 overflow-hidden">
             {[t.send.advantageFree, t.send.advantageInstant, t.send.advantageSecure].map((txt, i) => (
               <div key={i} className="flex items-center gap-3 px-4 py-3">
