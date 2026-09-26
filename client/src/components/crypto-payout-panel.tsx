@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ArrowLeft, ArrowRight, Loader2, Save, ShieldCheck, Trash2, Wallet } from "lucide-react";
+import { ArrowLeft, ArrowRight, Loader2, Save, Trash2, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -563,10 +563,6 @@ export function CryptoPayoutPanel({ flow, onBack, embedded = false, amount: cont
             <div className="flex justify-between gap-3"><span className="text-muted-foreground">Frais AshTechPay</span><span>{money(feeAmount)} USDT</span></div>
             <div className="flex justify-between gap-3 font-semibold"><span>Total débité</span><span>{money(totalDebit)} USDT</span></div>
           </div>
-          <p className="flex items-start gap-2 text-xs text-muted-foreground">
-            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
-            Un code de vérification peut être envoyé à votre adresse e-mail. Les envois confirmés sur la blockchain ne peuvent pas être annulés.
-          </p>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setConfirmOpen(false)}>Retour</Button>
             <Button type="button" onClick={beginSubmission} disabled={submitMutation.isPending}>
