@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ArrowLeft, ArrowRight, Loader2, ShieldCheck, Wallet } from "lucide-react";
+import { ArrowLeft, ArrowRight, Loader2, Save, ShieldCheck, Trash2, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { coinLogoUrl } from "@/lib/use-crypto-assets";
 
 type CryptoPayoutFlow = "withdrawal" | "send";
 
@@ -43,6 +44,14 @@ interface UserWallet {
   balance?: string | number;
 }
 
+interface SavedCryptoWithdrawalAddress {
+  id: string;
+  label: string;
+  assetCode: string;
+  address: string;
+  memo: string | null;
+}
+
 interface Props {
   flow: CryptoPayoutFlow;
   onBack?: () => void;
@@ -52,12 +61,34 @@ function money(value: number): string {
   return (Number.isFinite(value) ? value : 0).toFixed(2);
 }
 
+function CryptoAssetLogo({ assetCode }: { assetCode: string }) {
+  const [hasError, setHasError] = useState(false);
+  const symbol = assetCode.split(".")[0].toUpperCase();
+
+  return (
+    <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-[9px] font-bold">
+      {hasError ? (
+        <span aria-hidden="true">{symbol.slice(0, 2)}</span>
+      ) : (
+        <img
+          src={coinLogoUrl(assetCode)}
+          alt=""
+          className="h-full w-full object-contain"
+          onError={() => setHasError(true)}
+        />
+      )}
+    </span>
+  );
+}
+
 export function CryptoPayoutPanel({ flow, onBack }: Props) {
   const { toast } = useToast();
   const [assetCode, setAssetCode] = useState("USDT.TRC20");
   const [amount, setAmount] = useState("");
   const [destinationAddress, setDestinationAddress] = useState("");
   const [destinationMemo, setDestinationMemo] = useState("");
+  const [selectedSavedAddressId, setSelectedSavedAddressId] = useState("");
+  const [addressLabel, setAddressLabel] = useState("");
   const [feeBearer, setFeeBearer] = useState<"sender" | "recipient">("sender");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [otpOpen, setOtpOpen] = useState(false);
@@ -74,6 +105,15 @@ export function CryptoPayoutPanel({ flow, onBack }: Props) {
   });
   const { data: user } = useQuery<UserWallet>({ queryKey: ["/api/user"] });
   const { data: wallets = [] } = useQuery<WalletBalance[]>({ queryKey: ["/api/wallets"] });
+  const { data: savedAddresses = [] } = useQuery<SavedCryptoWithdrawalAddress[]>({
+    queryKey: ["/api/crypto/withdrawal-addresses"],
+    enabled: flow === "withdrawal",
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/crypto/withdrawal-addresses");
+      if (!response.ok) throw new Error("Impossible de charger les adresses crypto enregistrées.");
+      return response.json();
+    },
+  });
 
   const network = useMemo(
     () => config?.networks.find(item => item.assetCode.toUpperCase() === assetCode.toUpperCase()),
@@ -94,6 +134,56 @@ export function CryptoPayoutPanel({ flow, onBack }: Props) {
   const secondaryBalance = Number(wallets.find(wallet => wallet.currency === "USDT")?.balance || 0);
   const usdtBalance = primaryBalance ?? secondaryBalance;
   const amountHasAtMostTwoDecimals = /^\d{1,12}(?:\.\d{1,2})?$/.test(amount.trim());
+  const addressCanBeSaved =
+    flow === "withdrawal" &&
+    !!network &&
+    addressLabel.trim().length > 0 &&
+    addressLabel.trim().length <= 40 &&
+    destinationAddress.trim().length >= 8 &&
+    destinationAddress.trim().length <= 256 &&
+    destinationMemo.trim().length <= 128 &&
+    (!network.memoRequired || !!destinationMemo.trim());
+
+  const saveAddressMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/crypto/withdrawal-addresses", {
+        label: addressLabel.trim(),
+        assetCode,
+        address: destinationAddress.trim(),
+        memo: destinationMemo.trim() || undefined,
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.message || "Impossible d’enregistrer cette adresse.");
+      return body as SavedCryptoWithdrawalAddress & { alreadySaved?: boolean };
+    },
+    onSuccess: saved => {
+      setSelectedSavedAddressId(saved.id);
+      setAddressLabel("");
+      queryClient.invalidateQueries({ queryKey: ["/api/crypto/withdrawal-addresses"] });
+      toast({
+        title: saved.alreadySaved ? "Adresse déjà enregistrée" : "Adresse enregistrée",
+        description: saved.alreadySaved
+          ? "Cette adresse figurait déjà dans vos adresses de retrait."
+          : "Vous pourrez la sélectionner lors de vos prochains retraits crypto.",
+      });
+    },
+    onError: (error: Error) => toast({ title: "Enregistrement impossible", description: error.message, variant: "destructive" }),
+  });
+
+  const deleteAddressMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiRequest("DELETE", `/api/crypto/withdrawal-addresses/${encodeURIComponent(id)}`);
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.message || "Impossible de supprimer cette adresse.");
+      return id;
+    },
+    onSuccess: id => {
+      if (selectedSavedAddressId === id) setSelectedSavedAddressId("");
+      queryClient.invalidateQueries({ queryKey: ["/api/crypto/withdrawal-addresses"] });
+      toast({ title: "Adresse supprimée", description: "L’adresse a été retirée de vos adresses enregistrées." });
+    },
+    onError: (error: Error) => toast({ title: "Suppression impossible", description: error.message, variant: "destructive" }),
+  });
 
   const submitMutation = useMutation({
     mutationFn: async (otpCode?: string) => {
@@ -234,20 +324,92 @@ export function CryptoPayoutPanel({ flow, onBack }: Props) {
 
       <div className="space-y-2">
         <Label htmlFor="crypto-payout-network">Réseau</Label>
-        <Select value={assetCode} onValueChange={setAssetCode} disabled={configLoading || !config?.networks?.length}>
-          <SelectTrigger id="crypto-payout-network">
+        <Select value={assetCode} onValueChange={value => {
+          if (selectedSavedAddressId) {
+            setDestinationAddress("");
+            setDestinationMemo("");
+          }
+          setAssetCode(value);
+          setSelectedSavedAddressId("");
+        }} disabled={configLoading || !config?.networks?.length}>
+          <SelectTrigger id="crypto-payout-network" className="gap-2">
+            <CryptoAssetLogo assetCode={assetCode} />
             <SelectValue placeholder={configLoading ? "Chargement..." : "Choisir un réseau"} />
           </SelectTrigger>
           <SelectContent>
             {config?.networks.map(item => (
-              <SelectItem key={item.assetCode} value={item.assetCode}>{item.label} — {item.assetCode}</SelectItem>
+              <SelectItem key={item.assetCode} value={item.assetCode}>
+                <span className="flex items-center gap-2">
+                  <CryptoAssetLogo assetCode={item.assetCode} />
+                  <span>{item.label}</span>
+                  <span className="text-xs text-muted-foreground">{item.assetCode}</span>
+                </span>
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
-        {!network && Boolean(config?.networks?.length) && (
+        {!network && selectedSavedAddressId && (
+          <p className="text-xs text-amber-600">Le réseau de cette adresse enregistrée n’est pas disponible. Choisissez un autre réseau.</p>
+        )}
+        {!network && !selectedSavedAddressId && Boolean(config?.networks?.length) && (
           <p className="text-xs text-amber-600">Le réseau USDT.TRC20 par défaut est indisponible. Choisissez un réseau manuellement.</p>
         )}
       </div>
+
+      {flow === "withdrawal" && savedAddresses.length > 0 && (
+        <div className="space-y-2">
+          <Label htmlFor="crypto-payout-saved-address">Adresse enregistrée</Label>
+          <Select
+            value={selectedSavedAddressId}
+            onValueChange={id => {
+              const saved = savedAddresses.find(item => item.id === id);
+              if (!saved) return;
+              setAssetCode(saved.assetCode);
+              setDestinationAddress(saved.address);
+              setDestinationMemo(saved.memo || "");
+              setSelectedSavedAddressId(saved.id);
+            }}
+          >
+            <SelectTrigger id="crypto-payout-saved-address">
+              <SelectValue placeholder="Choisir une adresse enregistrée" />
+            </SelectTrigger>
+            <SelectContent>
+              {savedAddresses.map(item => (
+                <SelectItem key={item.id} value={item.id}>
+                  <span className="flex min-w-0 items-center gap-2">
+                    <CryptoAssetLogo assetCode={item.assetCode} />
+                    <span className="truncate">{item.label}</span>
+                    <span className="text-xs text-muted-foreground">{item.assetCode}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {item.address.length > 18 ? `${item.address.slice(0, 8)}…${item.address.slice(-6)}` : item.address}
+                    </span>
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {selectedSavedAddressId && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-destructive hover:text-destructive"
+              disabled={deleteAddressMutation.isPending}
+              onClick={() => {
+                const selected = savedAddresses.find(item => item.id === selectedSavedAddressId);
+                if (selected && window.confirm(`Supprimer l’adresse « ${selected.label} » des adresses enregistrées ?`)) {
+                  deleteAddressMutation.mutate(selected.id);
+                }
+              }}
+            >
+              {deleteAddressMutation.isPending
+                ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                : <Trash2 className="mr-2 h-4 w-4" />}
+              Supprimer cette adresse
+            </Button>
+          )}
+        </div>
+      )}
 
       <div className="space-y-2">
         <Label htmlFor="crypto-payout-address">Adresse de destination</Label>
@@ -256,7 +418,10 @@ export function CryptoPayoutPanel({ flow, onBack }: Props) {
           autoComplete="off"
           spellCheck={false}
           value={destinationAddress}
-          onChange={event => setDestinationAddress(event.target.value)}
+          onChange={event => {
+            setDestinationAddress(event.target.value);
+            setSelectedSavedAddressId("");
+          }}
           placeholder="Collez l’adresse du portefeuille"
           maxLength={256}
         />
@@ -269,10 +434,38 @@ export function CryptoPayoutPanel({ flow, onBack }: Props) {
             id="crypto-payout-memo"
             autoComplete="off"
             value={destinationMemo}
-            onChange={event => setDestinationMemo(event.target.value)}
+            onChange={event => {
+              setDestinationMemo(event.target.value);
+              setSelectedSavedAddressId("");
+            }}
             maxLength={128}
             placeholder="Memo ou tag du destinataire"
           />
+        </div>
+      )}
+
+      {flow === "withdrawal" && !selectedSavedAddressId && (
+        <div className="space-y-2 rounded-xl border p-3">
+          <Label htmlFor="crypto-payout-address-label">Enregistrer pour les prochains retraits</Label>
+          <div className="flex gap-2">
+            <Input
+              id="crypto-payout-address-label"
+              value={addressLabel}
+              onChange={event => setAddressLabel(event.target.value)}
+              placeholder="Nom, par exemple « Mon portefeuille »"
+              maxLength={40}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              className="shrink-0 gap-2"
+              disabled={!addressCanBeSaved || saveAddressMutation.isPending}
+              onClick={() => saveAddressMutation.mutate()}
+            >
+              {saveAddressMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Enregistrer
+            </Button>
+          </div>
         </div>
       )}
 
@@ -311,9 +504,6 @@ export function CryptoPayoutPanel({ flow, onBack }: Props) {
         {feeBearer === "recipient" && (
           <div className="flex justify-between gap-3"><span className="text-muted-foreground">Débité de votre portefeuille</span><span>{money(totalDebit)} USDT</span></div>
         )}
-        <p className="border-t pt-2 text-xs text-muted-foreground">
-          Les frais de service IziChange sont réglés séparément par AshTechPay. Vérifiez soigneusement le réseau et l’adresse.
-        </p>
       </div>
 
       <Button type="button" className="w-full gap-2" disabled={!canContinue || submitMutation.isPending} onClick={() => setConfirmOpen(true)}>

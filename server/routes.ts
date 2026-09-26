@@ -9026,6 +9026,72 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/crypto/withdrawal-addresses", requireAuth, async (req, res) => {
+    try {
+      const addresses = await storage.getCryptoWithdrawalAddressesByUserId(req.userId!);
+      return res.json(addresses);
+    } catch (error: any) {
+      console.error("[crypto/withdrawal-addresses:list]", error.message);
+      return res.status(500).json({ message: "Impossible de charger les adresses crypto enregistrées." });
+    }
+  });
+
+  app.post("/api/crypto/withdrawal-addresses", requireAuth, async (req, res) => {
+    try {
+      const userId = req.userId!;
+      const label = typeof req.body?.label === "string" ? req.body.label.trim() : "";
+      const assetCode = typeof req.body?.assetCode === "string" ? req.body.assetCode.trim().toUpperCase() : "";
+      const address = typeof req.body?.address === "string" ? req.body.address.trim() : "";
+      const memo = typeof req.body?.memo === "string" ? req.body.memo.trim() : "";
+      if (label.length < 1 || label.length > 40) {
+        return res.status(400).json({ message: "Le nom de l’adresse doit contenir entre 1 et 40 caractères." });
+      }
+      if (!/^USDT\.[A-Z0-9_-]{1,30}$/.test(assetCode)) {
+        return res.status(400).json({ message: "Sélectionnez un réseau USDT valide." });
+      }
+      if (address.length < 8 || address.length > 256 || /[\u0000-\u001F\u007F]/.test(address)) {
+        return res.status(400).json({ message: "Adresse crypto invalide." });
+      }
+      if (memo.length > 128 || /[\u0000-\u001F\u007F]/.test(memo)) {
+        return res.status(400).json({ message: "Le memo ou tag est invalide." });
+      }
+
+      const existing = await storage.getCryptoWithdrawalAddressesByUserId(userId);
+      const duplicate = existing.find(item =>
+        item.assetCode.toUpperCase() === assetCode &&
+        item.address === address &&
+        (item.memo || "") === memo
+      );
+      if (duplicate) return res.json({ ...duplicate, alreadySaved: true });
+      if (existing.length >= 20) {
+        return res.status(400).json({ message: "Vous avez atteint la limite de 20 adresses crypto enregistrées." });
+      }
+
+      const saved = await storage.createCryptoWithdrawalAddress({
+        userId,
+        label,
+        assetCode,
+        address,
+        memo: memo || null,
+      });
+      return res.status(201).json(saved);
+    } catch (error: any) {
+      console.error("[crypto/withdrawal-addresses:create]", error.message);
+      return res.status(500).json({ message: "Impossible d’enregistrer cette adresse crypto." });
+    }
+  });
+
+  app.delete("/api/crypto/withdrawal-addresses/:id", requireAuth, async (req, res) => {
+    try {
+      const deleted = await storage.deleteCryptoWithdrawalAddress(String(req.params.id || ""), req.userId!);
+      if (!deleted) return res.status(404).json({ message: "Adresse crypto introuvable." });
+      return res.json({ deleted: true });
+    } catch (error: any) {
+      console.error("[crypto/withdrawal-addresses:delete]", error.message);
+      return res.status(500).json({ message: "Impossible de supprimer cette adresse crypto." });
+    }
+  });
+
   app.get("/api/crypto/payout/config", requireAuth, async (req, res) => {
     try {
       const user = await storage.getUser(req.userId!);

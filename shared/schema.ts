@@ -459,6 +459,18 @@ export const withdrawalNumbers = pgTable("withdrawal_numbers", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const cryptoWithdrawalAddresses = pgTable("crypto_withdrawal_addresses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  label: text("label").notNull(),
+  assetCode: text("asset_code").notNull(),
+  address: text("address").notNull(),
+  memo: text("memo"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (t) => ({
+  userIdx: index("crypto_withdrawal_addresses_user_id_idx").on(t.userId),
+}));
+
 // Pending changes to withdrawal numbers (needs admin approval)
 export const withdrawalNumberChanges = pgTable("withdrawal_number_changes", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -1080,6 +1092,7 @@ export const kycSubmissionFormSchema = z.object({
 
 // Withdrawal numbers schemas
 export const insertWithdrawalNumberSchema = createInsertSchema(withdrawalNumbers).omit({ id: true, createdAt: true });
+export const insertCryptoWithdrawalAddressSchema = createInsertSchema(cryptoWithdrawalAddresses).omit({ id: true, createdAt: true });
 export const insertWithdrawalNumberChangeSchema = createInsertSchema(withdrawalNumberChanges).omit({ id: true, createdAt: true, processedAt: true });
 
 // User notifications schemas
@@ -1241,6 +1254,8 @@ export type PlatformSetting = typeof platformSettings.$inferSelect;
 export type InsertPlatformSetting = z.infer<typeof insertPlatformSettingSchema>;
 export type WithdrawalNumber = typeof withdrawalNumbers.$inferSelect;
 export type InsertWithdrawalNumber = z.infer<typeof insertWithdrawalNumberSchema>;
+export type CryptoWithdrawalAddress = typeof cryptoWithdrawalAddresses.$inferSelect;
+export type InsertCryptoWithdrawalAddress = z.infer<typeof insertCryptoWithdrawalAddressSchema>;
 export type WithdrawalNumberChange = typeof withdrawalNumberChanges.$inferSelect;
 export type InsertWithdrawalNumberChange = z.infer<typeof insertWithdrawalNumberChangeSchema>;
 export type UserNotification = typeof userNotifications.$inferSelect;

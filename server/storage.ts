@@ -25,6 +25,7 @@ import {
   auditLogs,
   platformSettings,
   withdrawalNumbers,
+  cryptoWithdrawalAddresses,
   withdrawalNumberChanges,
   userNotifications,
   pushSubscriptions,
@@ -58,6 +59,8 @@ import {
   type InsertPlatformSetting,
   type WithdrawalNumber,
   type InsertWithdrawalNumber,
+  type CryptoWithdrawalAddress,
+  type InsertCryptoWithdrawalAddress,
   type WithdrawalNumberChange,
   type InsertWithdrawalNumberChange,
   type UserNotification,
@@ -305,6 +308,11 @@ export interface IStorage {
   updateWithdrawalNumber(id: string, updates: Partial<InsertWithdrawalNumber>): Promise<WithdrawalNumber | undefined>;
   deleteWithdrawalNumber(id: string): Promise<void>;
   countUserWithdrawalNumbers(userId: string): Promise<number>;
+
+  // Saved crypto withdrawal addresses
+  getCryptoWithdrawalAddressesByUserId(userId: string): Promise<CryptoWithdrawalAddress[]>;
+  createCryptoWithdrawalAddress(address: InsertCryptoWithdrawalAddress): Promise<CryptoWithdrawalAddress>;
+  deleteCryptoWithdrawalAddress(id: string, userId: string): Promise<boolean>;
   
   // Withdrawal number change requests
   createWithdrawalNumberChange(change: InsertWithdrawalNumberChange): Promise<WithdrawalNumberChange>;
@@ -1497,6 +1505,7 @@ export class DatabaseStorage implements IStorage {
       sql`withdrawal_number_id IN (SELECT id FROM withdrawal_numbers WHERE user_id = ${id})`
     );
     await db.delete(withdrawalNumbers).where(eq(withdrawalNumbers.userId, id));
+    await db.delete(cryptoWithdrawalAddresses).where(eq(cryptoWithdrawalAddresses.userId, id));
     
     await db.delete(paymentIntents).where(eq(paymentIntents.merchantId, id));
     await db.delete(transactions).where(eq(transactions.userId, id));
@@ -2606,6 +2615,44 @@ export class DatabaseStorage implements IStorage {
   async countUserWithdrawalNumbers(userId: string): Promise<number> {
     const [result] = await db.select({ count: count() }).from(withdrawalNumbers).where(eq(withdrawalNumbers.userId, userId));
     return result.count;
+  }
+
+  async getCryptoWithdrawalAddressesByUserId(userId: string): Promise<CryptoWithdrawalAddress[]> {
+    return db.select().from(cryptoWithdrawalAddresses)
+      .where(eq(cryptoWithdrawalAddresses.userId, userId))
+      .orderBy(desc(cryptoWithdrawalAddresses.createdAt));
+  }
+
+  async createCryptoWithdrawalAddress(address: InsertCryptoWithdrawalAddress): Promise<CryptoWithdrawalAddress> {
+    if (isMysqlDialect) {
+      return mysqlInsertAndRead(
+        cryptoWithdrawalAddresses,
+        address as Record<string, unknown>,
+        async (id) => {
+          const [row] = await db.select().from(cryptoWithdrawalAddresses)
+            .where(eq(cryptoWithdrawalAddresses.id, id));
+          return row || undefined;
+        },
+      );
+    }
+    const [row] = await db.insert(cryptoWithdrawalAddresses).values(address).returning();
+    return row;
+  }
+
+  async deleteCryptoWithdrawalAddress(id: string, userId: string): Promise<boolean> {
+    const where = and(
+      eq(cryptoWithdrawalAddresses.id, id),
+      eq(cryptoWithdrawalAddresses.userId, userId),
+    );
+    const [existing] = await db.select({ id: cryptoWithdrawalAddresses.id })
+      .from(cryptoWithdrawalAddresses)
+      .where(where);
+    if (!existing) return false;
+    await db.delete(cryptoWithdrawalAddresses).where(where);
+    const [remaining] = await db.select({ id: cryptoWithdrawalAddresses.id })
+      .from(cryptoWithdrawalAddresses)
+      .where(where);
+    return !remaining;
   }
   
   // Withdrawal number change requests

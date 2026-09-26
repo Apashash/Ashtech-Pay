@@ -74,6 +74,7 @@ const TARGET_TABLES = [
   "user_notifications",
   "users",
   "wallets",
+  "crypto_withdrawal_addresses",
   "withdrawal_number_changes",
   "withdrawal_numbers",
 ];

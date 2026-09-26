@@ -139,6 +139,11 @@ export const withdrawalNumbers = mysqlTable("withdrawal_numbers", {
   id: id(), userId: varchar("user_id", { length: 191 }).notNull().references(() => users.id), phoneNumber: text("phone_number").notNull(),
   operatorName: text("operator_name").notNull(), label: text("label"), isActive: boolean("is_active").default(true), createdAt: dt("created_at"),
 });
+export const cryptoWithdrawalAddresses = mysqlTable("crypto_withdrawal_addresses", {
+  id: id(), userId: varchar("user_id", { length: 191 }).notNull().references(() => users.id),
+  label: text("label").notNull(), assetCode: text("asset_code").notNull(), address: text("address").notNull(),
+  memo: text("memo"), createdAt: dt("created_at"),
+}, t => ({ userIdx: index("crypto_withdrawal_addresses_user_id_idx").on(t.userId) }));
 export const withdrawalNumberChanges = mysqlTable("withdrawal_number_changes", {
   id: id(), userId: varchar("user_id", { length: 191 }).notNull().references(() => users.id),
   withdrawalNumberId: varchar("withdrawal_number_id", { length: 191 }).references(() => withdrawalNumbers.id), action: text("action").notNull(),
@@ -257,6 +262,7 @@ export const insertPlatformSettingSchema = insert(platformSettings);
 export const insertAuditLogSchema = insert(auditLogs);
 export const insertPushSubscriptionSchema = insert(pushSubscriptions);
 export const insertWithdrawalNumberSchema = insert(withdrawalNumbers);
+export const insertCryptoWithdrawalAddressSchema = createInsertSchema(cryptoWithdrawalAddresses).omit({ id: true, createdAt: true });
 export const insertWithdrawalNumberChangeSchema = insert(withdrawalNumberChanges);
 export const insertUserNotificationSchema = insert(userNotifications);
 export const insertGlobalMessageSchema = insert(globalMessages);
@@ -287,6 +293,7 @@ export type TicketMessage = typeof ticketMessages.$inferSelect; export type Inse
 export type AdminLog = typeof adminLogs.$inferSelect; export type InsertAdminLog = z.infer<typeof insertAdminLogSchema>;
 export type PlatformSetting = typeof platformSettings.$inferSelect; export type InsertPlatformSetting = z.infer<typeof insertPlatformSettingSchema>;
 export type WithdrawalNumber = typeof withdrawalNumbers.$inferSelect; export type InsertWithdrawalNumber = z.infer<typeof insertWithdrawalNumberSchema>;
+export type CryptoWithdrawalAddress = typeof cryptoWithdrawalAddresses.$inferSelect; export type InsertCryptoWithdrawalAddress = z.infer<typeof insertCryptoWithdrawalAddressSchema>;
 export type WithdrawalNumberChange = typeof withdrawalNumberChanges.$inferSelect; export type InsertWithdrawalNumberChange = z.infer<typeof insertWithdrawalNumberChangeSchema>;
 export type AuditLog = typeof auditLogs.$inferSelect; export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
 export type PushSubscription = typeof pushSubscriptions.$inferSelect; export type InsertPushSubscription = z.infer<typeof insertPushSubscriptionSchema>;
