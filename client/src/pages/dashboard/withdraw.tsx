@@ -11,7 +11,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { withdrawSchema, type SupportedCurrency, type WithdrawalNumber } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { User } from "@shared/schema";
-import { Smartphone, Building2, Loader2, CheckCircle, AlertCircle, Plus, Settings, Shield, Info, CreditCard, X, RefreshCw, Clock } from "lucide-react";
+import { Smartphone, Wallet, Loader2, CheckCircle, AlertCircle, Plus, Settings, Shield, Info, CreditCard, X, RefreshCw, Clock } from "lucide-react";
 import { useLanguage } from "@/lib/language";
 import { BottomSheet, BottomSheetContent, BottomSheetHeader, BottomSheetTitle, BottomSheetFooter } from "@/components/ui/bottom-sheet";
 import { getOperatorLogo } from "@/lib/operator-logos";
@@ -54,7 +54,7 @@ interface WalletBalance {
 
 const withdrawMethods = [
   { id: "mobile_money", name: "Mobile Money", icon: Smartphone, description: "Orange, MTN, Wave, Airtel..." },
-  { id: "bank_transfer", name: "Virement bancaire", icon: Building2, description: "Vers votre compte bancaire" },
+  { id: "crypto", name: "Crypto", icon: Wallet, description: "Retrait en USDT" },
 ];
 
 const OTP_LOCK_KEY = "atp_otp_lock";
@@ -384,24 +384,6 @@ export default function WithdrawPage() {
 
   return (
     <DashboardLayout>
-      <div className="mx-auto max-w-lg px-4 pt-4">
-        <div className="grid grid-cols-2 gap-2 rounded-xl bg-muted p-1">
-          <Button
-            type="button"
-            variant={!showCryptoPayout ? "default" : "ghost"}
-            onClick={() => setShowCryptoPayout(false)}
-          >
-            Mobile Money / Banque
-          </Button>
-          <Button
-            type="button"
-            variant={showCryptoPayout ? "default" : "ghost"}
-            onClick={() => setShowCryptoPayout(true)}
-          >
-            Retrait crypto
-          </Button>
-        </div>
-      </div>
       {showCryptoPayout ? (
         <div className="px-4 py-4">
           <CryptoPayoutPanel flow="withdrawal" onBack={() => setShowCryptoPayout(false)} />
@@ -440,30 +422,20 @@ export default function WithdrawPage() {
               )}
             </div>
 
-            {limitsLoaded && balance < minWithdrawal && (
-              <div className="flex items-center gap-3 rounded-xl border border-yellow-500/40 bg-yellow-500/8 px-4 py-3">
-                <AlertCircle className="w-4 h-4 text-yellow-500 shrink-0" />
-                <p className="text-sm text-foreground">
-                  Solde insuffisant. Minimum : {minWithdrawal.toLocaleString()} {withdrawalCurrency}.
-                </p>
-              </div>
-            )}
-
             {/* ── Méthode ── */}
             <div className="rounded-2xl border border-border bg-card p-4 space-y-3">
               <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Méthode</p>
               <div className="grid grid-cols-2 gap-3">
                 {withdrawMethods.map((method) => {
                   const isSelected = selectedMethod === method.id;
-                  const isDisabled = method.id === "bank_transfer";
                   return (
                     <button
                       key={method.id}
                       type="button"
                       data-testid={`withdraw-method-${method.id}`}
                       onClick={() => {
-                        if (isDisabled) {
-                          toast({ title: "Bientôt disponible", description: "Le virement bancaire sera disponible prochainement." });
+                        if (method.id === "crypto") {
+                          setShowCryptoPayout(true);
                         } else {
                           setSelectedMethod(method.id);
                         }
@@ -472,14 +444,9 @@ export default function WithdrawPage() {
                         isSelected
                           ? "border-primary bg-primary/5 shadow-sm"
                           : "border-border bg-background hover:border-muted-foreground/30"
-                      } ${isDisabled ? "opacity-60" : ""}`}
+                      }`}
                     >
-                      {isDisabled && (
-                        <span className="absolute top-2 right-2 text-[9px] font-bold uppercase tracking-wider text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                          Bientôt
-                        </span>
-                      )}
-                      {isSelected && !isDisabled && (
+                      {isSelected && (
                         <CheckCircle className="absolute top-2 right-2 w-4 h-4 text-primary" />
                       )}
                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
