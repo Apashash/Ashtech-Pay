@@ -72,15 +72,22 @@ export function coinLogoUrl(symbolOrAssetCode: string): string {
  */
 const NETWORK_COIN: Record<string, string> = {
   TRC20:   "trx",
+  "TRC-20": "trx",
+  TRON:    "trx",
   BEP20:   "bnb",
+  "BEP-20": "bnb",
   BSC:     "bnb",
   ERC20:   "eth",
+  "ERC-20": "eth",
   ETH:     "eth",
+  ETHEREUM:"eth",
   TON:     "ton",
   Polygon: "matic",
+  POLYGON: "matic",
   POL:     "matic",
   MATIC:   "matic",
   SOL:     "sol",
+  SOLANA:  "sol",
   BTC:     "btc",
   LTC:     "ltc",
   DOGE:    "doge",
@@ -92,7 +99,11 @@ const NETWORK_COIN: Record<string, string> = {
 };
 
 export function networkLogoUrl(networkId: string): string {
-  const slug = NETWORK_COIN[networkId] ?? networkId.toLowerCase();
+  const normalizedId = networkId.trim().toLowerCase();
+  const matchingId = Object.keys(NETWORK_COIN).find(
+    id => id.toLowerCase() === normalizedId,
+  );
+  const slug = matchingId ? NETWORK_COIN[matchingId] : normalizedId;
   return `${CDN}/${slug}.png`;
 }
 

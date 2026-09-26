@@ -1365,7 +1365,7 @@ export default function SendMoneyPage() {
             <div>
               <h3 className="text-xl font-bold text-foreground">{successLabel || "Envoi effectué avec succès"}</h3>
               <p className="text-sm text-muted-foreground mt-1">
-                {otpType === "internal" ? "Transfert instantané — aucun frais." : "Votre transaction est en cours de traitement."}
+                {otpType === "internal" ? "Transfert instantané aucun frais." : "Votre transaction est en cours de traitement."}
               </p>
             </div>
             <Button

@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { coinLogoUrl } from "@/lib/use-crypto-assets";
+import { networkLogoUrl } from "@/lib/use-crypto-assets";
 
 type CryptoPayoutFlow = "withdrawal" | "send";
 
@@ -61,9 +61,34 @@ function money(value: number): string {
   return (Number.isFinite(value) ? value : 0).toFixed(2);
 }
 
-function CryptoAssetLogo({ assetCode }: { assetCode: string }) {
+const NETWORK_SYMBOLS: Record<string, string> = {
+  TRC20: "TRX",
+  TRX: "TRX",
+  BEP20: "BNB",
+  BSC: "BNB",
+  ERC20: "ETH",
+  ETH: "ETH",
+  TON: "TON",
+  POLYGON: "POL",
+  POL: "POL",
+  MATIC: "POL",
+  SOL: "SOL",
+};
+
+function networkIdForAssetCode(assetCode: string, networks: CryptoNetwork[]): string {
+  const match = networks.find(
+    item => item.assetCode.toUpperCase() === assetCode.toUpperCase(),
+  );
+  if (match) return match.id;
+  return assetCode.split(".").slice(1).join(".") || assetCode;
+}
+
+function CryptoNetworkLogo({ networkId }: { networkId: string }) {
   const [hasError, setHasError] = useState(false);
-  const symbol = assetCode.split(".")[0].toUpperCase();
+  const normalizedNetworkId = networkId.trim().toUpperCase();
+  const symbol = NETWORK_SYMBOLS[normalizedNetworkId]
+    || normalizedNetworkId.replace(/[^A-Z0-9]/g, "").slice(0, 2)
+    || "CR";
 
   return (
     <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-[9px] font-bold">
@@ -71,7 +96,7 @@ function CryptoAssetLogo({ assetCode }: { assetCode: string }) {
         <span aria-hidden="true">{symbol.slice(0, 2)}</span>
       ) : (
         <img
-          src={coinLogoUrl(assetCode)}
+          src={networkLogoUrl(networkId)}
           alt=""
           className="h-full w-full object-contain"
           onError={() => setHasError(true)}
@@ -303,9 +328,6 @@ export function CryptoPayoutPanel({ flow, onBack }: Props) {
         )}
         <div className="min-w-0 flex-1">
           <h2 className="text-lg font-semibold">{flow === "withdrawal" ? "Retrait crypto" : "Envoyer des USDT"}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Envoyez des USDT vers une adresse externe depuis votre portefeuille USDT.
-          </p>
         </div>
       </div>
 
@@ -333,14 +355,13 @@ export function CryptoPayoutPanel({ flow, onBack }: Props) {
           setSelectedSavedAddressId("");
         }} disabled={configLoading || !config?.networks?.length}>
           <SelectTrigger id="crypto-payout-network" className="gap-2">
-            <CryptoAssetLogo assetCode={assetCode} />
             <SelectValue placeholder={configLoading ? "Chargement..." : "Choisir un réseau"} />
           </SelectTrigger>
           <SelectContent>
             {config?.networks.map(item => (
               <SelectItem key={item.assetCode} value={item.assetCode}>
                 <span className="flex items-center gap-2">
-                  <CryptoAssetLogo assetCode={item.assetCode} />
+                    <CryptoNetworkLogo networkId={item.id} />
                   <span>{item.label}</span>
                   <span className="text-xs text-muted-foreground">{item.assetCode}</span>
                 </span>
@@ -377,7 +398,7 @@ export function CryptoPayoutPanel({ flow, onBack }: Props) {
               {savedAddresses.map(item => (
                 <SelectItem key={item.id} value={item.id}>
                   <span className="flex min-w-0 items-center gap-2">
-                    <CryptoAssetLogo assetCode={item.assetCode} />
+                    <CryptoNetworkLogo networkId={networkIdForAssetCode(item.assetCode, config?.networks || [])} />
                     <span className="truncate">{item.label}</span>
                     <span className="text-xs text-muted-foreground">{item.assetCode}</span>
                     <span className="text-xs text-muted-foreground">

@@ -266,7 +266,7 @@ function SendMoneyDialog({ open, onClose, wallets = [] }: { open: boolean; onClo
                 <SelectValue placeholder="Choisir la destination" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={INTERNAL_TRANSFER_KEY}>🏦 Transfert Interne Ashtech Pay</SelectItem>
+                <SelectItem value={INTERNAL_TRANSFER_KEY}>Interne</SelectItem>
                 {Object.keys(COUNTRY_CURRENCIES)
                   .filter((c, i, arr) => arr.findIndex(x => COUNTRY_CURRENCIES[x] === COUNTRY_CURRENCIES[c]) === i)
                   .map(country => (
