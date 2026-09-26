@@ -73,6 +73,10 @@ export default function AdminCountries() {
     izichange_fee_percent: "2.5",
     izichange_provider_fee_percent: "0",
   });
+  const [cryptoWithdrawalLimits, setCryptoWithdrawalLimits] = useState({
+    minUsdt: "",
+    maxUsdt: "",
+  });
   const { data: savedSettings } = useQuery<PlatformSetting[]>({ queryKey: ["/api/admin/settings"] });
   useEffect(() => {
     if (savedSettings) {
@@ -82,6 +86,22 @@ export default function AdminCountries() {
           patch[s.key] = s.value;
       });
       if (Object.keys(patch).length) setCryptoSettings(prev => ({ ...prev, ...patch }));
+    }
+  }, [savedSettings]);
+  useEffect(() => {
+    const setting = savedSettings?.find(item => item.key === "crypto_withdrawal_limits");
+    if (!setting) {
+      setCryptoWithdrawalLimits({ minUsdt: "", maxUsdt: "" });
+      return;
+    }
+    try {
+      const parsed = JSON.parse(setting.value);
+      setCryptoWithdrawalLimits({
+        minUsdt: parsed?.minUsdt == null ? "" : String(parsed.minUsdt),
+        maxUsdt: parsed?.maxUsdt == null ? "" : String(parsed.maxUsdt),
+      });
+    } catch {
+      setCryptoWithdrawalLimits({ minUsdt: "", maxUsdt: "" });
     }
   }, [savedSettings]);
   const saveSettingMutation = useMutation({
@@ -131,6 +151,36 @@ export default function AdminCountries() {
           [payoutFeeScope]: { ...(current.countries[payoutFeeScope] || {}), [assetCode]: rule },
         },
       };
+    });
+  };
+  const cryptoMinValue = cryptoWithdrawalLimits.minUsdt.trim() === "" ? null : Number(cryptoWithdrawalLimits.minUsdt);
+  const cryptoMaxValue = cryptoWithdrawalLimits.maxUsdt.trim() === "" ? null : Number(cryptoWithdrawalLimits.maxUsdt);
+  const cryptoLimitsAreCleared = cryptoMinValue === null && cryptoMaxValue === null;
+  const cryptoLimitsAreValid = cryptoLimitsAreCleared || (
+    cryptoMinValue !== null &&
+    cryptoMaxValue !== null &&
+    Number.isFinite(cryptoMinValue) &&
+    Number.isFinite(cryptoMaxValue) &&
+    cryptoMinValue > 0 &&
+    cryptoMaxValue >= cryptoMinValue &&
+    Math.abs(Math.round(cryptoMinValue * 100) / 100 - cryptoMinValue) <= 1e-9 &&
+    Math.abs(Math.round(cryptoMaxValue * 100) / 100 - cryptoMaxValue) <= 1e-9
+  );
+  const saveCryptoWithdrawalLimits = () => {
+    if (!cryptoLimitsAreValid) {
+      toast({
+        title: "Limites invalides",
+        description: "Saisissez un minimum et un maximum positifs, avec au plus deux décimales. Le maximum doit être supérieur ou égal au minimum.",
+        variant: "destructive",
+      });
+      return;
+    }
+    saveSettingMutation.mutate({
+      key: "crypto_withdrawal_limits",
+      value: JSON.stringify({
+        minUsdt: cryptoMinValue,
+        maxUsdt: cryptoMaxValue,
+      }),
     });
   };
 
@@ -628,6 +678,66 @@ export default function AdminCountries() {
                     </div>
                   ))}
               </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Retraits crypto</p>
+            <CardTitle className="text-base">Limites des retraits USDT</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Ces limites s’appliquent au montant demandé en USDT, quel que soit le pays ou le réseau choisi.
+              Les retraits restent désactivés tant que les deux valeurs ne sont pas renseignées.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="crypto-withdrawal-min-usdt">Minimum (USDT)</Label>
+                <Input
+                  id="crypto-withdrawal-min-usdt"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={cryptoWithdrawalLimits.minUsdt}
+                  onChange={event => setCryptoWithdrawalLimits(current => ({ ...current, minUsdt: event.target.value }))}
+                  placeholder="Non configuré"
+                  data-testid="input-crypto-withdrawal-min-usdt"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="crypto-withdrawal-max-usdt">Maximum (USDT)</Label>
+                <Input
+                  id="crypto-withdrawal-max-usdt"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={cryptoWithdrawalLimits.maxUsdt}
+                  onChange={event => setCryptoWithdrawalLimits(current => ({ ...current, maxUsdt: event.target.value }))}
+                  placeholder="Non configuré"
+                  data-testid="input-crypto-withdrawal-max-usdt"
+                />
+              </div>
+            </div>
+            <Button
+              onClick={saveCryptoWithdrawalLimits}
+              disabled={saveSettingMutation.isPending || !cryptoLimitsAreValid}
+              className="gap-2"
+              data-testid="button-save-crypto-withdrawal-limits"
+            >
+              <Save className="h-4 w-4" />
+              Enregistrer les limites
+            </Button>
+            {cryptoLimitsAreCleared && (
+              <p className="text-xs text-amber-600">
+                Les deux champs sont vides : enregistrer cette configuration désactivera les retraits crypto.
+              </p>
+            )}
+            {!cryptoLimitsAreValid && (
+              <p className="text-xs text-destructive">
+                Renseignez les deux montants avec au plus deux décimales et vérifiez que le maximum est supérieur ou égal au minimum.
+              </p>
             )}
           </CardContent>
         </Card>

@@ -76,7 +76,7 @@ import { decryptField, encryptField, isFieldEncryptionConfigured } from "./field
 import { isAdminPinProtectionEnabled, requireAdminPin, verifyAdminPinCode } from "./adminPin";
 import { createPaymentIntent, createDirectCharge, createIziPayout, validateWebhook, getIziPayWebhookSecret, toIziPayCurrency, isIziPayConfigured } from "./izichange";
 import { fetchCryptoAssets, filterCryptoAssets, parseDisabledCryptoAssets, getStaticCryptoAssets } from "./cryptoAssets";
-import { calculateCryptoPayout, isDefinitiveIziPayoutRejection, parseCryptoPayoutFeeConfig, resolveCryptoPayoutFee } from "./cryptoPayout";
+import { calculateCryptoPayout, isDefinitiveIziPayoutRejection, parseCryptoPayoutFeeConfig, parseCryptoWithdrawalLimits, resolveCryptoPayoutFee } from "./cryptoPayout";
 import {
   buildDirectCryptoCustomer,
   computeDirectCryptoFeeBreakdown,
@@ -9111,6 +9111,8 @@ export async function registerRoutes(
       const usdtNetworks = filterCryptoAssets(allAssets, disabled).USDT?.networks || [];
       const setting = await storage.getSetting("crypto_withdrawal_fees");
       const feeConfig = parseCryptoPayoutFeeConfig(setting?.value);
+      const limitsSetting = await storage.getSetting("crypto_withdrawal_limits");
+      const withdrawalLimits = parseCryptoWithdrawalLimits(limitsSetting?.value);
       const fees = Object.fromEntries(usdtNetworks.map(network => [
         network.assetCode,
         resolveCryptoPayoutFee(feeConfig, country?.id, network.assetCode),
@@ -9120,6 +9122,7 @@ export async function registerRoutes(
         countryCode: country?.code || userCountry || "CM",
         networks: usdtNetworks,
         fees,
+        withdrawalLimits,
       });
     } catch (error: any) {
       console.error("[crypto/payout/config]", error.message);
@@ -9167,6 +9170,23 @@ export async function registerRoutes(
       const enteredAmount = Number(amountRaw);
       if (!Number.isFinite(enteredAmount) || enteredAmount <= 0) {
         return res.status(400).json({ message: "Montant invalide." });
+      }
+      if (flow === "withdrawal") {
+        const limitsSetting = await storage.getSetting("crypto_withdrawal_limits");
+        const withdrawalLimits = parseCryptoWithdrawalLimits(limitsSetting?.value);
+        if (!withdrawalLimits.configured) {
+          return res.status(503).json({ message: "Les limites de retrait crypto ne sont pas encore configurées." });
+        }
+        if (enteredAmount < withdrawalLimits.minUsdt!) {
+          return res.status(400).json({
+            message: `Le montant minimum de retrait crypto est de ${withdrawalLimits.minUsdt} USDT.`,
+          });
+        }
+        if (enteredAmount > withdrawalLimits.maxUsdt!) {
+          return res.status(400).json({
+            message: `Le montant maximum de retrait crypto est de ${withdrawalLimits.maxUsdt} USDT.`,
+          });
+        }
       }
 
       const disabledSetting = await storage.getSetting("crypto_disabled_assets");

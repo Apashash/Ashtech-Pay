@@ -4,6 +4,7 @@ import {
   calculateCryptoPayout,
   isDefinitiveIziPayoutRejection,
   parseCryptoPayoutFeeConfig,
+  parseCryptoWithdrawalLimits,
   resolveCryptoPayoutFee,
 } from "../server/cryptoPayout";
 import { getIziPayPayoutBaseUrlForMode, normalizeIziPayoutResponse } from "../server/izichange";
@@ -26,6 +27,23 @@ test("crypto payout fee configuration supports country overrides and global fall
     fixedUsdt: 0,
     percentage: 0,
   });
+});
+
+test("crypto withdrawal limits require positive, ordered USDT amounts with at most two decimals", () => {
+  assert.deepEqual(parseCryptoWithdrawalLimits('{"minUsdt":"5.25","maxUsdt":"500"}'), {
+    minUsdt: 5.25,
+    maxUsdt: 500,
+    configured: true,
+  });
+  assert.equal(parseCryptoWithdrawalLimits({ minUsdt: 0.29, maxUsdt: 10 }).configured, true);
+  assert.deepEqual(parseCryptoWithdrawalLimits('{"minUsdt":null,"maxUsdt":500}'), {
+    minUsdt: null,
+    maxUsdt: null,
+    configured: false,
+  });
+  assert.equal(parseCryptoWithdrawalLimits({ minUsdt: 50, maxUsdt: 20 }).configured, false);
+  assert.equal(parseCryptoWithdrawalLimits({ minUsdt: 0, maxUsdt: 20 }).configured, false);
+  assert.equal(parseCryptoWithdrawalLimits({ minUsdt: 1.001, maxUsdt: 20 }).configured, false);
 });
 
 test("recipient-paid fee is deducted from payout while sender-paid fee increases debit", () => {

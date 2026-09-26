@@ -15,7 +15,46 @@ export interface CryptoPayoutCalculation {
   totalDebit: string;
 }
 
+export interface CryptoWithdrawalLimits {
+  minUsdt: number | null;
+  maxUsdt: number | null;
+  configured: boolean;
+}
+
 const ZERO_FEE: CryptoPayoutFeeRule = { fixedUsdt: 0, percentage: 0 };
+
+export function parseCryptoWithdrawalLimits(value: unknown): CryptoWithdrawalLimits {
+  let raw: unknown = value;
+  if (typeof raw === "string") {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      raw = null;
+    }
+  }
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return { minUsdt: null, maxUsdt: null, configured: false };
+  }
+
+  const source = raw as Record<string, unknown>;
+  const parseLimit = (candidate: unknown): number | null => {
+    if (candidate === null || candidate === undefined || String(candidate).trim() === "") return null;
+    const parsed = Number(candidate);
+    if (
+      !Number.isFinite(parsed) ||
+      parsed <= 0 ||
+      Math.abs(Math.round(parsed * 100) / 100 - parsed) > 1e-9
+    ) return null;
+    return parsed;
+  };
+  const minUsdt = parseLimit(source.minUsdt);
+  const maxUsdt = parseLimit(source.maxUsdt);
+  const configured = minUsdt !== null && maxUsdt !== null && maxUsdt >= minUsdt;
+
+  return configured
+    ? { minUsdt, maxUsdt, configured: true }
+    : { minUsdt: null, maxUsdt: null, configured: false };
+}
 
 function parseRule(value: unknown): CryptoPayoutFeeRule | undefined {
   if (!value || typeof value !== "object") return undefined;

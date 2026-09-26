@@ -27,11 +27,16 @@ interface CryptoNetwork {
   memoType: string | null;
 }
 
-interface CryptoPayoutConfig {
+export interface CryptoPayoutConfig {
   enabled: boolean;
   countryCode: string;
   networks: CryptoNetwork[];
   fees: Record<string, { fixedUsdt: number; percentage: number }>;
+  withdrawalLimits?: {
+    minUsdt: number | null;
+    maxUsdt: number | null;
+    configured: boolean;
+  };
 }
 
 interface WalletBalance {
@@ -55,6 +60,10 @@ interface SavedCryptoWithdrawalAddress {
 interface Props {
   flow: CryptoPayoutFlow;
   onBack?: () => void;
+  embedded?: boolean;
+  amount?: string;
+  onAmountChange?: (value: string) => void;
+  onSuccess?: () => void;
 }
 
 function money(value: number): string {
@@ -106,10 +115,15 @@ function CryptoNetworkLogo({ networkId }: { networkId: string }) {
   );
 }
 
-export function CryptoPayoutPanel({ flow, onBack }: Props) {
+export function CryptoPayoutPanel({ flow, onBack, embedded = false, amount: controlledAmount, onAmountChange, onSuccess }: Props) {
   const { toast } = useToast();
   const [assetCode, setAssetCode] = useState("USDT.TRC20");
-  const [amount, setAmount] = useState("");
+  const [localAmount, setLocalAmount] = useState("");
+  const amount = controlledAmount ?? localAmount;
+  const setAmount = (value: string) => {
+    if (controlledAmount === undefined) setLocalAmount(value);
+    onAmountChange?.(value);
+  };
   const [destinationAddress, setDestinationAddress] = useState("");
   const [destinationMemo, setDestinationMemo] = useState("");
   const [selectedSavedAddressId, setSelectedSavedAddressId] = useState("");
@@ -232,6 +246,7 @@ export function CryptoPayoutPanel({ flow, onBack }: Props) {
       setOtpRef("");
       setOtp("");
       setAmount("");
+        onSuccess?.();
       setDestinationAddress("");
       setDestinationMemo("");
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
@@ -302,6 +317,11 @@ export function CryptoPayoutPanel({ flow, onBack }: Props) {
 
   const canContinue =
     !!config?.enabled &&
+    (flow !== "withdrawal" || (
+      config.withdrawalLimits?.configured === true &&
+      amountValue >= Number(config.withdrawalLimits.minUsdt) &&
+      amountValue <= Number(config.withdrawalLimits.maxUsdt)
+    )) &&
     !!network &&
     Number.isFinite(amountValue) &&
     amountValue > 0 &&
@@ -315,21 +335,23 @@ export function CryptoPayoutPanel({ flow, onBack }: Props) {
 
   return (
     <section
-      className="mx-auto w-full max-w-xl space-y-5 rounded-2xl border bg-card p-4 shadow-sm sm:p-6"
+      className={embedded ? "space-y-4" : "mx-auto w-full max-w-xl space-y-5 rounded-2xl border bg-card p-4 shadow-sm sm:p-6"}
       onKeyDown={event => {
         if (event.key === "Enter" && event.target instanceof HTMLInputElement) event.preventDefault();
       }}
     >
-      <div className="flex items-start gap-3">
-        {onBack && (
-          <Button type="button" variant="ghost" size="icon" onClick={onBack} aria-label="Retour">
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-        )}
-        <div className="min-w-0 flex-1">
-          <h2 className="text-lg font-semibold">{flow === "withdrawal" ? "Retrait crypto" : "Envoyer des USDT"}</h2>
+      {!embedded && (
+        <div className="flex items-start gap-3">
+          {onBack && (
+            <Button type="button" variant="ghost" size="icon" onClick={onBack} aria-label="Retour">
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          )}
+          <div className="min-w-0 flex-1">
+            <h2 className="text-lg font-semibold">{flow === "withdrawal" ? "Retrait crypto" : "Envoyer des USDT"}</h2>
+          </div>
         </div>
-      </div>
+      )}
 
       {!configLoading && !config?.enabled && (
         <div role="alert" className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-700 dark:text-amber-300">
@@ -337,12 +359,20 @@ export function CryptoPayoutPanel({ flow, onBack }: Props) {
         </div>
       )}
 
-      <div className="flex items-center justify-between rounded-xl bg-muted/50 px-4 py-3">
-        <span className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Wallet className="h-4 w-4" /> Solde USDT
-        </span>
-        <span className="font-semibold tabular-nums">{money(usdtBalance)} USDT</span>
-      </div>
+      {flow === "withdrawal" && !configLoading && config?.enabled && config.withdrawalLimits?.configured !== true && (
+        <div role="alert" className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-700 dark:text-amber-300">
+          Les retraits crypto seront disponibles dès que l’administration aura configuré le minimum et le maximum en USDT.
+        </div>
+      )}
+
+      {!embedded && (
+        <div className="flex items-center justify-between rounded-xl bg-muted/50 px-4 py-3">
+          <span className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Wallet className="h-4 w-4" /> Solde USDT
+          </span>
+          <span className="font-semibold tabular-nums">{money(usdtBalance)} USDT</span>
+        </div>
+      )}
 
       <div className="space-y-2">
         <Label htmlFor="crypto-payout-network">Réseau</Label>
@@ -490,19 +520,21 @@ export function CryptoPayoutPanel({ flow, onBack }: Props) {
         </div>
       )}
 
-      <div className="space-y-2">
-        <Label htmlFor="crypto-payout-amount">Montant (USDT)</Label>
-        <Input
-          id="crypto-payout-amount"
-          type="number"
-          min="0.01"
-          step="0.01"
-          inputMode="decimal"
-          value={amount}
-          onChange={event => setAmount(event.target.value)}
-          placeholder="0.00"
-        />
-      </div>
+      {!embedded && (
+        <div className="space-y-2">
+          <Label htmlFor="crypto-payout-amount">Montant (USDT)</Label>
+          <Input
+            id="crypto-payout-amount"
+            type="number"
+            min="0.01"
+            step="0.01"
+            inputMode="decimal"
+            value={amount}
+            onChange={event => setAmount(event.target.value)}
+            placeholder="0.00"
+          />
+        </div>
+      )}
 
       <div className="space-y-2">
         <Label>Qui paie les frais AshTechPay ?</Label>

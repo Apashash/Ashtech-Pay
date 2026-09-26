@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/dashboard-layout";
-import { CryptoPayoutPanel } from "@/components/crypto-payout-panel";
+import { CryptoPayoutPanel, type CryptoPayoutConfig } from "@/components/crypto-payout-panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
@@ -78,7 +78,6 @@ function clearOtpLock() {
 
 export default function WithdrawPage() {
   const [selectedMethod, setSelectedMethod] = useState<string>("mobile_money");
-  const [showCryptoPayout, setShowCryptoPayout] = useState(false);
   const [selectedNumber, setSelectedNumber] = useState<string>("");
   const [selectedCountry, setSelectedCountry] = useState<string>("");
   const [selectedOperator, setSelectedOperator] = useState<string>("");
@@ -104,6 +103,14 @@ export default function WithdrawPage() {
 
   const { data: wallets = [] } = useQuery<WalletBalance[]>({
     queryKey: ["/api/wallets"],
+  });
+  const { data: cryptoPayoutConfig } = useQuery<CryptoPayoutConfig>({
+    queryKey: ["/api/crypto/payout/config"],
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/crypto/payout/config");
+      if (!response.ok) throw new Error("Impossible de charger la configuration crypto.");
+      return response.json();
+    },
   });
   const userCurrency = user?.preferredCurrency || "XAF";
 
@@ -135,12 +142,32 @@ export default function WithdrawPage() {
   const balance = isDecimalCurrency
     ? Math.floor(rawBalance * 100) / 100
     : Math.round(rawBalance);
+  const usdtWallet = wallets.find(wallet => wallet.currency === "USDT");
+  const cryptoBalanceRaw = user?.preferredCurrency === "USDT" && user.balance != null
+    ? Number(user.balance)
+    : Number(usdtWallet?.balance || 0);
+  const cryptoBalance = Number.isFinite(cryptoBalanceRaw)
+    ? Math.floor(cryptoBalanceRaw * 100) / 100
+    : 0;
   // fxRates are XAF-direct: fxRates[currency] = how many XAF = 1 unit.
   // Country limits are stored and displayed in the destination wallet currency.
   // Do not fall back to the old global limits once a country is selected.
   const limitsLoaded = !!selectedCountryData;
   const minWithdrawal = Number(selectedCountryData?.minWithdrawal ?? 300);
   const maxWithdrawal = Number(selectedCountryData?.maxWithdrawal ?? 500000);
+  const isCryptoWithdrawal = selectedMethod === "crypto";
+  const displayedCurrency = isCryptoWithdrawal ? "USDT" : withdrawalCurrency;
+  const displayedBalance = isCryptoWithdrawal ? cryptoBalance : balance;
+  const cryptoLimits = cryptoPayoutConfig?.withdrawalLimits;
+  const cryptoLimitsConfigured = cryptoLimits?.configured === true;
+  const displayedMinWithdrawal = isCryptoWithdrawal ? (cryptoLimits?.minUsdt ?? 0) : minWithdrawal;
+  const displayedMaxWithdrawal = isCryptoWithdrawal ? (cryptoLimits?.maxUsdt ?? 0) : maxWithdrawal;
+  const maxCryptoAmount = cryptoLimitsConfigured
+    ? Math.min(cryptoBalance, cryptoLimits!.maxUsdt!)
+    : cryptoBalance;
+  const formatDisplayedAmount = (amount: number) => isCryptoWithdrawal
+    ? `${Number.isFinite(amount) ? amount.toFixed(2) : "0.00"} USDT`
+    : formatCurrency(amount, withdrawalCurrency as SupportedCurrency);
 
   useEffect(() => {
     if (countriesConfig.length > 0 && !selectedCountry) {
@@ -351,7 +378,12 @@ export default function WithdrawPage() {
     ? Math.max(percentageFee + feeFixed, minPayoutCharge)
     : 0;
 
-  const isAmountValid = amountValue >= minWithdrawal && amountValue <= maxWithdrawal && amountValue <= balance;
+  const isAmountValid = isCryptoWithdrawal
+    ? cryptoLimitsConfigured &&
+      amountValue >= displayedMinWithdrawal &&
+      amountValue <= displayedMaxWithdrawal &&
+      amountValue <= displayedBalance
+    : amountValue >= minWithdrawal && amountValue <= maxWithdrawal && amountValue <= balance;
   const isMobileMoneyValid = selectedMethod === "mobile_money"
     ? (!!selectedCountry && !!selectedOperator && selectedOperatorData?.available !== false && !!watchedAccountDetails)
     : true;
@@ -384,13 +416,10 @@ export default function WithdrawPage() {
 
   return (
     <DashboardLayout>
-      {showCryptoPayout ? (
-        <div className="px-4 py-4">
-          <CryptoPayoutPanel flow="withdrawal" onBack={() => setShowCryptoPayout(false)} />
-        </div>
-      ) : (
       <Form {...form}>
-        <form onSubmit={form.handleSubmit((d) => withdrawMutation.mutate(d))}>
+        <form onSubmit={form.handleSubmit((d) => {
+          if (selectedMethod !== "crypto") withdrawMutation.mutate(d);
+        })}>
           <div className="space-y-4 pb-6">
 
             {/* ── Balance Card ── */}
@@ -398,16 +427,32 @@ export default function WithdrawPage() {
               className="rounded-2xl bg-[#1A237E] border border-[#1A237E] overflow-hidden p-6 text-white"
             >
               <p className="text-white/75 text-sm mb-1">
-                Solde compte principal
+                {isCryptoWithdrawal ? "Solde USDT" : "Solde compte principal"}
               </p>
               <p className="text-4xl font-bold tracking-tight whitespace-nowrap">
-                {formatCurrency(balance, withdrawalCurrency as SupportedCurrency)}
+                {formatDisplayedAmount(displayedBalance)}
               </p>
               <p className="text-sm text-white/75 mt-1">
-                {selectedCountryData?.name || user?.country || "Votre pays"} · {withdrawalCurrency}
+                {isCryptoWithdrawal ? "Portefeuille crypto · USDT" : `${selectedCountryData?.name || user?.country || "Votre pays"} · ${withdrawalCurrency}`}
               </p>
 
-              {limitsLoaded && (
+              {isCryptoWithdrawal ? (
+                <div className="flex items-center gap-6 mt-6 pt-4 border-t border-white/20">
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-white/60">Min retrait</p>
+                    <p className="text-sm font-bold">
+                      {cryptoLimitsConfigured ? `${displayedMinWithdrawal.toLocaleString()} USDT` : "Non configuré"}
+                    </p>
+                  </div>
+                  <div className="w-px h-8 bg-white/20" />
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-white/60">Max retrait</p>
+                    <p className="text-sm font-bold">
+                      {cryptoLimitsConfigured ? `${displayedMaxWithdrawal.toLocaleString()} USDT` : "Non configuré"}
+                    </p>
+                  </div>
+                </div>
+              ) : limitsLoaded ? (
                 <div className="flex items-center gap-6 mt-6 pt-4 border-t border-white/20">
                   <div>
                     <p className="text-[10px] font-semibold uppercase tracking-wider text-white/60">Min retrait</p>
@@ -419,7 +464,7 @@ export default function WithdrawPage() {
                     <p className="text-sm font-bold">{maxWithdrawal.toLocaleString()} {withdrawalCurrency}</p>
                   </div>
                 </div>
-              )}
+              ) : null}
             </div>
 
             {/* ── Méthode ── */}
@@ -434,11 +479,10 @@ export default function WithdrawPage() {
                       type="button"
                       data-testid={`withdraw-method-${method.id}`}
                       onClick={() => {
-                        if (method.id === "crypto") {
-                          setShowCryptoPayout(true);
-                        } else {
-                          setSelectedMethod(method.id);
+                        if (method.id !== selectedMethod) {
+                          form.setValue("amount", "", { shouldValidate: true });
                         }
+                        setSelectedMethod(method.id);
                       }}
                       className={`relative flex flex-col items-start gap-2 rounded-xl border-2 p-4 text-left transition-all ${
                         isSelected
@@ -485,11 +529,11 @@ export default function WithdrawPage() {
                           data-testid="input-withdraw-amount"
                         />
                         <div className="flex items-center gap-2 shrink-0">
-                          <span className="text-sm font-semibold text-muted-foreground">{withdrawalCurrency}</span>
+                          <span className="text-sm font-semibold text-muted-foreground">{displayedCurrency}</span>
                           <button
                             type="button"
                             data-testid="button-max-amount"
-                            onClick={() => form.setValue("amount", balance.toString(), { shouldValidate: true })}
+                            onClick={() => form.setValue("amount", (isCryptoWithdrawal ? maxCryptoAmount : displayedBalance).toString(), { shouldValidate: true })}
                             className="text-[11px] font-bold uppercase px-2 py-1 rounded-full bg-primary/15 text-primary hover:bg-primary/25 transition-colors"
                           >
                             MAX
@@ -501,21 +545,33 @@ export default function WithdrawPage() {
                   </FormItem>
                 )}
               />
-              {amountValue > 0 && amountValue < minWithdrawal && (
-                <div className="flex items-center gap-1.5 text-destructive text-xs">
+              {isCryptoWithdrawal && !cryptoLimitsConfigured && (
+                <div className="flex items-center gap-1.5 text-amber-600 text-xs">
                   <AlertCircle className="w-3.5 h-3.5" />
-                  {t.withdraw.minAmount} {minWithdrawal.toLocaleString()} {withdrawalCurrency}
+                  Les retraits crypto seront disponibles dès que les limites USDT seront configurées.
                 </div>
               )}
-              {amountValue > 0 && amountValue > balance && (
+              {amountValue > 0 && (!isCryptoWithdrawal || cryptoLimitsConfigured) && amountValue < displayedMinWithdrawal && (
                 <div className="flex items-center gap-1.5 text-destructive text-xs">
                   <AlertCircle className="w-3.5 h-3.5" />
-                  Solde insuffisant ({amountValue.toLocaleString()} {withdrawalCurrency} requis)
+                  {t.withdraw.minAmount} {displayedMinWithdrawal.toLocaleString()} {displayedCurrency}
+                </div>
+              )}
+              {amountValue > 0 && isCryptoWithdrawal && cryptoLimitsConfigured && amountValue > displayedMaxWithdrawal && (
+                <div className="flex items-center gap-1.5 text-destructive text-xs">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  Le montant maximum est de {displayedMaxWithdrawal.toLocaleString()} USDT
+                </div>
+              )}
+              {amountValue > 0 && amountValue > displayedBalance && (
+                <div className="flex items-center gap-1.5 text-destructive text-xs">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  Solde insuffisant ({amountValue.toLocaleString()} {displayedCurrency} requis)
                 </div>
               )}
 
               {/* Fee summary */}
-              {amountValue > 0 && selectedOperatorData && (
+              {!isCryptoWithdrawal && amountValue > 0 && selectedOperatorData && (
                 <div className="rounded-xl bg-muted/50 p-3 space-y-2" data-testid="fee-calculator-withdrawal">
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">
@@ -534,6 +590,16 @@ export default function WithdrawPage() {
                   </div>
                 </div>
               )}
+            </div>
+
+            <div hidden={!isCryptoWithdrawal}>
+              <CryptoPayoutPanel
+                flow="withdrawal"
+                embedded
+                amount={watchedAmount || ""}
+                onAmountChange={value => form.setValue("amount", value, { shouldValidate: true })}
+                onSuccess={() => form.setValue("amount", "")}
+              />
             </div>
 
             {/* ── Destination (mobile money) ── */}
@@ -686,6 +752,7 @@ export default function WithdrawPage() {
 
             {/* ── Submit ── */}
             <button
+              hidden={isCryptoWithdrawal}
               type="button"
               disabled={isSubmitDisabled}
               data-testid="button-withdraw-confirm"
@@ -702,9 +769,8 @@ export default function WithdrawPage() {
           </div>
         </form>
       </Form>
-      )}
 
-      {!showCryptoPayout && (
+      {selectedMethod !== "crypto" && (
       <>
       {/* ── Confirm bottom sheet ── */}
       <BottomSheet open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
