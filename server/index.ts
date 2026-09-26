@@ -456,7 +456,11 @@ app.use((req, res, next) => {
     // ── 5.5: Sanitize error responses in production ───────────────────────────
     // Prevents internal error messages and stack traces leaking to clients.
     if (isProd && res.statusCode >= 500 && bodyJson && typeof bodyJson === "object") {
-      const isCryptoApi = req.path === "/v1/crypto/collect" || req.path === "/v1/crypto/assets";
+      const isCryptoApi =
+        req.path === "/v1/crypto/collect" ||
+        req.path === "/v1/crypto/assets" ||
+        req.path === "/api/crypto/withdrawal-addresses" ||
+        /^\/api\/crypto\/withdrawal-addresses\/[^/]+$/.test(req.path);
       const isMerchantProviderError =
         req.path === "/v1/collect" ||
         /^\/api\/public\/hosted-session\/[^/]+\/pay$/.test(req.path) ||
