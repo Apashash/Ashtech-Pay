@@ -1,4 +1,5 @@
 import { getAdminPath } from "@/lib/adminPath";
+import { clearChunkReloadAttempt } from "@/lib/chunk-recovery";
 import React, { Suspense, useEffect, useLayoutEffect } from "react";
 import { Switch, Route, useLocation } from "wouter";
 import { queryClient, removeAuthToken, getQueryFn, getAuthHeaders } from "./lib/queryClient";
@@ -193,6 +194,7 @@ function Router() {
   const A = getAdminPath();
   return (
     <Suspense fallback={<LoadingScreen />}>
+    <>
     <Switch>
       <Route path="/" component={LandingPage} />
       <Route path="/blocked" component={BlockedPage} />
@@ -288,8 +290,20 @@ function Router() {
       <Route path="/faq" component={FAQPage} />
       <Route component={NotFound} />
     </Switch>
+    <ChunkRecoverySuccessMarker />
+    </>
     </Suspense>
   );
+}
+
+function ChunkRecoverySuccessMarker() {
+  useEffect(() => {
+    // Clear the one-shot retry guard only once the lazy route has rendered
+    // inside this Suspense boundary, allowing future deploy/network failures
+    // in the same tab to recover automatically too.
+    clearChunkReloadAttempt();
+  }, []);
+  return null;
 }
 
 // Connexion SSE globale — expulse l'ancien navigateur en temps réel quand un nouveau login arrive

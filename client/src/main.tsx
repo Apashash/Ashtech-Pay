@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { clearChunkReloadAttempt } from "./lib/chunk-recovery";
 
 // Remove the one-time cache-busting parameter after a recovery reload so it
 // does not remain in copied URLs or affect application route query parameters.
@@ -30,7 +31,7 @@ function showFatalError(message: string) {
   const btn = document.createElement("button");
   btn.setAttribute("style", "padding:.65rem 1.75rem;background:#f59e0b;color:#0f172a;border:none;border-radius:.5rem;font-weight:700;font-size:1rem;cursor:pointer");
   btn.textContent = "Recharger la page";
-  btn.addEventListener("click", () => { try { sessionStorage.clear(); } catch(_) {} location.reload(); });
+   btn.addEventListener("click", () => { clearChunkReloadAttempt(); location.reload(); });
   text.appendChild(h1);
   text.appendChild(p);
   wrap.appendChild(text);

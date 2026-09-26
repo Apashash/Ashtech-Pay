@@ -1,4 +1,5 @@
 import React from "react";
+import { CHUNK_RELOAD_ATTEMPT_KEY, clearChunkReloadAttempt } from "@/lib/chunk-recovery";
 
 interface State {
   hasError: boolean;
@@ -23,13 +24,12 @@ export class ErrorBoundary extends React.Component<React.PropsWithChildren, Stat
     // a chunk that is no longer available. One automatic reload repairs that
     // stale chunk without forcing the user to press the button manually.
     if (this.isTransientChunkError(error)) {
-      const retryKey = "ashtech_chunk_reload_attempt";
       try {
-        if (sessionStorage.getItem(retryKey) !== "1") {
-          sessionStorage.setItem(retryKey, "1");
+        if (sessionStorage.getItem(CHUNK_RELOAD_ATTEMPT_KEY) !== "1") {
+          sessionStorage.setItem(CHUNK_RELOAD_ATTEMPT_KEY, "1");
           window.setTimeout(() => this.reloadWithCacheBust(), 250);
         } else {
-          sessionStorage.removeItem(retryKey);
+          clearChunkReloadAttempt();
         }
       } catch {
         // Private browsing can block sessionStorage; leave the visible
@@ -55,7 +55,7 @@ export class ErrorBoundary extends React.Component<React.PropsWithChildren, Stat
   }
 
   handleReload = () => {
-    try { sessionStorage.clear(); } catch {}
+    clearChunkReloadAttempt();
     this.reloadWithCacheBust();
   };
 
