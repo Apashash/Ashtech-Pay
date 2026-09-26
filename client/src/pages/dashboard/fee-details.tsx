@@ -232,22 +232,20 @@ export default function FeeDetailsPage() {
                       {configuredCryptoWithdrawalNetworks.map(({ network, assetCode, globalRule, countryRules }) => (
                         <div key={assetCode} className="border-t border-border/60 first:border-t-0">
                           <div
-                            className="flex flex-wrap items-center justify-between gap-2 px-5 py-3 bg-background/40"
+                            className="flex flex-col items-start gap-2 px-5 py-3 bg-background/40"
                             data-testid={`row-crypto-withdrawal-fee-${assetCode}`}
                           >
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="text-sm font-medium text-foreground">{fp.cryptoWithdrawal}</span>
-                              <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground">
-                                <CryptoNetworkLogo networkId={network.id} size="sm" />
-                                <span>{network.label}</span>
-                                <span aria-hidden="true">·</span>
-                                <span>{assetCode}</span>
-                              </span>
                               {globalRule && countryRules.length > 0 && (
                                 <Badge variant="secondary" className="text-xs py-0 h-5">
                                   {fp.defaultBadge}
                                 </Badge>
                               )}
+                            </div>
+                            <div className="flex w-full min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+                              <CryptoNetworkLogo networkId={network.id} size="sm" />
+                              <span className="min-w-0 break-words">{network.label} · {assetCode}</span>
                             </div>
                             {globalRule && (
                               <Badge variant="outline" className="text-xs font-semibold border-orange-500/30 text-orange-700 dark:text-orange-400">
