@@ -1018,29 +1018,6 @@ export default function DepositPage() {
                         {coinPriceLoading && <span className="ml-1 opacity-60">(chargement…)</span>}
                       </p>
                     )}
-                    <p className="text-xs text-muted-foreground px-1">
-                      Minimum : <span className="font-semibold text-foreground">
-                        {cryptoMinimumAmount ? `${formatCryptoAmount(cryptoMinimumAmount)} ${cryptoCoin}` : "1 USDT"}
-                      </span> (soit 1 USDT, avant frais)
-                    </p>
-                    {/* Quick-select presets (expressed as USDT equivalents, click sets coin amount) */}
-                    <div className="flex gap-2 flex-wrap">
-                      {["10", "50", "100", "250", "500"].map(v => {
-                        const usdtVal = parseFloat(v);
-                        const coinVal = cryptoCoinPrice > 0 ? usdtVal / cryptoCoinPrice : 0;
-                        return (
-                          <button
-                            key={v}
-                            type="button"
-                            disabled={coinVal <= 0}
-                            onClick={() => setCryptoAmount(coinVal < 1 ? coinVal.toFixed(6) : coinVal.toFixed(2))}
-                            className="text-xs px-3 py-1.5 rounded-lg border border-border bg-muted/30 hover:bg-muted/60 font-semibold transition-all disabled:opacity-40"
-                          >
-                            ~{v} USDT
-                          </button>
-                        );
-                      })}
-                    </div>
                   </div>
 
                   {/* ── Fee summary (USDT) ── */}

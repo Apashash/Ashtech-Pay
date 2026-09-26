@@ -1090,6 +1090,48 @@ function getUserIdFromToken(token: string): string | null {
   }
 }
 
+async function isPersistentlyRevokedDeviceToken(userId: string, tokenIssuedAt: number): Promise<boolean> {
+  const result = isMysqlDialect
+    ? await pool.query(
+        `SELECT 1 AS revoked
+           FROM revoked_device_tokens
+          WHERE user_id = ? AND token_issued_at = ?
+          LIMIT 1`,
+        [userId, tokenIssuedAt],
+      )
+    : await pool.query(
+        `SELECT 1 AS revoked
+           FROM revoked_device_tokens
+          WHERE user_id = $1 AND token_issued_at = $2
+          LIMIT 1`,
+        [userId, tokenIssuedAt],
+      );
+  return result.rows.length > 0;
+}
+
+async function persistSpecificDeviceTokenRevocation(userId: string, tokenIssuedAt: number): Promise<void> {
+  const revokedAt = Date.now();
+  if (isMysqlDialect) {
+    await pool.query(
+      `INSERT INTO revoked_device_tokens (user_id, token_issued_at, revoked_at)
+       VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE revoked_at = VALUES(revoked_at)`,
+      [userId, tokenIssuedAt, revokedAt],
+    );
+  } else {
+    await pool.query(
+      `INSERT INTO revoked_device_tokens (user_id, token_issued_at, revoked_at)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (user_id, token_issued_at)
+       DO UPDATE SET revoked_at = EXCLUDED.revoked_at`,
+      [userId, tokenIssuedAt, revokedAt],
+    );
+  }
+
+  if (!revokedSpecificTokenTs.has(userId)) revokedSpecificTokenTs.set(userId, new Set());
+  revokedSpecificTokenTs.get(userId)!.add(tokenIssuedAt);
+}
+
 // Extrait le userId d'un token sans vérifier la révocation (pour détecter les kicks single-device)
 function getTokenUserIdIgnoreRevocation(token: string): string | null {
   try {
@@ -1723,6 +1765,7 @@ const singleDeviceKicks = new Set<string>();
 const revokedTokensBefore = new Map<string, number>();
 // Map userId → Set<tokenIssuedAt> : tokens d'appareils spécifiques révoqués (déconnexion par appareil)
 const revokedSpecificTokenTs = new Map<string, Set<number>>();
+let lastRevokedDeviceTokenCleanupAt = 0;
 // Map userId → dernière IP de connexion connue
 const activeIpRegistry = new Map<string, string>();
 
@@ -1945,6 +1988,16 @@ setInterval(() => {
       if (now - ts > TOKEN_EXPIRY_MS) tsSet.delete(ts);
     }
     if (tsSet.size === 0) revokedSpecificTokenTs.delete(uid);
+  }
+  if (now - lastRevokedDeviceTokenCleanupAt >= 60 * 60 * 1000) {
+    lastRevokedDeviceTokenCleanupAt = now;
+    const expiredTokenCutoff = now - TOKEN_EXPIRY_MS;
+    const cleanupQuery = isMysqlDialect
+      ? pool.query(`DELETE FROM revoked_device_tokens WHERE token_issued_at < ?`, [expiredTokenCutoff])
+      : pool.query(`DELETE FROM revoked_device_tokens WHERE token_issued_at < $1`, [expiredTokenCutoff]);
+    cleanupQuery.catch((error: any) => {
+      console.warn("[Auth] Impossible de nettoyer les révocations d'appareils expirées:", error?.message);
+    });
   }
   // singleDeviceKicks : vider les sessions non réclamées après 10 min
   // (cas rare où le navigateur ne refait jamais de requête)
@@ -2384,14 +2437,11 @@ export async function registerRoutes(
         isMysql: process.env.DB_DIALECT?.toLowerCase() === "mysql",
         tableName: "session",
         maxDevices: 4,
-        onDeviceEvicted: ({ userId, sid, tokenIssuedAt }) => {
-          singleDeviceKicks.add(sid);
+        onDeviceEvicted: async ({ userId, sid, tokenIssuedAt }) => {
           if (tokenIssuedAt !== null) {
-            if (!revokedSpecificTokenTs.has(userId)) {
-              revokedSpecificTokenTs.set(userId, new Set());
-            }
-            revokedSpecificTokenTs.get(userId)!.add(tokenIssuedAt);
+            await persistSpecificDeviceTokenRevocation(userId, tokenIssuedAt);
           }
+          singleDeviceKicks.add(sid);
           notifySpecificSessionForceLogout(sid, "device_limit");
           console.log(`[Sessions] Limite de 4 appareils atteinte — appareil le plus ancien déconnecté (userId=${userId}, sid=${sid})`);
         },
@@ -2444,6 +2494,24 @@ export async function registerRoutes(
       const token = authHeader.substring(7);
       const resolvedId = getUserIdFromToken(token);
       if (resolvedId) {
+        const tokenTimestamp = extractTokenTimestamp(token);
+        if (tokenTimestamp !== null) {
+          try {
+            if (await isPersistentlyRevokedDeviceToken(resolvedId, tokenTimestamp)) {
+              if (!revokedSpecificTokenTs.has(resolvedId)) {
+                revokedSpecificTokenTs.set(resolvedId, new Set());
+              }
+              revokedSpecificTokenTs.get(resolvedId)!.add(tokenTimestamp);
+              req.singleDeviceKick = true;
+              return next();
+            }
+          } catch (error: any) {
+            console.error("[Auth] Vérification de révocation d'appareil impossible:", error?.message);
+            return res.status(503).json({
+              message: "Vérification de session temporairement indisponible. Veuillez réessayer.",
+            });
+          }
+        }
         userId = resolvedId;
         bearerTokenTimestamp = extractTokenTimestamp(token);
       } else {

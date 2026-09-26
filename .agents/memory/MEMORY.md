@@ -48,6 +48,7 @@
 - [Merchant webhook SSRF boundary](merchant-webhook-ssrf.md) — merchant callback URLs need DNS/IP validation and pinned outbound requests, not lexical URL checks alone.
 - [Bearer device sessions](bearer-device-sessions.md) — persist the valid current Bearer-token session before listing or deleting other devices, while excluding that SID from bulk logout.
 - [Bearer session deduplication](bearer-session-deduplication.md) — cookie-less Bearer requests must persist by userId + tokenIssuedAt, not by each fresh Express SID.
+- [Persistent device-token revocation](device-token-revocation.md) — deleting a session row does not invalidate a stateless Bearer token; persist revocations by user and issued-at timestamp.
 - [Authenticated route identity](authenticated-route-identity.md) — requireAuth guarantees req.userId, not req.user; authenticated handlers must use req.userId or explicitly load the user.
 - [Provider API error exposure](provider-api-errors.md) — merchant-facing errors preserve the provider’s useful message and diagnostics, but never its raw response or sensitive data.
 - [PawaPay credential key alignment](pawapay-credential-key-alignment.md) — PawaPay credentials use a session-derived dedicated envelope with legacy FIELD_ENCRYPTION_KEY compatibility.

@@ -1,7 +1,7 @@
 import { pool } from "./db";
 
 const MYSQL_AUXILIARY_SCHEMA_NAME = "mysql-runtime-auxiliary";
-const MYSQL_AUXILIARY_SCHEMA_VERSION = "2026-09-17-v2";
+const MYSQL_AUXILIARY_SCHEMA_VERSION = "2026-09-26-v3";
 
 const KYC_DOCUMENTS_TABLE_SQL = `CREATE TABLE IF NOT EXISTS kyc_documents (
   id VARCHAR(191) NOT NULL PRIMARY KEY,
@@ -132,6 +132,13 @@ export async function ensureMysqlAuxiliarySchema(): Promise<void> {
       claimed_by TEXT,
       claimed_until BIGINT,
       consumed_at BIGINT
+    ) ENGINE=InnoDB`,
+    `CREATE TABLE IF NOT EXISTS revoked_device_tokens (
+      user_id VARCHAR(191) NOT NULL,
+      token_issued_at BIGINT NOT NULL,
+      revoked_at BIGINT NOT NULL,
+      PRIMARY KEY (user_id, token_issued_at),
+      INDEX revoked_device_tokens_token_issued_at_idx (token_issued_at)
     ) ENGINE=InnoDB`,
     `ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS private_folder_path TEXT NULL`,
     `ALTER TABLE kyc_submissions ADD COLUMN IF NOT EXISTS summary_pdf_path TEXT NULL`,

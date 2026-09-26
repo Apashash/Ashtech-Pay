@@ -164,7 +164,7 @@ export function wrapSessionStoreWithTokenDedup(
               );
 
           const now = Date.now();
-          const deviceRows = (result.rows || []).flatMap((row: any) => {
+          const sessionRows = (result.rows || []).flatMap((row: any) => {
             let data: Record<string, any>;
             try {
               data = typeof row.sess === "string" ? JSON.parse(row.sess) : (row.sess || {});
@@ -177,34 +177,96 @@ export function wrapSessionStoreWithTokenDedup(
               sid: String(row.sid),
               data,
               age: getSessionDeviceAge(data, row.expire),
+              expire: expiresAt,
             }];
           });
 
-          if (deviceRows.length > maxDevices) {
-            deviceRows.sort((a, b) => b.age - a.age);
-            const evictedRows = deviceRows.slice(maxDevices);
-            for (const evicted of evictedRows) {
+          // Old cookie-less requests could leave more than one SID for the
+          // same user/token identity. Clean aliases without counting them as
+          // additional devices or revoking the token they share.
+          const deviceGroups = new Map<string, typeof sessionRows>();
+          for (const row of sessionRows) {
+            const tokenTs = Number(row.data?.tokenIssuedAt);
+            const identity = Number.isFinite(tokenTs) && tokenTs > 0
+              ? `token:${tokenTs}`
+              : `sid:${row.sid}`;
+            const group = deviceGroups.get(identity) || [];
+            group.push(row);
+            deviceGroups.set(identity, group);
+          }
+
+          const devices = [...deviceGroups.values()].map((group) => {
+            // Prefer this request's SID, otherwise preserve the freshest row's
+            // admin/session factors when removing legacy duplicate SIDs.
+            group.sort((a, b) =>
+              Number(b.sid === targetSid) - Number(a.sid === targetSid) ||
+              b.expire - a.expire
+            );
+            const canonical = group[0];
+            return {
+              rows: group,
+              age: Math.min(...group.map((row) => row.age)),
+              canonical,
+            };
+          });
+
+          for (const device of devices) {
+            for (const duplicate of device.rows.slice(1)) {
               if (options.isMysql) {
                 await options.pool.query(
                   `DELETE FROM \`${tableName}\` WHERE sid = ?`,
-                  [evicted.sid],
+                  [duplicate.sid],
                 );
               } else {
                 await options.pool.query(
                   `DELETE FROM "${tableName}" WHERE sid = $1`,
-                  [evicted.sid],
+                  [duplicate.sid],
                 );
               }
+            }
+          }
 
-              const evictedTokenTs = Number(evicted.data?.tokenIssuedAt);
-              try {
-                await options.onDeviceEvicted?.({
-                  userId: String(userId),
-                  sid: evicted.sid,
-                  tokenIssuedAt: Number.isFinite(evictedTokenTs) ? evictedTokenTs : null,
-                });
-              } catch (error) {
-                errorLog(error instanceof Error ? error : new Error(String(error)));
+          if (devices.length > maxDevices) {
+            devices.sort((a, b) => b.age - a.age);
+            const evictedDevices = devices.slice(maxDevices).sort((a, b) => a.age - b.age);
+            for (const device of evictedDevices) {
+              const tokenIssuedAt = Number(device.canonical.data?.tokenIssuedAt);
+              let revoked = true;
+              for (const evicted of device.rows) {
+                try {
+                  // Persist the token revocation before removing its session
+                  // row; a stateless Bearer token must not recreate it later.
+                  await options.onDeviceEvicted?.({
+                    userId: String(userId),
+                    sid: evicted.sid,
+                    tokenIssuedAt: Number.isFinite(tokenIssuedAt) && tokenIssuedAt > 0
+                      ? tokenIssuedAt
+                      : null,
+                  });
+                } catch (error) {
+                  errorLog(error instanceof Error ? error : new Error(String(error)));
+                  revoked = false;
+                  break;
+                }
+              }
+              if (!revoked) {
+                // Keep the device if its Bearer token could not be revoked. A
+                // later session write will retry once persistence is healthy.
+                continue;
+              }
+
+              for (const evicted of device.rows) {
+                if (options.isMysql) {
+                  await options.pool.query(
+                    `DELETE FROM \`${tableName}\` WHERE sid = ?`,
+                    [evicted.sid],
+                  );
+                } else {
+                  await options.pool.query(
+                    `DELETE FROM "${tableName}" WHERE sid = $1`,
+                    [evicted.sid],
+                  );
+                }
               }
             }
           }

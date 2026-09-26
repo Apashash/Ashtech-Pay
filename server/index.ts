@@ -68,7 +68,7 @@ const STARTUP_PUBLIC_API_PATHS = new Set([
 // Bump this value whenever the idempotent migration block below gains a new
 // schema change. Completed versions are stored in platform_settings so a
 // normal Passenger restart does not repeat every ALTER TABLE/CREATE INDEX.
-const SCHEMA_MIGRATION_VERSION = "2026-09-15-hosted-checkout-key-cleanup-v1";
+const SCHEMA_MIGRATION_VERSION = "2026-09-26-device-token-revocations-v1";
 
 // ── Gestionnaires d'erreurs globaux ──────────────────────────────────────────
 // unhandledRejection: log + continue — safe, these are async promise failures.
@@ -801,6 +801,18 @@ app.use((req, res, next) => {
     await db.execute(sql`ALTER TABLE operators ADD COLUMN IF NOT EXISTS pawapay_provider_code TEXT`);
     await db.execute(sql`ALTER TABLE fees ADD COLUMN IF NOT EXISTS pawapay_fee DECIMAL(10,4) DEFAULT '0'`);
     await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS token_revoked_before BIGINT DEFAULT 0`);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS revoked_device_tokens (
+        user_id VARCHAR NOT NULL,
+        token_issued_at BIGINT NOT NULL,
+        revoked_at BIGINT NOT NULL,
+        PRIMARY KEY (user_id, token_issued_at)
+      )
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS revoked_device_tokens_token_issued_at_idx
+      ON revoked_device_tokens (token_issued_at)
+    `);
     await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_image_path TEXT`);
     await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS withdrawal_blocked BOOLEAN DEFAULT FALSE`);
     await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS withdrawal_block_reason TEXT`);
