@@ -541,16 +541,10 @@ export default function WithdrawPage() {
                         </div>
                       </div>
                     </FormControl>
-                    <FormMessage />
+                    {!isCryptoWithdrawal && <FormMessage />}
                   </FormItem>
                 )}
               />
-              {isCryptoWithdrawal && !cryptoLimitsConfigured && (
-                <div className="flex items-center gap-1.5 text-amber-600 text-xs">
-                  <AlertCircle className="w-3.5 h-3.5" />
-                  Les retraits crypto seront disponibles dès que les limites USDT seront configurées.
-                </div>
-              )}
               {amountValue > 0 && (!isCryptoWithdrawal || cryptoLimitsConfigured) && amountValue < displayedMinWithdrawal && (
                 <div className="flex items-center gap-1.5 text-destructive text-xs">
                   <AlertCircle className="w-3.5 h-3.5" />
@@ -563,7 +557,7 @@ export default function WithdrawPage() {
                   Le montant maximum est de {displayedMaxWithdrawal.toLocaleString()} USDT
                 </div>
               )}
-              {amountValue > 0 && amountValue > displayedBalance && (
+              {!isCryptoWithdrawal && amountValue > 0 && amountValue > displayedBalance && (
                 <div className="flex items-center gap-1.5 text-destructive text-xs">
                   <AlertCircle className="w-3.5 h-3.5" />
                   Solde insuffisant ({amountValue.toLocaleString()} {displayedCurrency} requis)

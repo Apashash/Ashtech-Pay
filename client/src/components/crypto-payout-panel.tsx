@@ -359,12 +359,6 @@ export function CryptoPayoutPanel({ flow, onBack, embedded = false, amount: cont
         </div>
       )}
 
-      {flow === "withdrawal" && !configLoading && config?.enabled && config.withdrawalLimits?.configured !== true && (
-        <div role="alert" className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-700 dark:text-amber-300">
-          Les retraits crypto seront disponibles dès que l’administration aura configuré le minimum et le maximum en USDT.
-        </div>
-      )}
-
       {!embedded && (
         <div className="flex items-center justify-between rounded-xl bg-muted/50 px-4 py-3">
           <span className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -540,10 +534,10 @@ export function CryptoPayoutPanel({ flow, onBack, embedded = false, amount: cont
         <Label>Qui paie les frais AshTechPay ?</Label>
         <div className="grid grid-cols-2 gap-2">
           <Button type="button" variant={feeBearer === "sender" ? "default" : "outline"} onClick={() => setFeeBearer("sender")}>
-            Vous payez
+            Vous
           </Button>
           <Button type="button" variant={feeBearer === "recipient" ? "default" : "outline"} onClick={() => setFeeBearer("recipient")}>
-            Le destinataire paie
+            Destinataire
           </Button>
         </div>
       </div>
