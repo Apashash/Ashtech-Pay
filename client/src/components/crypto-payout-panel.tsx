@@ -535,13 +535,13 @@ export function CryptoPayoutPanel({ flow, onBack, embedded = false, showBalance 
       </div>
 
       <div className="space-y-2 rounded-xl border p-4 text-sm">
-        <div className="flex justify-between gap-3"><span className="text-muted-foreground">Frais AshTechPay</span><span>{money(feeAmount)} USDT</span></div>
+        <div className="flex justify-between gap-3"><span className="text-muted-foreground">Frais</span><span>{money(feeAmount)} USDT</span></div>
         <div className="flex justify-between gap-3 font-semibold">
-          <span>{feeBearer === "sender" ? "Débité de votre portefeuille" : "Envoyé au destinataire"}</span>
+          <span>{feeBearer === "sender" ? "Débité" : "Envoyé au destinataire"}</span>
           <span>{money(feeBearer === "sender" ? totalDebit : payoutAmount)} USDT</span>
         </div>
         {feeBearer === "recipient" && (
-          <div className="flex justify-between gap-3"><span className="text-muted-foreground">Débité de votre portefeuille</span><span>{money(totalDebit)} USDT</span></div>
+          <div className="flex justify-between gap-3"><span className="text-muted-foreground">Débité</span><span>{money(totalDebit)} USDT</span></div>
         )}
       </div>
 
