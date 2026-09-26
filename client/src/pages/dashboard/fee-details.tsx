@@ -237,9 +237,11 @@ export default function FeeDetailsPage() {
                           >
                             <div className="flex flex-wrap items-center gap-2">
                               <span className="text-sm font-medium text-foreground">{fp.cryptoWithdrawal}</span>
-                              <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                                <CryptoNetworkLogo networkId={network.id} />
-                                {network.label} · {assetCode}
+                              <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground">
+                                <CryptoNetworkLogo networkId={network.id} size="sm" />
+                                <span>{network.label}</span>
+                                <span aria-hidden="true">·</span>
+                                <span>{assetCode}</span>
                               </span>
                               {globalRule && countryRules.length > 0 && (
                                 <Badge variant="secondary" className="text-xs py-0 h-5">

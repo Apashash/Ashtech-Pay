@@ -15,18 +15,25 @@ const NETWORK_SYMBOLS: Record<string, string> = {
   SOL: "SOL",
 };
 
-export function CryptoNetworkLogo({ networkId }: { networkId: string }) {
+export function CryptoNetworkLogo({
+  networkId,
+  size = "md",
+}: {
+  networkId: string;
+  size?: "sm" | "md";
+}) {
   const [failedNetworkId, setFailedNetworkId] = useState<string | null>(null);
   const normalizedNetworkId = networkId.trim().toUpperCase();
   const symbol = NETWORK_SYMBOLS[normalizedNetworkId]
     || normalizedNetworkId.replace(/[^A-Z0-9]/g, "").slice(0, 2)
     || "CR";
   const hasError = failedNetworkId === networkId;
+  const sizeClass = size === "sm" ? "h-5 w-5 text-[8px]" : "h-6 w-6 text-[9px]";
 
   return (
     <span
       aria-hidden="true"
-      className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-[9px] font-bold"
+      className={`flex ${sizeClass} shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted font-bold`}
     >
       {hasError ? (
         <span>{symbol.slice(0, 2)}</span>
