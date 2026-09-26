@@ -212,15 +212,18 @@ function telegramReferenceCopyKeyboard(opts: {
   merchantReference?: string;
   externalReference?: string;
 }): any[][] {
-  return [
-    [{ text: "📋 Copier réf. AshTechPay", copy_text: { text: opts.reference } }],
-    ...(opts.merchantReference
-      ? [[{ text: "📋 Copier réf. site marchand", copy_text: { text: opts.merchantReference } }]]
-      : []),
-    ...(opts.externalReference
-      ? [[{ text: "📋 Copier réf. fournisseur", copy_text: { text: opts.externalReference } }]]
-      : []),
+  const buttons: Array<{ text: string; copy_text: { text: string } }> = [
+    { text: "📋 AshTechPay", copy_text: { text: opts.reference } },
   ];
+
+  if (opts.merchantReference) {
+    buttons.push({ text: "📋 Marchand", copy_text: { text: opts.merchantReference } });
+  }
+  if (opts.externalReference) {
+    buttons.push({ text: "📋 Fournisseur", copy_text: { text: opts.externalReference } });
+  }
+
+  return [buttons];
 }
 
 function now(): string {
