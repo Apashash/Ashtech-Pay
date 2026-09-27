@@ -452,10 +452,6 @@ export default function ConvertPage() {
               onChange={(e) => setConvertAmount(e.target.value.replace(/[^0-9.]/g, ""))}
               data-testid="input-convert-amount"
             />
-            <p className="text-xs text-muted-foreground">
-              Minimum : {minimumAmountInSource.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {fromCurrency}
-              {" "} (équivalent à {minimumConversionXaf.toLocaleString("fr-FR")} FCFA, avant frais)
-            </p>
             {convertAmount && parsedAmount > 0 && !meetsConversionMinimum && (
               <p className="text-xs text-red-500">
                 Le montant minimum est de {minimumAmountInSource.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {fromCurrency}.
