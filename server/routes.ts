@@ -89,13 +89,13 @@ import {
   sandboxStatusLabel,
   type SandboxCollectStatus,
 } from "./sandboxTestNumbers";
-import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, checkAfribaPayStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, getAfribaPayOtpInfo, confirmAfribaPayOtp, isAfribaPayOtpRequiredMessage, verifyAfribaPayWebhookSignature, validateAfribaPayinAmount } from "./afribapay";
+import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, checkAfribaPayStatus, checkAfribaPayoutStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, getAfribaPayOtpInfo, confirmAfribaPayOtp, isAfribaPayOtpRequiredMessage, verifyAfribaPayWebhookSignature, validateAfribaPayinAmount } from "./afribapay";
 import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, initiatePixPayPayout, checkPixPayStatus, computePixPayFees, parsePixPayWebhook, PIXPAY_CURRENCY_MAP, PIXPAY_SUPPORTED_COUNTRIES, detectPixPayFlowType, getPixPayServiceId, PIXPAY_OTP_USSD_CODES } from "./pixpay";
 import { assertPawaPayProviderActive, classifyPawaPayControlledTransaction, createPawaPayDeposit, createPawaPayId, createPawaPayPayout, createPawaPayPaymentPage, getPawaPayActiveConfiguration, getPawaPayDeposit, getPawaPayPayout, resolvePawaPayOperationConfiguration, PAWAPAY_CUSTOMER_MESSAGE } from "./pawapay";
 import { addPendingPayment, removePendingPayment, expireCryptoPaymentIfNeeded } from "./paymentPoller";
 import { processPawaPayDepositCallback } from "./paymentPoller";
 import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserWallet, sameCfaFamily, getConversionPairKey, maybeAutoConvert } from "./walletHelper";
-import { addPendingPayout, removePendingPayout, processIziPayPayoutCallback } from "./payoutPoller";
+import { addPendingPayout, removePendingPayout, processIziPayPayoutCallback, processPayout } from "./payoutPoller";
 import { processPendingConversions } from "./conversionPoller";
 import { processPawaPayPayoutCallback } from "./payoutPoller";
 import {
@@ -15137,7 +15137,8 @@ export async function registerRoutes(
           userFullName: (user as any)?.fullName || (user as any)?.username || "Inconnu",
           userEmail: (user as any)?.email || "",
           operatorName: (operator as any)?.name || null,
-          originalProvider: metadata.paymentProvider ||
+          originalProvider: metadata.pendingPayoutProvider ||
+            metadata.paymentProvider ||
             (operator as any)?.paymentProvider ||
             (operator as any)?.depositPaymentProvider ||
             null,
@@ -15262,6 +15263,7 @@ export async function registerRoutes(
         await storage.updateTransactionMetadata(txId, {
           ...((tx.metadata || {}) as Record<string, unknown>),
           paymentProvider: "pawapay", pawaCountry: pawaPayCountry(countryCode),
+          pendingPayoutProvider: "pawapay",
           walletCurrency: (tx.metadata as any)?.walletCurrency || tx.currency || "XAF",
         });
         // Store the recovery key before the request. If the network outcome is
@@ -15301,6 +15303,10 @@ export async function registerRoutes(
         // If the server crashes after a successful provider call but before
         // updateTransactionStatus, recoverPendingPayouts() finds "processing"
         // + externalReference and polls the provider instead of re-executing.
+        await storage.updateTransactionMetadata(txId, {
+          ...((tx.metadata || {}) as Record<string, unknown>),
+          pendingPayoutProvider: "afribapay",
+        });
         await storage.updateTransactionExternalReference(txId, afribaAdminRetryRef);
 
         const result = await initiateAfribaPayout({
@@ -15329,6 +15335,10 @@ export async function registerRoutes(
         const pixpayAdminRetryRef = `${txRef}-R${Date.now().toString(36)}`;
 
         // ── Solution 3: persist ref BEFORE calling provider ─────────────────
+        await storage.updateTransactionMetadata(txId, {
+          ...((tx.metadata || {}) as Record<string, unknown>),
+          pendingPayoutProvider: "pixpay",
+        });
         await storage.updateTransactionExternalReference(txId, pixpayAdminRetryRef);
 
         const result = await initiatePixPayPayout({
@@ -15576,10 +15586,55 @@ export async function registerRoutes(
           status: reconciled,
         });
       }
+      let confirmedAfribaPayRejection = false;
       if (tx.externalReference) {
-        return res.status(409).json({
-          message: "Une tentative fournisseur existe déjà. Rapprochez son résultat avant tout remboursement.",
-        });
+        const metadata = ((tx as any).metadata || {}) as Record<string, any>;
+        const operator = tx.operatorId ? await storage.getOperator(tx.operatorId).catch(() => null) : null;
+        const provider = metadata.pendingPayoutProvider ||
+          metadata.paymentProvider ||
+          (operator as any)?.paymentProvider;
+
+        if (provider !== "afribapay") {
+          return res.status(409).json({
+            message: "Une tentative fournisseur existe déjà. Rapprochez son résultat avant tout remboursement.",
+          });
+        }
+
+        const providerResult = await checkAfribaPayoutStatus(tx.externalReference, "order_id");
+        if (providerResult.status === "pending") {
+          return res.status(409).json({
+            message: "AfribaPay n’a pas encore confirmé l’échec du paiement. Aucun remboursement n’a été effectué.",
+            status: "pending",
+          });
+        }
+        if (providerResult.status === "completed") {
+          await processPayout({
+            transactionId: tx.id,
+            reference: tx.externalReference,
+            userId: tx.userId,
+            amount: tx.amount,
+            totalDebited: tx.totalAmount || tx.amount,
+            attempts: 0,
+            provider: "afribapay",
+            countryCode: (tx.recipientCountry || "CM").toUpperCase(),
+            txType: tx.type,
+            txCurrency: tx.currency || "XAF",
+            walletCurrency: metadata.walletCurrency || tx.currency || "XAF",
+          }, "success");
+          const reconciled = await storage.getTransactionById(tx.id).catch(() => null);
+          if (reconciled?.status !== "completed") {
+            return res.status(409).json({
+              message: "AfribaPay confirme la réussite, mais le rapprochement n’est pas terminé. Aucun remboursement n’a été fait.",
+              status: reconciled?.status || "pending",
+            });
+          }
+          return res.json({
+            message: "AfribaPay confirme que le paiement a été effectué. La transaction a été rapprochée; aucun remboursement n’a été fait.",
+            status: "completed",
+            refunded: false,
+          });
+        }
+        confirmedAfribaPayRejection = true;
       }
       const totalAmount = parseFloat(tx.totalAmount || tx.amount);
       const refunded = await storage.refundPendingManualPayout(tx.id);
@@ -15605,13 +15660,21 @@ export async function registerRoutes(
         action: "refund_pending_payout",
         targetType: "transaction",
         targetId: tx.id,
-        details: JSON.stringify({ totalAmount, currency: tx.currency }),
+        details: JSON.stringify({
+          totalAmount,
+          currency: tx.currency,
+          ...(confirmedAfribaPayRejection ? { provider: "afribapay", providerStatus: "failed" } : {}),
+        }),
         ipAddress: req.ip || null,
       }).catch((logError: any) => {
         console.error("Pending payout refund admin-log failed:", logError?.message || logError);
       });
       console.log(`[Admin] Refunded pending_manual ${tx.reference} — ${totalAmount} ${tx.currency} to user ${tx.userId}`);
-      res.json({ message: "Transaction annulée et remboursée" });
+      res.json({
+        message: "Transaction annulée et remboursée",
+        status: "failed",
+        refunded: true,
+      });
     } catch (error: any) {
       console.error("Admin refund pending-payout error:", error.message);
       res.status(500).json({ message: "Erreur serveur" });

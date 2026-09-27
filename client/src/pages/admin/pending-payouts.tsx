@@ -125,10 +125,16 @@ export default function AdminPendingPayoutsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/pending-payouts"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/transactions"] });
       queryClient.invalidateQueries({ queryKey: [`/api/admin/transactions/${txId}/details`] });
-      toast({ title: "Remboursé", description: data.message });
+      toast({
+        title: data.status === "completed" ? "Paiement déjà effectué" : "Remboursé",
+        description: data.message,
+      });
       setLoadingId(null);
     },
-    onError: (error: Error) => {
+    onError: (error: Error, txId: string) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/pending-payouts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/transactions"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/admin/transactions/${txId}/details`] });
       toast({ title: "Erreur", description: error.message, variant: "destructive" });
       setLoadingId(null);
     },

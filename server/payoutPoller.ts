@@ -65,7 +65,9 @@ export async function recoverPendingPayouts() {
       if (!internalRef) continue;
       const operator = t.operatorId ? await storage.getOperator(t.operatorId).catch(() => null) : null;
       const metadata = ((t as any).metadata || {}) as Record<string, any>;
-      const configuredProvider = (operator as any)?.paymentProvider as "afribapay" | "pixpay" | "pawapay" | undefined;
+      const configuredProvider = (
+        metadata.pendingPayoutProvider || (operator as any)?.paymentProvider
+      ) as "afribapay" | "pixpay" | "pawapay" | undefined;
       const provider = metadata.paymentProvider === "izichange"
         ? "izichange"
         : t.externalReference && isPawaPayUuidV4(t.externalReference) ? "pawapay" : configuredProvider;
@@ -140,7 +142,9 @@ export async function processPayout(payout: PendingPayout, apiStatus: string) {
     const iziManual = payout.provider === "izichange" &&
       transaction?.status === "pending_manual" &&
       (transaction as any)?.metadata?.paymentProvider === "izichange";
-    if (!transaction || (transaction.status !== "pending" && transaction.status !== "processing" && !pawaManual && !iziManual)) {
+    const afribaManual = payout.provider === "afribapay" &&
+      transaction?.status === "pending_manual";
+    if (!transaction || (transaction.status !== "pending" && transaction.status !== "processing" && !pawaManual && !iziManual && !afribaManual)) {
       removePendingPayout(payout.reference);
       return;
     }
@@ -199,18 +203,21 @@ export async function processPayout(payout: PendingPayout, apiStatus: string) {
       // These are definitive terminal provider statuses. Reject the payout
       // and restore the debited amount; ambiguous initiation errors are
       // handled separately as pending_manual by the route.
+      const afribaManualRefund = payout.provider === "afribapay" && transaction.status === "pending_manual";
       const claimed = payout.provider === "pawapay"
         ? await storage.claimPawaPayoutFailedAndRefund(payout.transactionId, ["pending", "processing", "pending_manual"])
         : payout.provider === "izichange"
           ? await storage.claimIziPayPayoutFailedAndRefund(payout.transactionId, ["pending", "processing", "pending_manual"])
-          : await storage.claimTransactionStatus(payout.transactionId, "failed", ["pending", "processing", "pending_manual"]);
+          : afribaManualRefund
+            ? await storage.refundPendingManualPayout(payout.transactionId)
+            : await storage.claimTransactionStatus(payout.transactionId, "failed", ["pending", "processing", "pending_manual"]);
       if (!claimed) {
         removePendingPayout(payout.reference);
         return;
       }
       setFailedCooldown(payout.userId);
       const refundAmount = parseFloat(payout.totalDebited || payout.amount);
-      if (payout.provider !== "pawapay" && payout.provider !== "izichange") {
+      if (payout.provider !== "pawapay" && payout.provider !== "izichange" && !afribaManualRefund) {
         await storage.refundToOriginalWallet(payout.userId, payout.txType, payout.walletCurrency || payout.txCurrency, refundAmount);
       }
       await storage.createUserNotification({
