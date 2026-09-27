@@ -63,11 +63,6 @@ interface CryptoWithdrawalFeeConfig {
   countries: Record<string, Record<string, CryptoWithdrawalFeeRule>>;
 }
 
-const CFA_CONVERSION_CURRENCIES = new Set([
-  "XAF", "XAFC", "XAFG", "XAFCF", "XAFTD",
-  "XOF", "XOFC", "XOFF", "XOFN", "XOFB", "XOFT", "XOFS", "XOFM", "XOFGW",
-]);
-
 export default function AdminCountries() {
   const { toast } = useToast();
   const [showCountryModal, setShowCountryModal] = useState(false);
@@ -127,7 +122,6 @@ export default function AdminCountries() {
   const conversionMinimumValue = Number(conversionMinimumXaf);
   const conversionMinimumIsValid = Number.isSafeInteger(conversionMinimumValue) &&
     conversionMinimumValue >= 1 && conversionMinimumValue <= 1_000_000_000;
-  const conversionMinimumForDisplay = conversionMinimumIsValid ? conversionMinimumValue : 500;
   const saveConversionMinimum = () => {
     if (!conversionMinimumIsValid) {
       toast({
@@ -269,19 +263,6 @@ export default function AdminCountries() {
   const { data: countries, isLoading: loadingCountries } = useQuery<Country[]>({
     queryKey: ["/api/admin/countries"],
   });
-  const { data: conversionExchangeRates = {} } = useQuery<Record<string, number>>({
-    queryKey: ["/api/public/exchange-rates"],
-  });
-  const conversionMinimumRows = Object.entries(conversionExchangeRates)
-    .filter(([currency, rate]) =>
-      !CFA_CONVERSION_CURRENCIES.has(currency) && Number.isFinite(Number(rate)) && Number(rate) > 0
-    )
-    .sort(([currencyA], [currencyB]) => currencyA.localeCompare(currencyB))
-    .map(([currency, rate]) => {
-      const numericRate = Number(rate);
-      const equivalent = Math.ceil((conversionMinimumForDisplay / numericRate - 1e-9) * 100) / 100;
-      return { currency, equivalent };
-    });
 
   const { data: operators, isLoading: loadingOperators } = useQuery<Operator[]>({
     queryKey: ["/api/admin/operators"],
@@ -484,10 +465,6 @@ export default function AdminCountries() {
         <Card>
           <CardHeader>
             <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">Conversions</p>
-            <CardTitle className="text-base">Minimum global de conversion</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Ce seuil porte sur le montant saisi, avant déduction des frais. Il s’applique aux conversions manuelles, admin et automatiques.
-            </p>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
@@ -512,44 +489,6 @@ export default function AdminCountries() {
                 <Save className="mr-2 h-4 w-4" />
                 {saveSettingMutation.isPending ? "Enregistrement..." : "Enregistrer"}
               </Button>
-            </div>
-
-            <div className="rounded-lg border">
-              <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
-                <div>
-                  <p className="text-sm font-semibold">Équivalent selon le taux configuré</p>
-                  <p className="text-xs text-muted-foreground">
-                    Montant minimum correspondant à {conversionMinimumForDisplay.toLocaleString("fr-FR")} FCFA.
-                  </p>
-                </div>
-                <Badge variant="secondary">{conversionMinimumRows.length} devises</Badge>
-              </div>
-              <div className="max-h-56 overflow-y-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Devise</TableHead>
-                      <TableHead className="text-right">Minimum équivalent</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {conversionMinimumRows.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={2} className="text-center text-muted-foreground">
-                          Aucun taux non-FCFA disponible.
-                        </TableCell>
-                      </TableRow>
-                    ) : conversionMinimumRows.map(({ currency, equivalent }) => (
-                      <TableRow key={currency}>
-                        <TableCell className="font-medium">{currency}</TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {equivalent.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {currency}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
             </div>
           </CardContent>
         </Card>
