@@ -135,6 +135,14 @@ export default function AdminUsers() {
     queryKey: ["/api/public/deposit-config"],
     enabled: !!balanceModal,
   });
+  const { data: conversionSettings } = useQuery<{ conversionMinimumXaf: number }>({
+    queryKey: ["/api/public/fee-settings"],
+    queryFn: async () => {
+      const res = await fetch("/api/public/fee-settings", { credentials: "include" });
+      return res.json();
+    },
+    enabled: !!balanceModal,
+  });
 
   const { data: viewUserWallets } = useQuery<any[]>({
     queryKey: [`/api/admin/users/${viewUser?.id}/wallets`],
@@ -193,6 +201,12 @@ export default function AdminUsers() {
     afribapay: (depositConfig as any)?.conversionFeePercentAfribapay ?? depositConfig?.conversionFeePercent ?? 6,
   };
   const convFeePercent = convFeeByProvider[convProvider] ?? 6;
+  const conversionMinimumXaf = conversionSettings?.conversionMinimumXaf ?? 500;
+  const convFromRate = convFrom ? ((fxRates as Record<string, number>)[convFrom] || 1) : 1;
+  const conversionMinimumInSource = Math.ceil((conversionMinimumXaf / convFromRate - 1e-9) * 100) / 100;
+  const currentConvAmount = parseFloat(convAmount || "0");
+  const convMeetsMinimum = Number.isFinite(currentConvAmount) &&
+    currentConvAmount * convFromRate >= conversionMinimumXaf - 1e-7;
 
   const convPreview = (() => {
     if (!convFrom || !convTo || !convAmount || convFrom === convTo) return null;
@@ -206,7 +220,13 @@ export default function AdminUsers() {
     const inXAF = afterFee * fromRate;
     const received = inXAF / toRate;
     const srcBalance = parseFloat(userWalletList.find(w => w.currency === convFrom)?.balance || "0");
-    return { fee, received, srcBalance, sufficient: srcBalance >= amount };
+    return {
+      fee,
+      received,
+      srcBalance,
+      sufficient: srcBalance >= amount,
+      meetsMinimum: amount * fromRate >= conversionMinimumXaf - 1e-7,
+    };
   })();
 
   useEffect(() => {
@@ -1301,12 +1321,23 @@ export default function AdminUsers() {
                       Disponible : <span className="font-medium">{parseFloat(userWalletList.find(w => w.currency === convFrom)?.balance || "0").toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {convFrom}</span>
                     </p>
                   )}
+                  {convFrom && (
+                    <p className="text-xs text-muted-foreground">
+                      Minimum : {conversionMinimumInSource.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {convFrom}
+                      {" "} (≈ {conversionMinimumXaf.toLocaleString("fr-FR")} FCFA, avant frais)
+                    </p>
+                  )}
                 </div>
 
                 {convPreview && (
-                  <div className={`rounded-lg border p-3 space-y-2 text-sm ${convPreview.sufficient ? "bg-muted/30" : "bg-red-500/10 border-red-500/30"}`}>
+                  <div className={`rounded-lg border p-3 space-y-2 text-sm ${convPreview.sufficient && convPreview.meetsMinimum ? "bg-muted/30" : "bg-red-500/10 border-red-500/30"}`}>
                     {!convPreview.sufficient && (
                       <p className="text-red-500 font-medium text-xs">Solde insuffisant en {convFrom}</p>
+                    )}
+                    {!convPreview.meetsMinimum && (
+                      <p className="text-red-500 font-medium text-xs">
+                        Le minimum de conversion est de {conversionMinimumInSource.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {convFrom}.
+                      </p>
                     )}
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Frais ({convFeePercent}%)</span>
@@ -1327,7 +1358,7 @@ export default function AdminUsers() {
                     toCurrency: convTo,
                     amount: convAmount,
                   })}
-                  disabled={adminConvertMutation.isPending || !convFrom || !convTo || !convAmount || convFrom === convTo || (convPreview ? !convPreview.sufficient : false)}
+                  disabled={adminConvertMutation.isPending || !convFrom || !convTo || !convAmount || convFrom === convTo || !convMeetsMinimum || (convPreview ? !convPreview.sufficient : false)}
                 >
                   {adminConvertMutation.isPending
                     ? "Conversion en cours..."

@@ -478,6 +478,14 @@ export default function AutoConversionPage() {
   const { data: rules = [], isLoading: rulesLoading } = useQuery<AutoConversionRule[]>({
     queryKey: ["/api/auto-conversion"],
   });
+  const { data: conversionSettings } = useQuery<{ conversionMinimumXaf: number }>({
+    queryKey: ["/api/public/fee-settings"],
+    queryFn: async () => {
+      const res = await fetch("/api/public/fee-settings", { credentials: "include" });
+      return res.json();
+    },
+  });
+  const conversionMinimumXaf = conversionSettings?.conversionMinimumXaf ?? 500;
 
   const usedFromCurrencies = useMemo(() => new Set(rules.map((r) => r.fromCurrency)), [rules]);
   // All currencies already used as destination in any rule
@@ -656,6 +664,12 @@ export default function AutoConversionPage() {
               Conversion automatique
             </h1>
           </div>
+        </div>
+
+        <div className="mx-4 mb-4 rounded-xl border bg-muted/30 px-4 py-3 text-xs text-muted-foreground">
+          Une conversion automatique ne s’exécute que si le montant atteint au moins l’équivalent de{" "}
+          <strong className="text-foreground">{conversionMinimumXaf.toLocaleString("fr-FR")} FCFA</strong>.
+          Les montants sous ce seuil restent dans le portefeuille source.
         </div>
 
         {!showForm && sourceOptions.length > 0 && (

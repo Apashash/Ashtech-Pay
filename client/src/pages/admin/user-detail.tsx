@@ -225,6 +225,7 @@ export default function AdminUserDetail() {
   });
 
   const { data: feeSettings } = useQuery<{
+    conversionMinimumXaf: number;
     conversionFeePercent: number;
     convTotalXafXaf: number; convTotalXofXof: number;
     convTotalXofXaf: number; convTotalXafXof: number;
@@ -265,9 +266,9 @@ export default function AdminUserDetail() {
   ] : [];
 
   // Per-pair fee logic — identical to user convert page
-  const XOF_FAM = new Set(["XOF","XOFC","XOFF","XOFN","XOFB","XOFT","XOFS","XOFM"]);
-  const XAF_FAM = new Set(["XAF","XAFC","XAFG"]);
-  const CFA_CODES = new Set(["XAF","XAFC","XAFG","XOF","XOFC","XOFF","XOFN","XOFB","XOFT","XOFS","XOFM"]);
+  const XOF_FAM = new Set(["XOF","XOFC","XOFF","XOFN","XOFB","XOFT","XOFS","XOFM","XOFGW"]);
+  const XAF_FAM = new Set(["XAF","XAFC","XAFG","XAFCF","XAFTD"]);
+  const CFA_CODES = new Set(["XAF","XAFC","XAFG","XAFCF","XAFTD","XOF","XOFC","XOFF","XOFN","XOFB","XOFT","XOFS","XOFM","XOFGW"]);
   const convFromFam = XOF_FAM.has(convFrom) ? "XOF" : XAF_FAM.has(convFrom) ? "XAF" : convFrom === "CDF" ? "CDF" : "OTHER";
   const convToFam   = XOF_FAM.has(convTo)   ? "XOF" : XAF_FAM.has(convTo)   ? "XAF" : convTo   === "CDF" ? "CDF" : "OTHER";
   const convFeePercent =
@@ -280,6 +281,14 @@ export default function AdminUserDetail() {
     (convFromFam === "XAF" || convFromFam === "XOF") && convTo === "USDT"                            ? (feeSettings?.convTotalCfaUsdt ?? 2) :
     convFrom === "USDT" && (convToFam === "XAF" || convToFam === "XOF")                              ? (feeSettings?.convTotalUsdtCfa ?? 2) :
     (feeSettings?.conversionFeePercent ?? 6);
+  const conversionMinimumXaf = feeSettings?.conversionMinimumXaf ?? 500;
+  const convFromRate = convFrom
+    ? (CFA_CODES.has(convFrom) ? 1 : ((fxRates as Record<string, number>)[convFrom] || 1))
+    : 1;
+  const conversionMinimumInSource = Math.ceil((conversionMinimumXaf / convFromRate - 1e-9) * 100) / 100;
+  const currentConvAmount = parseFloat(convAmount || "0");
+  const convMeetsMinimum = Number.isFinite(currentConvAmount) &&
+    currentConvAmount * convFromRate >= conversionMinimumXaf - 1e-7;
 
   // Auto-initialize currencies from user wallets when modal opens
   useEffect(() => {
@@ -306,7 +315,13 @@ export default function AdminUserDetail() {
     const amountInXAF = afterFee * fromRate;
     const received = amountInXAF / toRate;
     const srcBalance = parseFloat(walletList.find(w => w.currency === convFrom)?.balance || "0");
-    return { fee, received, srcBalance, sufficient: srcBalance >= amount };
+    return {
+      fee,
+      received,
+      srcBalance,
+      sufficient: srcBalance >= amount,
+      meetsMinimum: amount * fromRate >= conversionMinimumXaf - 1e-7,
+    };
   })();
 
   const invalidate = () => {
@@ -1031,10 +1046,21 @@ export default function AdminUserDetail() {
               <div className="space-y-1">
                 <Label>Montant à convertir {convFrom ? `(${convFrom})` : ""}</Label>
                 <Input type="text" inputMode="decimal" value={convAmount} onChange={(e) => setConvAmount(e.target.value.replace(/[^0-9.]/g, ""))} placeholder="0.00" />
+                {convFrom && (
+                  <p className="text-xs text-muted-foreground">
+                    Minimum : {conversionMinimumInSource.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {convFrom}
+                    {" "} (≈ {conversionMinimumXaf.toLocaleString("fr-FR")} FCFA, avant frais)
+                  </p>
+                )}
               </div>
               {convPreview && (
-                <div className={`rounded-lg border p-3 space-y-2 text-sm ${convPreview.sufficient ? "bg-muted/30" : "bg-red-500/10 border-red-500/30"}`}>
+                <div className={`rounded-lg border p-3 space-y-2 text-sm ${convPreview.sufficient && convPreview.meetsMinimum ? "bg-muted/30" : "bg-red-500/10 border-red-500/30"}`}>
                   {!convPreview.sufficient && <p className="text-red-500 font-medium text-xs">Solde insuffisant en {convFrom} (disponible : {convPreview.srcBalance.toLocaleString("fr-FR", { maximumFractionDigits: 2 })})</p>}
+                  {!convPreview.meetsMinimum && (
+                    <p className="text-red-500 font-medium text-xs">
+                      Le minimum de conversion est de {conversionMinimumInSource.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {convFrom}.
+                    </p>
+                  )}
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Frais ({convFeePercent}%)</span>
                     <span className="font-medium text-orange-500">− {convPreview.fee.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {convFrom}</span>
@@ -1048,7 +1074,7 @@ export default function AdminUserDetail() {
               <Button
                 className="w-full"
                 onClick={() => convertMutation.mutate()}
-                disabled={convertMutation.isPending || !convFrom || !convTo || !convAmount || convFrom === convTo || (convPreview ? !convPreview.sufficient : true)}
+                disabled={convertMutation.isPending || !convFrom || !convTo || !convAmount || convFrom === convTo || !convMeetsMinimum || (convPreview ? !convPreview.sufficient : true)}
               >
                 {convertMutation.isPending ? "Conversion en cours..." : convFrom && convTo ? `Convertir ${convFrom} → ${convTo}` : "Sélectionner les devises"}
               </Button>

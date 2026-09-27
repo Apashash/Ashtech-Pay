@@ -73,6 +73,7 @@ export default function ConvertPage() {
   const { data: transactions = [] } = useQuery<Transaction[]>({ queryKey: ["/api/transactions"] });
   const { data: fxRates = {} } = useQuery<Record<string, number>>({ queryKey: ["/api/public/exchange-rates"] });
   const { data: feeSettings } = useQuery<{
+    conversionMinimumXaf: number;
     conversionFeePercent: number;
     convTotalXafXaf: number; convTotalXofXof: number;
     convTotalXofXaf: number; convTotalXafXof: number;
@@ -109,8 +110,8 @@ export default function ConvertPage() {
   }, [walletList.length, presetFrom, presetTo]);
 
   // Determine fee % by currency pair (XOF↔XAF, CDF↔CFA)
-  const XOF_FAM = new Set(["XOF","XOFC","XOFF","XOFN","XOFB","XOFT","XOFS","XOFM"]);
-  const XAF_FAM = new Set(["XAF","XAFC","XAFG"]);
+  const XOF_FAM = new Set(["XOF","XOFC","XOFF","XOFN","XOFB","XOFT","XOFS","XOFM","XOFGW"]);
+  const XAF_FAM = new Set(["XAF","XAFC","XAFG","XAFCF","XAFTD"]);
   const fromFam = XOF_FAM.has(fromCurrency) ? "XOF" : XAF_FAM.has(fromCurrency) ? "XAF" : fromCurrency === "CDF" ? "CDF" : "OTHER";
   const toFam   = XOF_FAM.has(toCurrency)   ? "XOF" : XAF_FAM.has(toCurrency)   ? "XAF" : toCurrency   === "CDF" ? "CDF" : "OTHER";
   const conversionFeePercent =
@@ -129,10 +130,13 @@ export default function ConvertPage() {
   const hasSufficientBalance = parsedAmount > 0 && parsedAmount <= sourceParsedBalance;
   const feeAmount = (parsedAmount * conversionFeePercent) / 100;
   const amountAfterFee = parsedAmount - feeAmount;
-  const CFA_CODES = new Set(["XAF","XAFC","XAFG","XOF","XOFC","XOFF","XOFN","XOFB","XOFT","XOFS","XOFM"]);
+  const CFA_CODES = new Set(["XAF","XAFC","XAFG","XAFCF","XAFTD","XOF","XOFC","XOFF","XOFN","XOFB","XOFT","XOFS","XOFM","XOFGW"]);
   // fxRates are XAF-direct: fxRates[currency] = how many XAF = 1 unit of that currency (CFA = 1)
   const fromRate = CFA_CODES.has(fromCurrency) ? 1 : (fxRates[fromCurrency] || 1);
   const toRate = CFA_CODES.has(toCurrency) ? 1 : (fxRates[toCurrency] || 1);
+  const minimumConversionXaf = feeSettings?.conversionMinimumXaf ?? 500;
+  const minimumAmountInSource = Math.ceil((minimumConversionXaf / fromRate - 1e-9) * 100) / 100;
+  const meetsConversionMinimum = parsedAmount * fromRate >= minimumConversionXaf - 1e-7;
   const amountInXAF = amountAfterFee * fromRate;
   const previewAmount = amountInXAF / toRate;
 
@@ -448,6 +452,15 @@ export default function ConvertPage() {
               onChange={(e) => setConvertAmount(e.target.value.replace(/[^0-9.]/g, ""))}
               data-testid="input-convert-amount"
             />
+            <p className="text-xs text-muted-foreground">
+              Minimum : {minimumAmountInSource.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {fromCurrency}
+              {" "} (équivalent à {minimumConversionXaf.toLocaleString("fr-FR")} FCFA, avant frais)
+            </p>
+            {convertAmount && parsedAmount > 0 && !meetsConversionMinimum && (
+              <p className="text-xs text-red-500">
+                Le montant minimum est de {minimumAmountInSource.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {fromCurrency}.
+              </p>
+            )}
             {convertAmount && parsedAmount > 0 && !hasSufficientBalance && (
               <p className="text-xs text-red-500">
                 {t.wallets.insufficientPre}{sourceParsedBalance.toLocaleString("fr-FR")} {fromCurrency}
@@ -476,7 +489,7 @@ export default function ConvertPage() {
           {/* Submit */}
           <Button
             className="w-full h-12 rounded-xl font-bold text-base"
-            disabled={!hasSufficientBalance || convertMutation.isPending || !!conversionPending}
+            disabled={!hasSufficientBalance || !meetsConversionMinimum || convertMutation.isPending || !!conversionPending}
             onClick={() => convertMutation.mutate({ fromCurrency, toCurrency, amount: convertAmount })}
             data-testid="button-confirm-convert"
           >

@@ -63,9 +63,15 @@ interface CryptoWithdrawalFeeConfig {
   countries: Record<string, Record<string, CryptoWithdrawalFeeRule>>;
 }
 
+const CFA_CONVERSION_CURRENCIES = new Set([
+  "XAF", "XAFC", "XAFG", "XAFCF", "XAFTD",
+  "XOF", "XOFC", "XOFF", "XOFN", "XOFB", "XOFT", "XOFS", "XOFM", "XOFGW",
+]);
+
 export default function AdminCountries() {
   const { toast } = useToast();
   const [showCountryModal, setShowCountryModal] = useState(false);
+  const [conversionMinimumXaf, setConversionMinimumXaf] = useState("500");
 
   // Crypto USDT settings
   const [cryptoSettings, setCryptoSettings] = useState({
@@ -89,6 +95,11 @@ export default function AdminCountries() {
     }
   }, [savedSettings]);
   useEffect(() => {
+    if (!savedSettings) return;
+    const setting = savedSettings.find(item => item.key === "conversion_minimum_xaf");
+    setConversionMinimumXaf(setting?.value || "500");
+  }, [savedSettings]);
+  useEffect(() => {
     const setting = savedSettings?.find(item => item.key === "crypto_withdrawal_limits");
     if (!setting) {
       setCryptoWithdrawalLimits({ minUsdt: "", maxUsdt: "" });
@@ -106,9 +117,31 @@ export default function AdminCountries() {
   }, [savedSettings]);
   const saveSettingMutation = useMutation({
     mutationFn: ({ key, value }: { key: string; value: string }) => apiRequest("POST", "/api/admin/settings", { key, value }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/admin/settings"] }); toast({ title: "Paramètre enregistré" }); },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/settings"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/public/fee-settings"] });
+      toast({ title: "Paramètre enregistré" });
+    },
     onError: () => toast({ title: "Erreur", variant: "destructive" }),
   });
+  const conversionMinimumValue = Number(conversionMinimumXaf);
+  const conversionMinimumIsValid = Number.isSafeInteger(conversionMinimumValue) &&
+    conversionMinimumValue >= 1 && conversionMinimumValue <= 1_000_000_000;
+  const conversionMinimumForDisplay = conversionMinimumIsValid ? conversionMinimumValue : 500;
+  const saveConversionMinimum = () => {
+    if (!conversionMinimumIsValid) {
+      toast({
+        title: "Minimum invalide",
+        description: "Saisissez un entier positif inférieur ou égal à 1 000 000 000 FCFA.",
+        variant: "destructive",
+      });
+      return;
+    }
+    saveSettingMutation.mutate({
+      key: "conversion_minimum_xaf",
+      value: String(conversionMinimumValue),
+    });
+  };
   const [cryptoSearch, setCryptoSearch] = useState("");
   const { data: adminCryptoAssets, isLoading: loadingCryptoAssets } = useQuery<AdminCryptoResponse>({
     queryKey: ["/api/admin/crypto/assets"],
@@ -236,6 +269,19 @@ export default function AdminCountries() {
   const { data: countries, isLoading: loadingCountries } = useQuery<Country[]>({
     queryKey: ["/api/admin/countries"],
   });
+  const { data: conversionExchangeRates = {} } = useQuery<Record<string, number>>({
+    queryKey: ["/api/public/exchange-rates"],
+  });
+  const conversionMinimumRows = Object.entries(conversionExchangeRates)
+    .filter(([currency, rate]) =>
+      !CFA_CONVERSION_CURRENCIES.has(currency) && Number.isFinite(Number(rate)) && Number(rate) > 0
+    )
+    .sort(([currencyA], [currencyB]) => currencyA.localeCompare(currencyB))
+    .map(([currency, rate]) => {
+      const numericRate = Number(rate);
+      const equivalent = Math.ceil((conversionMinimumForDisplay / numericRate - 1e-9) * 100) / 100;
+      return { currency, equivalent };
+    });
 
   const { data: operators, isLoading: loadingOperators } = useQuery<Operator[]>({
     queryKey: ["/api/admin/operators"],
@@ -434,6 +480,79 @@ export default function AdminCountries() {
           <h1 className="text-2xl font-bold">Pays & Opérateurs</h1>
           <p className="text-muted-foreground">Gérez les pays et leurs opérateurs de paiement</p>
         </div>
+
+        <Card>
+          <CardHeader>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">Conversions</p>
+            <CardTitle className="text-base">Minimum global de conversion</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Ce seuil porte sur le montant saisi, avant déduction des frais. Il s’applique aux conversions manuelles, admin et automatiques.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+              <div className="w-full max-w-sm space-y-2">
+                <Label htmlFor="conversion-minimum-xaf">Minimum (FCFA / XAF)</Label>
+                <Input
+                  id="conversion-minimum-xaf"
+                  type="number"
+                  min="1"
+                  max="1000000000"
+                  step="1"
+                  value={conversionMinimumXaf}
+                  onChange={event => setConversionMinimumXaf(event.target.value)}
+                  data-testid="input-conversion-minimum-xaf"
+                />
+              </div>
+              <Button
+                onClick={saveConversionMinimum}
+                disabled={!conversionMinimumIsValid || saveSettingMutation.isPending}
+                data-testid="button-save-conversion-minimum"
+              >
+                <Save className="mr-2 h-4 w-4" />
+                {saveSettingMutation.isPending ? "Enregistrement..." : "Enregistrer"}
+              </Button>
+            </div>
+
+            <div className="rounded-lg border">
+              <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
+                <div>
+                  <p className="text-sm font-semibold">Équivalent selon le taux configuré</p>
+                  <p className="text-xs text-muted-foreground">
+                    Montant minimum correspondant à {conversionMinimumForDisplay.toLocaleString("fr-FR")} FCFA.
+                  </p>
+                </div>
+                <Badge variant="secondary">{conversionMinimumRows.length} devises</Badge>
+              </div>
+              <div className="max-h-56 overflow-y-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Devise</TableHead>
+                      <TableHead className="text-right">Minimum équivalent</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {conversionMinimumRows.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={2} className="text-center text-muted-foreground">
+                          Aucun taux non-FCFA disponible.
+                        </TableCell>
+                      </TableRow>
+                    ) : conversionMinimumRows.map(({ currency, equivalent }) => (
+                      <TableRow key={currency}>
+                        <TableCell className="font-medium">{currency}</TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {equivalent.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {currency}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card className="md:col-span-1">

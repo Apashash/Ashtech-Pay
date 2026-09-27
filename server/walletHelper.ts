@@ -6,9 +6,21 @@ import { notifyConversionStarted } from "./telegram";
 // CFA franc currencies — XAF, XOF, and country-specific wallet variants
 // All have the same value (1 XAF = 1 XOF, both pegged to EUR at same rate)
 export const CFA_CURRENCIES = new Set([
-  "XAF", "XAFC", "XAFG",                                         // Central African CFA (BEAC)
-  "XOF", "XOFC", "XOFF", "XOFN", "XOFB", "XOFT", "XOFS", "XOFM", // West African CFA (BCEAO)
+  "XAF", "XAFC", "XAFG", "XAFCF", "XAFTD",                       // Central African CFA (BEAC)
+  "XOF", "XOFC", "XOFF", "XOFN", "XOFB", "XOFT", "XOFS", "XOFM", "XOFGW", // West African CFA (BCEAO)
 ]);
+
+export const DEFAULT_CONVERSION_MINIMUM_XAF = 500;
+
+export async function getConversionMinimumXaf(): Promise<number> {
+  const setting = await storage.getSetting("conversion_minimum_xaf");
+  if (!setting) return DEFAULT_CONVERSION_MINIMUM_XAF;
+  const minimum = Number(setting.value);
+  if (!Number.isSafeInteger(minimum) || minimum <= 0) {
+    throw new Error("INVALID_CONVERSION_MINIMUM_XAF");
+  }
+  return minimum;
+}
 
 // XAF reference (1 USD ≈ 585 XAF) — used only for fallback default computation
 const XAF_PER_USD = 585;
@@ -85,11 +97,28 @@ export function convertCurrency(
   return convertFromXAF(amountInXAF, toCurrency, fxRates);
 }
 
+export function minimumConversionAmountInCurrency(
+  minimumXaf: number,
+  currency: string,
+  fxRates: Record<string, number>,
+): number {
+  const amount = convertFromXAF(minimumXaf, currency, fxRates);
+  return Math.ceil(Math.max(0, amount - 1e-9) * 100) / 100;
+}
+
+export function minimumConversionErrorMessage(
+  minimumXaf: number,
+  currency: string,
+  fxRates: Record<string, number>,
+): string {
+  const localMinimum = minimumConversionAmountInCurrency(minimumXaf, currency, fxRates);
+  return `Le minimum de conversion est de ${minimumXaf.toLocaleString("fr-FR")} FCFA, soit au moins ${localMinimum.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} ${currency}.`;
+}
 
 // West African CFA family (BCEAO) — XOF and all country-specific variants are 1:1
-const XOF_FAMILY = new Set(["XOF", "XOFC", "XOFF", "XOFN", "XOFB", "XOFT", "XOFS", "XOFM"]);
+const XOF_FAMILY = new Set(["XOF", "XOFC", "XOFF", "XOFN", "XOFB", "XOFT", "XOFS", "XOFM", "XOFGW"]);
 // Central African CFA family (BEAC) — XAF and country-specific variants are 1:1
-const XAF_FAMILY = new Set(["XAF", "XAFC", "XAFG"]);
+const XAF_FAMILY = new Set(["XAF", "XAFC", "XAFG", "XAFCF", "XAFTD"]);
 
 export function sameCfaFamily(a: string, b: string): boolean {
   if (XOF_FAMILY.has(a) && XOF_FAMILY.has(b)) return true;
@@ -229,6 +258,11 @@ export async function maybeAutoConvert(
   const amountAfterFee = amountToConvert - totalFeeAmount;
 
   const fxRates = await loadFxRates();
+  const minimumXaf = await getConversionMinimumXaf();
+  if (convertToXAF(amountToConvert, creditedCurrency, fxRates) < minimumXaf - 1e-7) {
+    console.log(`[AutoConversion] Skipping ${userId} ${creditedCurrency}->${rule.toCurrency}: amount is below ${minimumXaf} XAF minimum`);
+    return;
+  }
   const amountInXAF = convertToXAF(amountAfterFee, creditedCurrency, fxRates);
   const receivedAmount = convertFromXAF(amountInXAF, rule.toCurrency, fxRates);
 

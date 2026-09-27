@@ -94,7 +94,7 @@ import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, initiatePixP
 import { assertPawaPayProviderActive, classifyPawaPayControlledTransaction, createPawaPayDeposit, createPawaPayId, createPawaPayPayout, createPawaPayPaymentPage, getPawaPayActiveConfiguration, getPawaPayDeposit, getPawaPayPayout, resolvePawaPayOperationConfiguration, PAWAPAY_CUSTOMER_MESSAGE } from "./pawapay";
 import { addPendingPayment, removePendingPayment, expireCryptoPaymentIfNeeded } from "./paymentPoller";
 import { processPawaPayDepositCallback } from "./paymentPoller";
-import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserWallet, sameCfaFamily, getConversionPairKey, maybeAutoConvert } from "./walletHelper";
+import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserWallet, sameCfaFamily, getConversionPairKey, maybeAutoConvert, getConversionMinimumXaf, minimumConversionAmountInCurrency, minimumConversionErrorMessage } from "./walletHelper";
 import { addPendingPayout, removePendingPayout, processIziPayPayoutCallback, processPayout } from "./payoutPoller";
 import { processPendingConversions } from "./conversionPoller";
 import { processPawaPayPayoutCallback } from "./payoutPoller";
@@ -7638,6 +7638,17 @@ export async function registerRoutes(
       const amountAfterFee = parsedAmount - totalFeeAmount;
 
       const convFxRates = await loadFxRates();
+      const minimumConversionXaf = await getConversionMinimumXaf();
+      const grossAmountInXaf = convertToXAF(parsedAmount, fromCurrency, convFxRates);
+      if (grossAmountInXaf < minimumConversionXaf - 1e-7) {
+        return res.status(400).json({
+          message: minimumConversionErrorMessage(minimumConversionXaf, fromCurrency, convFxRates),
+          code: "MINIMUM_CONVERSION_AMOUNT",
+          minimumAmount: minimumConversionAmountInCurrency(minimumConversionXaf, fromCurrency, convFxRates),
+          minimumCurrency: fromCurrency,
+          minimumAmountXaf: minimumConversionXaf,
+        });
+      }
       const amountInXAF = convertToXAF(amountAfterFee, fromCurrency, convFxRates);
       const receivedAmountRaw = convertFromXAF(amountInXAF, toCurrency, convFxRates);
 
@@ -8033,6 +8044,17 @@ export async function registerRoutes(
       const amountAfterFee = parsedAmount - feeAmount;
 
       const convFxRates = await loadFxRates();
+      const minimumConversionXaf = await getConversionMinimumXaf();
+      const grossAmountInXaf = convertToXAF(parsedAmount, fromCurrency, convFxRates);
+      if (grossAmountInXaf < minimumConversionXaf - 1e-7) {
+        return res.status(400).json({
+          message: minimumConversionErrorMessage(minimumConversionXaf, fromCurrency, convFxRates),
+          code: "MINIMUM_CONVERSION_AMOUNT",
+          minimumAmount: minimumConversionAmountInCurrency(minimumConversionXaf, fromCurrency, convFxRates),
+          minimumCurrency: fromCurrency,
+          minimumAmountXaf: minimumConversionXaf,
+        });
+      }
       const amountInXAF = convertToXAF(amountAfterFee, fromCurrency, convFxRates);
       const receivedAmount = convertFromXAF(amountInXAF, toCurrency, convFxRates);
 
@@ -8445,12 +8467,17 @@ export async function registerRoutes(
   app.post("/api/wallets/convert-preview", requireAuth, async (req, res) => {
     try {
       const { fromCurrency, toCurrency, amount } = req.body;
+      if (!fromCurrency || !toCurrency) {
+        return res.status(400).json({ message: "fromCurrency et toCurrency sont requis" });
+      }
       const parsedAmount = parseFloat(amount || "0");
       if (isNaN(parsedAmount) || parsedAmount <= 0) {
         return res.status(400).json({ message: "Montant invalide" });
       }
 
       const previewFxRates = await loadFxRates();
+      const minimumConversionXaf = await getConversionMinimumXaf();
+      const grossAmountInXaf = convertToXAF(parsedAmount, fromCurrency, previewFxRates);
       const toAmount = convertCurrency(parsedAmount, fromCurrency, toCurrency, previewFxRates);
       if (!isFinite(toAmount) || toAmount <= 0) {
         return res.status(400).json({ message: `Taux non disponible pour ${fromCurrency} → ${toCurrency}. Configurez les taux de change dans l'admin.` });
@@ -8463,6 +8490,9 @@ export async function registerRoutes(
         toAmount,
         toCurrency,
         rate,
+        minimumAmount: minimumConversionAmountInCurrency(minimumConversionXaf, fromCurrency, previewFxRates),
+        minimumAmountXaf: minimumConversionXaf,
+        meetsMinimum: grossAmountInXaf >= minimumConversionXaf - 1e-7,
       });
     } catch (error) {
       res.status(500).json({ message: "Erreur serveur" });
@@ -9022,6 +9052,7 @@ export async function registerRoutes(
   app.get("/api/public/fee-settings", publicInfoLimiter, async (_req, res) => {
     try {
       const settings = await storage.getAllSettings();
+      const conversionMinimumXaf = await getConversionMinimumXaf();
       const conversionFeePercent = parseFloat(settings.find(s => s.key === "conversion_fee_percent")?.value || "6");
       const depositFeePercent = parseFloat(settings.find(s => s.key === "deposit_fee_percent")?.value || "0");
       const paymentLinkFeePercent = parseFloat(settings.find(s => s.key === "payment_link_fee_percent")?.value || "2");
@@ -9054,6 +9085,7 @@ export async function registerRoutes(
       );
       res.json({
         conversionFeePercent,
+        conversionMinimumXaf,
         // Intra-famille
         convProviderFeeXafXaf, convAshtechFeeXafXaf,
         convTotalXafXaf: convProviderFeeXafXaf + convAshtechFeeXafXaf,
@@ -14890,6 +14922,12 @@ export async function registerRoutes(
       if (typeof key !== "string" || key.startsWith("pawapay_")) {
         return res.status(400).json({ message: "Utilisez la page dédiée PawaPay" });
       }
+      if (key === "conversion_minimum_xaf") {
+        const minimum = Number(value);
+        if (!Number.isSafeInteger(minimum) || minimum < 1 || minimum > 1_000_000_000) {
+          return res.status(400).json({ message: "Le minimum de conversion doit être un entier positif inférieur ou égal à 1 000 000 000 FCFA." });
+        }
+      }
       
       const setting = await storage.upsertSetting(key, String(value), description || undefined);
       
@@ -14924,6 +14962,12 @@ export async function registerRoutes(
           return res.status(400).json({ message: "Utilisez la page dédiée PawaPay" });
         }
         if (key && value !== undefined) {
+          if (key === "conversion_minimum_xaf") {
+            const minimum = Number(value);
+            if (!Number.isSafeInteger(minimum) || minimum < 1 || minimum > 1_000_000_000) {
+              return res.status(400).json({ message: "Le minimum de conversion doit être un entier positif inférieur ou égal à 1 000 000 000 FCFA." });
+            }
+          }
           const setting = await storage.upsertSetting(key, String(value));
           results.push(setting);
         }
