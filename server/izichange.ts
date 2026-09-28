@@ -291,6 +291,61 @@ export async function createDirectCharge(
   return normalizeDirectChargeResponse(raw, params.requestedCoin, params.amount);
 }
 
+/**
+ * Extract the IziChange resource ID from a signed pay-in webhook. The provider
+ * has sent both wrapped and flat event payloads, so inspect known resource
+ * containers before the event data itself, and avoid treating a webhook
+ * envelope's own ID as the payment resource ID.
+ */
+export function extractIziPayProviderReference(eventData: any): string | undefined {
+  const candidates = [
+    eventData?.data?.object?.paymentIntent,
+    eventData?.data?.object?.payment_intent,
+    eventData?.data?.object?.charge,
+    eventData?.data?.object?.payin,
+    eventData?.object?.paymentIntent,
+    eventData?.object?.payment_intent,
+    eventData?.object?.charge,
+    eventData?.object?.payin,
+    eventData?.paymentIntent,
+    eventData?.payment_intent,
+    eventData?.charge,
+    eventData?.payin,
+    eventData?.data?.object,
+    eventData?.object,
+    eventData?.data,
+    eventData,
+  ];
+  const idFields = [
+    "id",
+    "paymentIntentId",
+    "payment_intent_id",
+    "chargeId",
+    "charge_id",
+    "payinId",
+    "payin_id",
+    "transactionId",
+    "transaction_id",
+  ];
+  const eventType = String(eventData?.event ?? eventData?.type ?? "").toLowerCase();
+  const isEventEnvelope =
+    /^(payment_intent|payin)\.(completed|failed|expired|confirmed)$/.test(eventType);
+
+  for (const candidate of candidates) {
+    if (!candidate || typeof candidate !== "object") continue;
+    for (const field of idFields) {
+      if (candidate === eventData && isEventEnvelope && field === "id") continue;
+      const value = candidate[field];
+      if (typeof value === "string" || typeof value === "number") {
+        const reference = String(value).trim();
+        if (reference) return reference;
+      }
+    }
+  }
+
+  return undefined;
+}
+
 // ── Crypto payouts (`POST /v1/payouts`) ───────────────────────────────────────
 export interface CreateIziPayoutParams {
   assetCode: string;

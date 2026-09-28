@@ -74,7 +74,7 @@ import {
 } from "./supabase";
 import { decryptField, encryptField, isFieldEncryptionConfigured } from "./fieldEncryption";
 import { isAdminPinProtectionEnabled, requireAdminPin, verifyAdminPinCode } from "./adminPin";
-import { createPaymentIntent, createDirectCharge, createIziPayout, validateWebhook, getIziPayWebhookSecret, toIziPayCurrency, isIziPayConfigured } from "./izichange";
+import { createPaymentIntent, createDirectCharge, createIziPayout, validateWebhook, getIziPayWebhookSecret, toIziPayCurrency, isIziPayConfigured, extractIziPayProviderReference } from "./izichange";
 import { fetchCryptoAssets, filterCryptoAssets, parseDisabledCryptoAssets, getStaticCryptoAssets } from "./cryptoAssets";
 import { calculateCryptoPayout, isDefinitiveIziPayoutRejection, parseCryptoPayoutFeeConfig, parseCryptoWithdrawalLimits, resolveCryptoPayoutFee } from "./cryptoPayout";
 import {
@@ -16716,23 +16716,85 @@ export async function registerRoutes(
         body.merchantReference            ??
         body.merchant_reference           ??
         "";
+      const providerReference = extractIziPayProviderReference(eventData);
 
-      if (!merchantReference) {
+      if (!merchantReference && !providerReference) {
         // Log everything we got so we can fix the path; return 200 to stop retries.
-        console.error("[IziChange Webhook] ⚠️  merchantReference not found in payload. Keys at root:", Object.keys(body), "Keys in data:", Object.keys(eventData ?? {}));
-        return res.status(200).json({ received: true, warning: "merchantReference not found — check server logs" });
+        console.error("[IziChange Webhook] No payment reference found. Keys at root:", Object.keys(body), "Keys in data:", Object.keys(eventData ?? {}));
+        return res.status(200).json({ received: true, warning: "payment reference not found — check server logs" });
       }
 
-      console.log(`[IziChange Webhook] ref=${merchantReference}`);
+      console.log(`[IziChange Webhook] ref=${merchantReference || "none"} provider_ref=${providerReference || "none"}`);
 
-      const transaction = await storage.getTransactionByReference(merchantReference);
+      const [transactionByExternalReference, transactionByPaymentIntentId, transactionByMerchantReference] =
+        await Promise.all([
+          providerReference
+            ? storage.getTransactionByExternalReference(providerReference)
+            : Promise.resolve(undefined),
+          providerReference
+            ? storage.getTransactionByPaymentIntentId(providerReference)
+            : Promise.resolve(undefined),
+          merchantReference
+            ? storage.getTransactionByReference(merchantReference)
+            : Promise.resolve(undefined),
+        ]);
+      const providerMatches = [
+        transactionByExternalReference,
+        transactionByPaymentIntentId,
+      ].filter((candidate): candidate is Transaction => Boolean(candidate));
+      const providerTransaction = providerMatches[0];
+      const providerIdsResolveDifferently = providerMatches.some(
+        (candidate) => candidate.id !== providerTransaction?.id,
+      );
+
+      if (
+        providerIdsResolveDifferently ||
+        (providerTransaction &&
+          transactionByMerchantReference &&
+          providerTransaction.id !== transactionByMerchantReference.id)
+      ) {
+        console.warn(
+          `[IziChange Webhook] Ignoring mismatched references ref=${merchantReference || "none"} provider_ref=${providerReference || "none"}`,
+        );
+        return res.status(200).json({ received: true, warning: "reference mismatch" });
+      }
+
+      const transaction = providerTransaction || transactionByMerchantReference;
       if (!transaction) {
-        console.warn(`[IziChange Webhook] Transaction not found for ref=${merchantReference}`);
+        console.warn(
+          `[IziChange Webhook] Transaction not found ref=${merchantReference || "none"} provider_ref=${providerReference || "none"}`,
+        );
         return res.status(200).json({ message: "ok" });
       }
 
+      if (
+        transaction.paymentMethod !== "crypto" ||
+        !["deposit", "payment_link"].includes(transaction.type)
+      ) {
+        console.warn(`[IziChange Webhook] Ignoring pay-in event for incompatible transaction ${transaction.reference}`);
+        return res.status(200).json({ received: true });
+      }
+
+      // A merchant-reference fallback is needed for older events and for a
+      // webhook racing the post-create readback. Once available, persist the
+      // provider ID so subsequent events resolve by the provider's reference.
+      if (
+        providerReference &&
+        !providerTransaction &&
+        transaction.externalReference &&
+        transaction.externalReference !== providerReference
+      ) {
+        console.warn(
+          `[IziChange Webhook] Ignoring provider ID mismatch for ref=${transaction.reference}`,
+        );
+        return res.status(200).json({ received: true, warning: "provider reference mismatch" });
+      }
+      if (providerReference && !transaction.externalReference) {
+        await storage.updateTransactionExternalReference(transaction.id, providerReference);
+      }
+
       if (transaction.status !== "pending") {
-        console.log(`[IziChange Webhook] Already processed ref=${merchantReference} status=${transaction.status}`);
+        console.log(`[IziChange Webhook] Already processed ref=${transaction.reference} status=${transaction.status}`);
         return res.status(200).json({ message: "already processed" });
       }
 
@@ -16741,7 +16803,7 @@ export async function registerRoutes(
         if (failedTransaction) {
           forwardMerchantWebhook(failedTransaction, "failed").catch(() => {});
         }
-        console.log(`[IziChange Webhook] ✗ Failed ref=${merchantReference} event=${eventType}`);
+        console.log(`[IziChange Webhook] ✗ Failed ref=${transaction.reference} event=${eventType}`);
         return res.json({ received: true });
       }
 
@@ -16794,7 +16856,7 @@ export async function registerRoutes(
         userEmail: (txUser as any)?.email || "",
         amount: creditAmount.toFixed(6),
         currency: "USDT",
-        reference: merchantReference,
+        reference: transaction.reference || merchantReference || transaction.id,
         merchantReference: (transaction as any).metadata?.merchantReference || (transaction as any).metadata?.merchant_reference || undefined,
         externalReference: (transaction as any).externalReference || undefined,
         depositType: transaction.type,
@@ -16810,7 +16872,7 @@ export async function registerRoutes(
         totalFeePercent: (transaction as any).metadata?.totalFeePercent,
       }).catch(() => {});
 
-      console.log(`[IziChange Webhook] ✓ Credited ${creditAmount.toFixed(4)} USDT — ref=${merchantReference}`);
+      console.log(`[IziChange Webhook] ✓ Credited ${creditAmount.toFixed(4)} USDT — ref=${transaction.reference}`);
       return res.json({ received: true });
     } catch (error: any) {
       console.error("[IziChange Webhook] Error:", error);
