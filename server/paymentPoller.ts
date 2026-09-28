@@ -117,7 +117,7 @@ async function checkPaymentStatus(payment: PendingPayment): Promise<"pending" | 
       // Keep the payment pending so it can resume when credentials are added.
       if (!isAfribaPayConfigured()) return "pending";
       // If AfribaPay circuit is open (subscription invalid), don't make any HTTP calls.
-      // Return "pending" — the normal timeout logic will auto-fail the transaction after 7 min.
+      // Return "pending" — provider outages do not time out or auto-fail deposits.
       if (isAfribaPayCircuitOpen()) return "pending";
       const providerReference = payment.externalReference?.trim();
       if (providerReference && providerReference !== payment.reference) {
