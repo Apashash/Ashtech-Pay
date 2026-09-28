@@ -155,6 +155,7 @@ export interface IStorage {
   claimPawaIncomingAndCredit(id: string, allowedFrom?: string[]): Promise<Transaction | undefined>;
   claimPawaPayoutFailedAndRefund(id: string, allowedFrom?: string[]): Promise<Transaction | undefined>;
   claimIziPayPayoutFailedAndRefund(id: string, allowedFrom?: string[]): Promise<Transaction | undefined>;
+  claimPayoutFailedAndRefund(id: string, allowedFrom?: string[]): Promise<Transaction | undefined>;
   updateTransactionMetadata(id: string, metadata: Record<string, unknown>): Promise<void>;
   updateTransaction(id: string, updates: Partial<InsertTransaction>): Promise<Transaction | undefined>;
   updateTransactionExternalReference(id: string, externalReference: string): Promise<Transaction | undefined>;
@@ -414,6 +415,7 @@ export interface IStorage {
   getHostedPageKeyByHpLive(hpLive: string): Promise<HostedPageKey | undefined>;
   createHostedPaymentSession(data: Omit<HostedPaymentSession, "createdAt">): Promise<HostedPaymentSession>;
   getHostedPaymentSession(id: string): Promise<HostedPaymentSession | undefined>;
+  claimHostedPaymentSession(id: string, allowedFrom?: string[]): Promise<HostedPaymentSession | undefined>;
   updateHostedPaymentSession(id: string, updates: Partial<HostedPaymentSession>): Promise<void>;
 }
 
@@ -1099,7 +1101,7 @@ export class DatabaseStorage implements IStorage {
     return claimed;
   }
 
-  async claimIziPayPayoutFailedAndRefund(
+  async claimPayoutFailedAndRefund(
     id: string,
     allowedFrom: string[] = ["pending", "processing", "pending_manual"],
   ): Promise<Transaction | undefined> {
@@ -1114,7 +1116,7 @@ export class DatabaseStorage implements IStorage {
         const result = await trx.update(transactions).set({ status: "failed" }).where(claimWhere);
         const header = Array.isArray(result) ? result[0] : result;
         const affectedRows = Number((header as any)?.affectedRows ?? (header as any)?.rowsAffected ?? (header as any)?.rowCount ?? (header as any)?.changes);
-        if (!Number.isFinite(affectedRows)) throw new Error("IZIPAY_PAYOUT_REFUND_CLAIM_UNCONFIRMED");
+        if (!Number.isFinite(affectedRows)) throw new Error("PAYOUT_REFUND_CLAIM_UNCONFIRMED");
         if (affectedRows === 0) return undefined;
         [transaction] = await trx.select().from(transactions).where(eq(transactions.id, id)).limit(1);
       } else {
@@ -1129,13 +1131,13 @@ export class DatabaseStorage implements IStorage {
         .from(users)
         .where(eq(users.id, transaction.userId))
         .limit(1);
-      if (!user) throw new Error("IZIPAY_PAYOUT_REFUND_USER_NOT_FOUND");
+      if (!user) throw new Error("PAYOUT_REFUND_USER_NOT_FOUND");
       const metadata = (transaction.metadata || {}) as Record<string, unknown>;
       const walletCurrency = typeof metadata.walletCurrency === "string"
         ? metadata.walletCurrency
         : transaction.currency || "USDT";
       const amount = Number.parseFloat(transaction.totalAmount || transaction.amount);
-      if (!Number.isFinite(amount) || amount <= 0) throw new Error("IZIPAY_PAYOUT_REFUND_AMOUNT_INVALID");
+      if (!Number.isFinite(amount) || amount <= 0) throw new Error("PAYOUT_REFUND_AMOUNT_INVALID");
 
       if ((user.preferredCurrency || "XAF") === walletCurrency) {
         await trx.update(users)
@@ -1159,6 +1161,13 @@ export class DatabaseStorage implements IStorage {
     });
     if (refunded) invalidateUserCache(refunded.userId);
     return refunded;
+  }
+
+  async claimIziPayPayoutFailedAndRefund(
+    id: string,
+    allowedFrom: string[] = ["pending", "processing", "pending_manual"],
+  ): Promise<Transaction | undefined> {
+    return this.claimPayoutFailedAndRefund(id, allowedFrom);
   }
 
   async refundPendingManualPayout(id: string): Promise<Transaction | undefined> {
@@ -3911,6 +3920,30 @@ export class DatabaseStorage implements IStorage {
 
   async getHostedPaymentSession(id: string): Promise<HostedPaymentSession | undefined> {
     const [session] = await db.select().from(hostedPaymentSessions).where(eq(hostedPaymentSessions.id, id));
+    return session || undefined;
+  }
+
+  async claimHostedPaymentSession(
+    id: string,
+    allowedFrom: string[] = ["pending"],
+  ): Promise<HostedPaymentSession | undefined> {
+    const where = and(
+      eq(hostedPaymentSessions.id, id),
+      inArray(hostedPaymentSessions.status, allowedFrom),
+    );
+    if (isMysqlDialect) {
+      const updateResult = await db.update(hostedPaymentSessions)
+        .set({ status: "processing" })
+        .where(where);
+      const header = Array.isArray(updateResult) ? (updateResult as any)[0] : updateResult as any;
+      const affectedRows = header?.affectedRows ?? header?.rowsAffected ?? header?.rowCount ?? header?.changes;
+      if (affectedRows === undefined || Number(affectedRows) === 0) return undefined;
+      return this.getHostedPaymentSession(id);
+    }
+    const [session] = await db.update(hostedPaymentSessions)
+      .set({ status: "processing" })
+      .where(where)
+      .returning();
     return session || undefined;
   }
 

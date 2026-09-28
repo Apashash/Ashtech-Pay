@@ -203,13 +203,12 @@ export async function processPayout(payout: PendingPayout, apiStatus: string) {
       // These are definitive terminal provider statuses. Reject the payout
       // and restore the debited amount; ambiguous initiation errors are
       // handled separately as pending_manual by the route.
-      const afribaManualRefund = payout.provider === "afribapay" && transaction.status === "pending_manual";
       const claimed = payout.provider === "pawapay"
         ? await storage.claimPawaPayoutFailedAndRefund(payout.transactionId, ["pending", "processing", "pending_manual"])
         : payout.provider === "izichange"
           ? await storage.claimIziPayPayoutFailedAndRefund(payout.transactionId, ["pending", "processing", "pending_manual"])
-          : afribaManualRefund
-            ? await storage.refundPendingManualPayout(payout.transactionId)
+          : payout.provider === "afribapay"
+            ? await storage.claimPayoutFailedAndRefund(payout.transactionId, ["pending", "processing", "pending_manual"])
             : await storage.claimTransactionStatus(payout.transactionId, "failed", ["pending", "processing", "pending_manual"]);
       if (!claimed) {
         removePendingPayout(payout.reference);
@@ -217,7 +216,7 @@ export async function processPayout(payout: PendingPayout, apiStatus: string) {
       }
       setFailedCooldown(payout.userId);
       const refundAmount = parseFloat(payout.totalDebited || payout.amount);
-      if (payout.provider !== "pawapay" && payout.provider !== "izichange" && !afribaManualRefund) {
+      if (payout.provider !== "pawapay" && payout.provider !== "izichange" && payout.provider !== "afribapay") {
         await storage.refundToOriginalWallet(payout.userId, payout.txType, payout.walletCurrency || payout.txCurrency, refundAmount);
       }
       await storage.createUserNotification({
@@ -314,7 +313,6 @@ async function checkProviderStatus(payout: PendingPayout): Promise<{ status: str
       // Leave the payout pending without generating repeated failed requests.
       if (!isAfribaPayConfigured()) return { status: "pending" };
       const result = await checkAfribaPayoutStatus(payout.reference, "order_id");
-      if (providerResponseIndicatesNotFound(result.raw)) return { status: "failed" };
       return { status: result.status };
     }
 

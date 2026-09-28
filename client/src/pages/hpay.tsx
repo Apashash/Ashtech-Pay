@@ -17,6 +17,11 @@ interface HostedSession {
   status: string;
   merchant_name: string;
   expires_at: string | null;
+  transaction_id?: string | null;
+  otp_required?: boolean;
+  otp_type?: "api" | "ussd" | null;
+  otp_reference?: string | null;
+  otp_ussd_code?: string | null;
 }
 
 interface Country {
@@ -36,6 +41,9 @@ interface PayResult {
   wave_url: string | null;
   redirect_url?: string | null;
   otp_info: string | null;
+  otp_required?: boolean;
+  otp_type?: "api" | "ussd" | null;
+  reference?: string | null;
 }
 
 function formatAmount(amount: number, currency: string) {
@@ -54,6 +62,7 @@ export default function HPayPage() {
   const [countryId, setCountryId] = useState("");
   const [operatorId, setOperatorId] = useState("");
   const [phone, setPhone] = useState("");
+  const [otpCode, setOtpCode] = useState("");
   const [pollInterval, setPollInterval] = useState<NodeJS.Timeout | null>(null);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -105,6 +114,33 @@ export default function HPayPage() {
     },
   });
 
+  const confirmOtpMutation = useMutation({
+    mutationFn: async (code: string) => {
+      const res = await fetch(`/api/public/hosted-session/${id}/confirm-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ otpCode: code }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Impossible de confirmer le code OTP.");
+      return data;
+    },
+    onSuccess: (result) => {
+      setOtpCode("");
+      setPayResult((current) => current ? {
+        ...current,
+        flow: "pending_check",
+        otp_required: false,
+        ussd_code: null,
+        otp_info: result.message || "Vérification du paiement en cours.",
+      } : current);
+      toast({ title: "Code envoyé", description: result.message || "Nous vérifions le paiement." });
+    },
+    onError: (err: any) => {
+      toast({ title: "Erreur", description: err.message, variant: "destructive" });
+    },
+  });
+
   const startPolling = useCallback(() => {
     if (pollingRef.current) return pollingRef.current;
     const interval = setInterval(async () => {
@@ -137,6 +173,22 @@ export default function HPayPage() {
     if (!session) return;
     if (session.status === "processing") {
       setStep("initiated");
+      if (session.otp_required) {
+        setPayResult({
+          status: "initiated",
+          transaction_id: session.transaction_id || "",
+          flow: session.otp_type === "ussd" ? "otp_ussd" : "otp_sms",
+          otp_required: true,
+          otp_type: session.otp_type || "api",
+          reference: session.otp_reference || null,
+          ussd_code: session.otp_ussd_code || null,
+          wave_url: null,
+          redirect_url: null,
+          otp_info: session.otp_type === "ussd"
+            ? "Composez le code USSD sur votre téléphone, puis saisissez le code OTP reçu."
+            : "Entrez le code OTP reçu par SMS sur votre téléphone.",
+        });
+      }
       startPolling();
     } else if (session.status === "success") setStep("success");
     else if (session.status === "failed") setStep("failed");
@@ -285,6 +337,42 @@ export default function HPayPage() {
                   <p className="text-sm text-muted-foreground">
                     Vous allez recevoir une notification USSD sur votre téléphone. Acceptez et entrez votre code PIN pour confirmer le paiement.
                   </p>
+                </div>
+              )}
+
+              {payResult?.otp_required && (
+                <div className="rounded-2xl border border-blue-500/30 bg-blue-500/5 p-5 space-y-3">
+                  <Label htmlFor="hosted-otp">Code OTP</Label>
+                  <Input
+                    id="hosted-otp"
+                    data-testid="input-hosted-otp"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    placeholder="4 à 6 chiffres"
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  />
+                  <Button
+                    className="w-full"
+                    onClick={() => confirmOtpMutation.mutate(otpCode)}
+                    disabled={otpCode.length < 4 || confirmOtpMutation.isPending}
+                    data-testid="button-confirm-hosted-otp"
+                  >
+                    {confirmOtpMutation.isPending ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Vérification...
+                      </>
+                    ) : "Confirmer le code OTP"}
+                  </Button>
+                </div>
+              )}
+
+              {payResult?.flow === "pending_check" && (
+                <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-5 text-sm text-muted-foreground">
+                  {payResult.otp_info || "Nous vérifions le paiement. Ne relancez pas la demande."}
                 </div>
               )}
 

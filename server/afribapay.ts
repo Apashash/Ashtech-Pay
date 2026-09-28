@@ -617,6 +617,26 @@ export async function checkAfribaPayStatus(
   }
 }
 
+export function classifyAfribaPayoutStatus(
+  httpStatus: number,
+  providerStatus: string | undefined,
+): "completed" | "failed" | "pending" {
+  // AfribaPay's public status-code table marks HTTP 404 as non-final. A failed
+  // lookup must not refund a payout that may already have been accepted.
+  if (httpStatus === 404) return "pending";
+
+  const status = String(providerStatus || "").toUpperCase();
+  if (["SUCCESS", "COMPLETED", "SUCCESSFUL", "PAID", "APPROVED", "PROCESSED"].includes(status)) {
+    return "completed";
+  }
+  if (["FAILED", "ERROR", "CANCELLED", "REJECTED", "EXPIRED"].includes(status)) {
+    return "failed";
+  }
+  // NOT_FOUND is not treated as terminal until AfribaPay confirms that
+  // transaction-level NOT_FOUND differs from its documented non-final HTTP 404.
+  return "pending";
+}
+
 // ─── Check payout status (withdrawals / transfers) ────────────────────────────
 export async function checkAfribaPayoutStatus(
   identifier: string,
@@ -631,18 +651,7 @@ export async function checkAfribaPayoutStatus(
     const rawStatus = (d?.status || d?.transaction_status || d?.payout_status || "").toUpperCase();
     console.log(`[AfribaPay PayoutStatus] ${param} → HTTP ${res.status} | raw_status="${rawStatus}" | data=${JSON.stringify(maskPiiInObject(d))}`);
 
-    if (res.status === 404 || rawStatus === "NOT_FOUND" || rawStatus === "NOT FOUND") {
-      return { status: "failed", raw: data };
-    }
-
-    if (rawStatus === "SUCCESS" || rawStatus === "COMPLETED" || rawStatus === "SUCCESSFUL"
-        || rawStatus === "PAID" || rawStatus === "APPROVED" || rawStatus === "PROCESSED") {
-      return { status: "completed", raw: data };
-    } else if (rawStatus === "FAILED" || rawStatus === "ERROR" || rawStatus === "CANCELLED"
-               || rawStatus === "REJECTED" || rawStatus === "EXPIRED") {
-      return { status: "failed", raw: data };
-    }
-    return { status: "pending", raw: data };
+    return { status: classifyAfribaPayoutStatus(res.status, rawStatus), raw: data };
   } catch (err: any) {
     console.error("[AfribaPay PayoutStatus] Error:", err);
     return { status: "pending" };
@@ -991,8 +1000,7 @@ export function parseAfribaPayWebhook(payload: any): {
       || statusRaw === "PAID" || statusRaw === "APPROVED" || statusRaw === "PROCESSED") {
     status = "completed";
   } else if (statusRaw === "FAILED" || statusRaw === "ERROR" || statusRaw === "CANCELLED"
-      || statusRaw === "REJECTED" || statusRaw === "EXPIRED" || statusRaw === "NOT_FOUND"
-      || statusRaw === "NOT FOUND") {
+      || statusRaw === "REJECTED" || statusRaw === "EXPIRED") {
     status = "failed";
   }
 

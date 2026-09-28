@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 import {
   AFRIBAPAY_MAX_PAYIN_AMOUNT,
   AFRIBAPAY_MIN_PAYIN_AMOUNT,
+  classifyAfribaPayoutStatus,
   parseAfribaPayWebhook,
   validateAfribaPayinAmount,
   verifyAfribaPayWebhookSignature,
@@ -41,6 +42,15 @@ test("AfribaPay webhook parser keeps reference_id and terminal statuses", () => 
   assert.equal(parsed.status, "completed");
   assert.equal(parseAfribaPayWebhook({ status: "EXPIRED" }).status, "failed");
   assert.equal(parseAfribaPayWebhook({ status: "PENDING" }).status, "pending");
+  assert.equal(parseAfribaPayWebhook({ status: "NOT_FOUND" }).status, "pending");
+});
+
+test("AfribaPay payout HTTP 404 and NOT_FOUND are non-final", () => {
+  assert.equal(classifyAfribaPayoutStatus(404, "FAILED"), "pending");
+  assert.equal(classifyAfribaPayoutStatus(404, "NOT_FOUND"), "pending");
+  assert.equal(classifyAfribaPayoutStatus(200, "NOT_FOUND"), "pending");
+  assert.equal(classifyAfribaPayoutStatus(200, "FAILED"), "failed");
+  assert.equal(classifyAfribaPayoutStatus(200, "SUCCESS"), "completed");
 });
 
 test("AfribaPay payin amount validation uses the conservative documented range", () => {

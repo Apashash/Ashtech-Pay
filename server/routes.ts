@@ -189,8 +189,8 @@ import {
 // ─── Helper: URL de callback webhook avec token d'authentification ────────────
 // Appelle les fournisseurs de paiement avec le token dans l'URL pour que leurs
 // callbacks soient authentifiés automatiquement (WEBHOOK_SECRET requis).
-function buildWebhookUrl(path: string): string {
-  const base = (process.env.APP_URL || "").replace(/\/$/, "");
+function buildWebhookUrl(path: string, baseUrl = process.env.APP_URL || ""): string {
+  const base = baseUrl.replace(/\/$/, "");
   const token = process.env.WEBHOOK_SECRET;
   return token
     ? `${base}${path}?token=${encodeURIComponent(token)}`
@@ -1687,6 +1687,7 @@ type OtpContext = {
   afribaTransactionId: string;
   expiresAt: number;
   otpType?: "api" | "ussd";
+  ussdCode?: string;
 };
 const otpContextCache = new Map<string, OtpContext>();
 
@@ -1713,7 +1714,8 @@ async function persistOtpContext(reference: string, context: OtpContext): Promis
 
 async function loadOtpContext(reference: string): Promise<OtpContext | undefined> {
   const cached = otpContextCache.get(reference);
-  if (cached) return cached;
+  if (cached && cached.expiresAt > Date.now()) return cached;
+  if (cached) otpContextCache.delete(reference);
   if (isMysqlDialect) {
     const result = await pool.query(
       `SELECT context FROM api_otp_sessions
@@ -2093,6 +2095,19 @@ function isProviderTimeoutFailure(result: {
   providerStatus?: unknown;
 }): boolean {
   return result.providerCode === "provider_timeout" || Number(result.providerStatus) === 504;
+}
+
+function isAmbiguousProviderInitiationFailure(result: {
+  providerCode?: unknown;
+  providerStatus?: unknown;
+}): boolean {
+  const status = Number(result.providerStatus);
+  return isProviderTimeoutFailure(result)
+    || !Number.isFinite(status)
+    || status <= 0
+    || status === 408
+    || status === 429
+    || status >= 500;
 }
 
 function isDefinitivePayoutRejection(result: {
@@ -17011,13 +17026,37 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Transaction not found" });
       }
 
-      if (transaction.status !== "pending") {
-        return res.json({ success: true });
-      }
-
       const isPaymentLink = transaction.type === "payment_link";
       const isPayout = transaction.type === "withdrawal" || transaction.type === "transfer_out";
       const txCurrency = transaction.currency || "XAF";
+
+      if (isPayout) {
+        if (status === "pending") return res.json({ success: true });
+        if (!["pending", "processing", "pending_manual"].includes(transaction.status)) {
+          return res.json({ success: true, message: "already processed" });
+        }
+        const metadata = ((transaction as any).metadata || {}) as Record<string, any>;
+        await processPayout({
+          transactionId: transaction.id,
+          reference: transaction.reference || ref,
+          externalReference: transaction.externalReference || undefined,
+          userId: transaction.userId,
+          amount: String(transaction.amount),
+          totalDebited: String((transaction as any).totalAmount || transaction.amount),
+          attempts: 0,
+          provider: "afribapay",
+          countryCode: String(metadata.countryCode || transaction.recipientCountry || ""),
+          txType: transaction.type,
+          txCurrency,
+          walletCurrency: String(metadata.walletCurrency || txCurrency),
+        }, status === "completed" ? "success" : "failed");
+        forwardMerchantWebhook(transaction, status).catch(() => {});
+        return res.json({ success: true });
+      }
+
+      if (transaction.status !== "pending") {
+        return res.json({ success: true });
+      }
 
       if (status === "completed") {
         const claimedTransaction = await storage.claimTransactionStatus(transaction.id, "completed");
@@ -19437,12 +19476,26 @@ export async function registerRoutes(
         return res.status(410).json({ error: "expired", message: "Ce lien de paiement a expiré." });
       }
       const merchant = await storage.getUser(session.merchantId);
+      let otpContext: OtpContext | undefined;
+      let transaction: any;
+      if (session.status === "processing" && session.transactionId) {
+        transaction = await storage.getTransactionById(session.transactionId);
+        if (transaction?.status === "pending" && transaction.reference) {
+          const context = await loadOtpContext(transaction.reference);
+          if (context && context.expiresAt > Date.now()) otpContext = context;
+        }
+      }
       res.json({
         payment_id: session.id,
         amount: parseFloat(session.amount),
         currency: session.currency,
         description: session.description,
         status: session.status,
+        transaction_id: transaction?.id || null,
+        otp_required: Boolean(otpContext),
+        otp_type: otpContext?.otpType || null,
+        otp_reference: otpContext ? transaction?.reference || null : null,
+        otp_ussd_code: otpContext?.ussdCode || null,
         merchant_name: merchant?.fullName || "Marchand",
         expires_at: session.expiresAt,
       });
@@ -19517,13 +19570,18 @@ export async function registerRoutes(
        const creditedAmount = feeBreakdown.creditedAmount;
        const totalAmount = amount;
 
-      // Create transaction
-      const txRef = "HP-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8).toUpperCase();
        if (provider === "pawapay") {
          await assertPawaPayProviderActive(resolvePawaPayProviderCode(operator, operator.name, country.code), "DEPOSIT", pawaPayCountry(country.code));
        }
        const pawaPayDepositId = provider === "pawapay" ? createPawaPayId() : undefined;
-      const tx = await storage.createTransaction({
+       const claimedSession = await storage.claimHostedPaymentSession(hpSession.id);
+       if (!claimedSession) {
+         return res.status(409).json({ error: "already_processed", message: "Ce paiement a déjà été lancé." });
+       }
+       const txRef = "HP-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8).toUpperCase();
+       let tx;
+       try {
+         tx = await storage.createTransaction({
         userId: merchant.id,
         type: "deposit",
          amount: String(creditedAmount),
@@ -19541,25 +19599,33 @@ export async function registerRoutes(
         source: "hosted_page",
         confirmedAt: null,
          ...(pawaPayDepositId ? { externalReference: pawaPayDepositId } : {}),
-          ...(pawaPayDepositId ? {
-            metadata: {
-              paymentProvider: "pawapay",
-              pawaCountry: pawaPayCountry(country.code),
-              countryCode: country.code,
-              walletCurrency,
-            },
-          } : {}),
-      } as any);
+         metadata: {
+           paymentProvider: provider,
+           countryCode: country.code,
+           walletCurrency,
+           hostedSessionId: hpSession.id,
+           ...(pawaPayDepositId ? { pawaCountry: pawaPayCountry(country.code) } : {}),
+         },
+         } as any);
+       } catch (createError) {
+         await storage.updateHostedPaymentSession(hpSession.id, { status: "pending" }).catch(() => {});
+         throw createError;
+       }
 
-      // Update hosted session to processing
-      await storage.updateHostedPaymentSession(hpSession.id, {
-        status: "processing",
-        transactionId: tx.id,
-      });
+       try {
+         await storage.updateHostedPaymentSession(hpSession.id, { transactionId: tx.id });
+       } catch (linkError) {
+         await storage.updateTransactionStatus(tx.id, "failed").catch(() => {});
+         await storage.updateHostedPaymentSession(hpSession.id, { status: "pending", transactionId: null }).catch(() => {});
+         throw linkError;
+       }
 
        // Initiate payment (AfribaPay or PixPay)
       let payResult: any = null;
        const countryCode = country.code.toUpperCase();
+        const appBase = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
+        const afribapayCallbackUrl = buildWebhookUrl("/api/afribapay/webhook", appBase);
+        let afribapayRequestStarted = false;
 
       try {
          if (provider === "pixpay") {
@@ -19571,12 +19637,11 @@ export async function registerRoutes(
             phone,
             countryCode,
             orderId: txRef,
-             ipnUrl: buildWebhookUrl("/api/pixpay/webhook"),
+              ipnUrl: buildWebhookUrl("/api/pixpay/webhook", appBase),
             customData: txRef,
           };
           const flowType = detectPixPayFlowType(operator.name, countryCode);
           if (flowType === "wave") {
-            const appBase = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
             const waveRes = await initiatePixPayWave({
               ...pixBaseParams,
               redirectUrl: `${appBase}/hpay/${hpSession.id}?status=success`,
@@ -19617,7 +19682,6 @@ export async function registerRoutes(
             payResult = { flow: "ussd_push", ussd_code: null, extRef };
           }
           } else if (provider === "pawapay") {
-           const appBase = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
            const result = await createPawaPayPaymentPage({
              depositId: pawaPayDepositId, amount: amount.toFixed(2), currency: toPawaPayCurrency(walletCurrency),
              phoneNumber: normalizePhone(phone) || "", country: pawaPayCountry(countryCode),
@@ -19632,47 +19696,133 @@ export async function registerRoutes(
           } else if (provider === "afribapay") {
           const afribapayOperatorCode = resolveAfribaPayOperatorCode(operator, operator.name);
           const afribapayCurrency = AFRIBAPAY_ISO_CURRENCY[countryCode.toUpperCase()] || country.currency;
-          let localPhone = phone.replace(/\s/g, "");
-          if (localPhone.startsWith("+")) localPhone = localPhone.slice(1);
-          const afribaResponse = await initiateAfribaPayin({
-            operator: afribapayOperatorCode,
-            country: countryCode,
-            phone_number: localPhone,
-             amount: amount,
-            currency: afribapayCurrency,
-            order_id: txRef,
-            reference_id: txRef,
-          });
-          if (!afribaResponse.success) {
-            throw createProviderFailure(
-              afribaResponse.message || "Erreur AfribaPay",
-              {
-                provider: "afribapay",
-                raw: afribaResponse.raw,
-                providerCode: afribaResponse.providerCode,
-                providerStatus: afribaResponse.providerStatus,
-              },
-            );
-          }
-          const extRef = afribaResponse.transaction_id || txRef;
-          await storage.updateTransactionExternalReference(tx.id, extRef);
-          payResult = { flow: "ussd_push", ussd_code: null, extRef };
+           let localPhone = phone.replace(/\D/g, "");
+           const dialPrefix = String((country as any).dialCode || "").replace(/\D/g, "");
+           if (dialPrefix && localPhone.startsWith(dialPrefix)) localPhone = localPhone.slice(dialPrefix.length);
+           const saveOtpContext = async (otpType: "api" | "ussd", ussdCode?: string) => {
+             await persistOtpContext(txRef, {
+               userId: merchant.id,
+               operator: afribapayOperatorCode,
+               country: countryCode,
+               phone: localPhone,
+               amount,
+               currency: afribapayCurrency,
+               afribaTransactionId: txRef,
+               expiresAt: Date.now() + 15 * 60 * 1000,
+               otpType,
+               ussdCode,
+             });
+           };
+           const otpInfo = await getAfribaPayOtpInfo(countryCode, afribapayOperatorCode);
+           if (otpInfo.required) {
+             let ussdCode = otpInfo.ussdCode || "";
+             if (ussdCode.toLowerCase().includes("montant")) {
+               ussdCode = ussdCode.replace(/montant/gi, String(Math.round(amount)));
+             }
+             if (otpInfo.type === "api") {
+               afribapayRequestStarted = true;
+               const otpInitResult = await initiateAfribaPayOtp({
+                 operator: afribapayOperatorCode,
+                 country: countryCode,
+                 phone_number: localPhone,
+                 amount,
+                 currency: afribapayCurrency,
+                 order_id: txRef,
+                 reference_id: txRef,
+                 notify_url: afribapayCallbackUrl,
+               });
+               if (!otpInitResult.success && !isAmbiguousProviderInitiationFailure(otpInitResult)) {
+                 throw createProviderFailure(otpInitResult.message || "Impossible d'envoyer le code OTP.", {
+                   provider: "afribapay",
+                   raw: otpInitResult.raw,
+                   providerCode: otpInitResult.providerCode,
+                   providerStatus: otpInitResult.providerStatus,
+                 });
+               }
+             }
+             const otpType = otpInfo.type === "ussd" ? "ussd" : "api";
+             await saveOtpContext(otpType, ussdCode || undefined);
+             payResult = {
+               flow: otpType === "ussd" ? "otp_ussd" : "otp_sms",
+               otp_required: true,
+               otp_type: otpType,
+               otp_info: otpType === "ussd"
+                 ? `Composez ${ussdCode || "le code USSD de votre opérateur"} sur votre téléphone, puis saisissez le code OTP reçu.`
+                 : "Entrez le code OTP reçu par SMS sur votre téléphone.",
+               ussd_code: otpType === "ussd" ? ussdCode || null : null,
+               extRef: txRef,
+             };
+           } else {
+             afribapayRequestStarted = true;
+             const afribaResponse = await initiateAfribaPayin({
+               operator: afribapayOperatorCode,
+               country: countryCode,
+               phone_number: localPhone,
+               amount,
+               currency: afribapayCurrency,
+               order_id: txRef,
+               reference_id: txRef,
+               notify_url: afribapayCallbackUrl,
+               return_url: `${appBase}/hpay/${hpSession.id}?status=success`,
+               cancel_url: `${appBase}/hpay/${hpSession.id}?status=cancelled`,
+             });
+             if (!afribaResponse.success && isAfribaPayOtpRequiredMessage(afribaResponse.message)) {
+               await saveOtpContext("api");
+               payResult = {
+                 flow: "otp_sms",
+                 otp_required: true,
+                 otp_type: "api",
+                 otp_info: "Entrez le code OTP reçu par SMS sur votre téléphone.",
+                 ussd_code: null,
+                 extRef: txRef,
+               };
+             } else if (!afribaResponse.success) {
+               throw createProviderFailure(
+                 afribaResponse.message || "Erreur AfribaPay",
+                 {
+                   provider: "afribapay",
+                   raw: afribaResponse.raw,
+                   providerCode: afribaResponse.providerCode,
+                   providerStatus: afribaResponse.providerStatus,
+                 },
+               );
+             } else {
+               const extRef = afribaResponse.transaction_id || txRef;
+               await storage.updateTransactionExternalReference(tx.id, extRef);
+               payResult = {
+                 flow: afribaResponse.provider_link ? "provider_page" : "ussd_push",
+                 redirect_url: afribaResponse.provider_link || null,
+                 ussd_code: null,
+                 extRef,
+               };
+             }
+           }
         } else {
           return res.status(400).json({ error: "unsupported_country", message: "Pays non supporté pour le paiement." });
         }
       } catch (payErr: any) {
-        await storage.updateHostedPaymentSession(hpSession.id, { status: "failed" });
-        await storage.updateTransactionStatus(tx.id, "failed");
-        return res.status(502).json(buildProviderErrorPayload({
-          error: "payment_initiation_failed",
-          message: payErr?.message,
-          fallback: "Échec de l'initiation du paiement.",
-          provider: payErr?.provider || provider,
-          raw: payErr?.raw,
-          providerCode: payErr?.providerCode,
-          providerStatus: payErr?.providerStatus,
-          sensitiveValues: [phone],
-        }));
+        if (provider === "afribapay" && afribapayRequestStarted && isAmbiguousProviderInitiationFailure(payErr)) {
+          // The provider may have accepted the request before the timeout.
+          // Keep the transaction pollable; never tell the customer to retry it.
+          payResult = {
+            flow: "pending_check",
+            otp_info: "La demande a été envoyée. Nous vérifions son statut; ne relancez pas le paiement.",
+            extRef: txRef,
+          };
+        } else {
+          await storage.updateHostedPaymentSession(hpSession.id, { status: "failed" });
+          await storage.updateTransactionStatus(tx.id, "failed");
+          return res.status(502).json(buildProviderErrorPayload({
+            error: "payment_initiation_failed",
+            message: payErr?.message,
+            fallback: "Échec de l'initiation du paiement.",
+            provider: payErr?.provider || provider,
+            raw: payErr?.raw,
+            providerCode: payErr?.providerCode,
+            providerStatus: payErr?.providerStatus,
+            sensitiveValues: [phone],
+          }));
+        }
       }
 
       // Register only asynchronous provider responses. Immediate PawaPay
@@ -19680,7 +19830,7 @@ export async function registerRoutes(
       if (payResult.completed && provider === "pawapay") {
         await processPawaPayDepositCallback(tx, "completed");
         await storage.updateHostedPaymentSession(hpSession.id, { status: "success" });
-      } else {
+      } else if (!payResult.otp_required) {
         addPendingPayment({
           transactionId: tx.id,
           reference: txRef,
@@ -19701,10 +19851,90 @@ export async function registerRoutes(
         wave_url: payResult.wave_url || null,
         redirect_url: payResult.redirect_url || null,
         otp_info: payResult.otp_info || null,
+        otp_required: Boolean(payResult.otp_required),
+        otp_type: payResult.otp_type || null,
+        reference: payResult.otp_required ? txRef : null,
       });
     } catch (e: any) {
       console.error("[public/hosted-session/:id/pay]", e);
       res.status(500).json({ error: "server_error" });
+    }
+  });
+
+  // POST /api/public/hosted-session/:id/confirm-otp — confirm AfribaPay OTP
+  app.post("/api/public/hosted-session/:id/confirm-otp", otpConfirmLimiter, async (req, res) => {
+    try {
+      const { otpCode } = req.body || {};
+      if (typeof otpCode !== "string" || !/^\d{4,6}$/.test(otpCode)) {
+        return res.status(400).json({ message: "Saisissez un code OTP de 4 à 6 chiffres." });
+      }
+      const session = await storage.getHostedPaymentSession(req.params.id);
+      if (!session) return res.status(404).json({ error: "not_found" });
+      if (session.expiresAt && new Date() > session.expiresAt) {
+        return res.status(410).json({ error: "expired", message: "Ce lien de paiement a expiré." });
+      }
+      if (session.status !== "processing" || !session.transactionId) {
+        return res.status(409).json({ error: "not_processing", message: "Aucun paiement OTP à confirmer." });
+      }
+      const tx = await storage.getTransactionById(session.transactionId);
+      if (!tx || tx.userId !== session.merchantId || (tx as any).source !== "hosted_page" || tx.status !== "pending") {
+        return res.status(409).json({ error: "already_processed", message: "Ce paiement ne peut plus être confirmé." });
+      }
+      if (!tx.reference) return res.status(409).json({ error: "missing_reference" });
+      const context = await loadOtpContext(tx.reference);
+      if (!context || context.expiresAt <= Date.now()) {
+        if (context) await deleteOtpContext(tx.reference);
+        return res.status(400).json({ message: "Session OTP expirée ou introuvable. Veuillez contacter le marchand." });
+      }
+      if (context.userId && context.userId !== session.merchantId) {
+        return res.status(403).json({ error: "forbidden" });
+      }
+
+      const appBase = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
+      const result = await confirmAfribaPayOtp({
+        operator: context.operator,
+        country: context.country,
+        phone_number: context.phone,
+        amount: context.amount,
+        currency: context.currency,
+        order_id: tx.reference,
+        reference_id: tx.reference,
+        otp_code: otpCode,
+        notify_url: buildWebhookUrl("/api/afribapay/webhook", appBase),
+        return_url: `${appBase}/hpay/${session.id}?status=success`,
+        cancel_url: `${appBase}/hpay/${session.id}?status=cancelled`,
+        lang: "fr",
+      });
+
+      if (!result.success && !isAmbiguousProviderInitiationFailure(result)) {
+        return res.status(400).json({ message: result.message || "Code OTP invalide ou expiré." });
+      }
+
+      await deleteOtpContext(tx.reference);
+      const externalReference = result.transaction_id || tx.reference;
+      if (result.success) {
+        await storage.updateTransactionExternalReference(tx.id, externalReference);
+      }
+      addPendingPayment({
+        transactionId: tx.id,
+        reference: tx.reference,
+        externalReference,
+        userId: tx.userId,
+        type: "deposit",
+        amount: tx.amount,
+        provider: "afribapay",
+        countryCode: context.country,
+      });
+      res.json({
+        success: true,
+        processing: true,
+        message: result.success
+          ? "OTP validé. Votre paiement est en cours de traitement."
+          : "Nous vérifions le paiement; ne le relancez pas.",
+      });
+    } catch (error: any) {
+      console.error("[public/hosted-session/:id/confirm-otp]", error);
+      res.status(500).json({ message: "Erreur lors de la confirmation du code OTP." });
     }
   });
 
