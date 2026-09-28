@@ -126,7 +126,7 @@ export default function NotificationsPage() {
       case "admin_message":
         return "/dashboard/support";
       case "global_message":
-        return "/dashboard/global-message";
+        return `/dashboard/global-message?notificationId=${encodeURIComponent(notificationId || "")}`;
       case "kyc_update_required":
         return `/dashboard/global-message?notificationId=${encodeURIComponent(notificationId || "")}`;
       default:
