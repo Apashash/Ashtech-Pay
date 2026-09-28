@@ -985,6 +985,21 @@ export async function confirmAfribaPayOtp(params: AfribaPayOtpParams): Promise<A
   }
 }
 
+export function isRetryableAfribaOtpRejection(result: {
+  message?: string | null;
+  providerCode?: string | null;
+}): boolean {
+  const code = String(result.providerCode || "").toLowerCase();
+  if (/(invalid|incorrect|expired|otp).*(otp|code|invalid|incorrect|expired)|otp_(invalid|expired|incorrect)/.test(code)) {
+    return true;
+  }
+
+  const message = String(result.message || "");
+  const mentionsOtp = /(otp|one[-\s]?time|verification code|\bcode\b)/i.test(message);
+  const rejectsCode = /(invalid|incorrect|wrong|expired|expire|invalide|faux|rejet|reject|refus)/i.test(message);
+  return mentionsOtp && rejectsCode;
+}
+
 // ─── Parse AfribaPay webhook ──────────────────────────────────────────────────
 export function parseAfribaPayWebhook(payload: any): {
   order_id?: string;

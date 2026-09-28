@@ -14,7 +14,7 @@ Ne codez pas le flux à partir du nom de la marque. Chargez [`GET /v1/countries`
 | USSD Push | `202` avec `status: "pending"` | Le client valide la demande sur son téléphone |
 | Wave / redirection | `202` avec `flow: "wave"` et `wave_url` | Ouvrir `wave_url`, puis attendre le webhook |
 | OTP SMS | `400` avec `error: "otp_required"` et `reference` | Lire le code reçu par SMS et relancer la requête avec `otp` et `reference` |
-| OTP USSD | `400` avec `error: "otp_required"` et `ussd_code` | Composer `ussd_code`, saisir le code obtenu, puis relancer avec `otp` |
+| OTP USSD | `400` avec `error: "otp_required"`, `reference` et `ussd_code` | Composer `ussd_code`, saisir le code obtenu, puis relancer avec le même `reference` et `otp` |
 
 Dans tous les cas, la transaction reste `pending` jusqu'à la confirmation du fournisseur. Ne livrez jamais une commande uniquement parce que la requête initiale a répondu `202`.
 
@@ -37,7 +37,7 @@ Exemple de réponse :
   "amount": 5000,
   "credited_amount": 4750,
   "currency": "XAF",
-  "operator": "MTN",
+  "operator": "MTN Money",
   "country_code": "CM"
 }
 ```
@@ -86,7 +86,7 @@ curl -X POST https://www.ashtechpay.com/v1/collect \
     "amount": 5000,
     "currency": "XOF",
     "phone": "2250XXXXXXXX",
-    "operator": "Orange",
+    "operator": "Orange Money",
     "country_code": "CI",
     "reference": "ASHPAY-DEP-XXXXXXXXXX",
     "otp": "123456",
@@ -103,12 +103,13 @@ Pour certains opérateurs Orange, le client doit composer un code USSD pour obte
 ```json
 {
   "error": "otp_required",
-  "message": "OTP requis. Composez le code indiqué pour obtenir votre code OTP, puis relancez la requête avec le champ 'otp'.",
+  "message": "OTP requis. Composez le code indiqué pour obtenir votre code OTP, puis relancez la requête avec les champs 'otp' et 'reference'.",
+  "reference": "ASHPAY-DEP-XXXXXXXXXX",
   "ussd_code": "#144*82#"
 }
 ```
 
-Affichez `ussd_code` directement au client. Certains codes contiennent le montant exact, par exemple pour le Burkina Faso. N'utilisez donc pas une table codée en dur dans votre application.
+Affichez `ussd_code` directement au client. Après saisie de l'OTP, renvoyez aussi le même `reference` de session. Certains codes contiennent le montant exact, par exemple pour le Burkina Faso. N'utilisez donc pas une table codée en dur dans votre application.
 
 Exemples de familles de flux actuellement configurées :
 
@@ -150,7 +151,7 @@ const response = await fetch("https://www.ashtechpay.com/v1/collect", {
     amount: 5000,
     currency: "XOF",
     phone: "2250XXXXXXXX",
-    operator: "Orange",
+    operator: "Orange Money",
     country_code: "CI",
     reference: "order_ci_12345",
     notify_url: "https://example.com/webhooks/ashtechpay",
@@ -176,7 +177,7 @@ response = requests.post(
         "amount": 5000,
         "currency": "XOF",
         "phone": "2250XXXXXXXX",
-        "operator": "Orange",
+        "operator": "Orange Money",
         "country_code": "CI",
         "reference": "order_ci_12345",
         "notify_url": "https://example.com/webhooks/ashtechpay",
@@ -196,7 +197,7 @@ curl -X POST https://www.ashtechpay.com/v1/collect \
     "amount": 5000,
     "currency": "XOF",
     "phone": "2250XXXXXXXX",
-    "operator": "Orange",
+    "operator": "Orange Money",
     "country_code": "CI",
     "reference": "order_ci_12345",
     "notify_url": "https://example.com/webhooks/ashtechpay"
@@ -213,7 +214,7 @@ $payload = [
     "amount" => 5000,
     "currency" => "XOF",
     "phone" => "2250XXXXXXXX",
-    "operator" => "Orange",
+    "operator" => "Orange Money",
     "country_code" => "CI",
     "reference" => "order_ci_12345",
     "notify_url" => "https://example.com/webhooks/ashtechpay",
@@ -248,7 +249,7 @@ curl -X POST https://www.ashtechpay.com/v1/collect \
     "amount": 5000,
     "currency": "XAF",
     "phone": "2376XXXXXXXX",
-    "operator": "MTN",
+    "operator": "MTN Money",
     "country_code": "CM",
     "reference": "order_cm_12345",
     "notify_url": "https://example.com/webhooks/ashtechpay"
@@ -286,7 +287,7 @@ curl -X POST https://www.ashtechpay.com/v1/collect \
     "amount": 5000,
     "currency": "XOF",
     "phone": "2250XXXXXXXX",
-    "operator": "Orange",
+    "operator": "Orange Money",
     "country_code": "CI",
     "reference": "order_orange_12345",
     "notify_url": "https://example.com/webhooks/ashtechpay"
@@ -313,7 +314,7 @@ const response = await fetch("https://www.ashtechpay.com/v1/collect", {
     amount: 5000,
     currency: "XOF",
     phone: "2250XXXXXXXX",
-    operator: "Orange",
+    operator: "Orange Money",
     country_code: "CI",
     reference: "ASHPAY-DEP-XXXXXXXXXX",
     otp: "123456",
@@ -340,7 +341,7 @@ response = requests.post(
         "amount": 5000,
         "currency": "XOF",
         "phone": "2250XXXXXXXX",
-        "operator": "Orange",
+        "operator": "Orange Money",
         "country_code": "CI",
         "reference": "ASHPAY-DEP-XXXXXXXXXX",
         "otp": "123456",
@@ -361,7 +362,7 @@ curl -X POST https://www.ashtechpay.com/v1/collect \
     "amount": 5000,
     "currency": "XOF",
     "phone": "2250XXXXXXXX",
-    "operator": "Orange",
+    "operator": "Orange Money",
     "country_code": "CI",
     "reference": "ASHPAY-DEP-XXXXXXXXXX",
     "otp": "123456",
@@ -379,7 +380,7 @@ $payload = [
     "amount" => 5000,
     "currency" => "XOF",
     "phone" => "2250XXXXXXXX",
-    "operator" => "Orange",
+    "operator" => "Orange Money",
     "country_code" => "CI",
     "reference" => "ASHPAY-DEP-XXXXXXXXXX",
     "otp" => "123456",
@@ -405,7 +406,7 @@ curl_close($ch);
 
 Ne remplacez pas la référence de session OTP par votre référence de commande. Une session expirée renvoie `400 otp_expired` : recommencez alors une nouvelle collecte sans réutiliser l'ancien OTP.
 
-Après avoir affiché le code, demandez au client de saisir le code OTP reçu, puis relancez la collecte avec le même `amount`, `currency`, `phone`, `operator`, `country_code` et le champ `otp`.
+Après avoir affiché le code, demandez au client de saisir le code OTP reçu, puis relancez la collecte avec exactement les mêmes `amount`, `currency`, `phone`, `operator` et `country_code`, ainsi que le `reference` de session renvoyé par `otp_required` et le champ `otp`. Le serveur réserve atomiquement la session pendant la confirmation : une seconde confirmation concurrente renvoie `409 otp_confirmation_in_progress`. Un OTP explicitement invalide renvoie `400 invalid_otp` et peut être réessayé avec la même session. Si le fournisseur ne donne pas de résultat certain, l'API renvoie `202 pending` : ne renvoyez pas le code et consultez le statut ou attendez le webhook.
 
 ## Gestion des réponses et des erreurs
 

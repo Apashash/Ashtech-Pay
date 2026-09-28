@@ -23,7 +23,7 @@ const response = await fetch("https://www.ashtechpay.com/v1/collect", {
     amount: 1000,
     currency: "XAF",
     country_code: "CM",
-    operator: "MTN",
+    operator: "MTN Money",
     phone: "2376XXXXXXXX",
     reference: "order_12345",
     notify_url: "https://example.com/webhooks/ashtechpay",
@@ -50,7 +50,7 @@ response = requests.post(
         "amount": 1000,
         "currency": "XAF",
         "country_code": "CM",
-        "operator": "MTN",
+        "operator": "MTN Money",
         "phone": "2376XXXXXXXX",
         "reference": "order_12345",
         "notify_url": "https://example.com/webhooks/ashtechpay",
@@ -70,7 +70,7 @@ curl -X POST https://www.ashtechpay.com/v1/collect \
     "amount": 1000,
     "currency": "XAF",
     "country_code": "CM",
-    "operator": "MTN",
+    "operator": "MTN Money",
     "phone": "2376XXXXXXXX",
     "reference": "order_12345",
     "notify_url": "https://example.com/webhooks/ashtechpay"
@@ -87,7 +87,7 @@ $payload = [
     "amount" => 1000,
     "currency" => "XAF",
     "country_code" => "CM",
-    "operator" => "MTN",
+    "operator" => "MTN Money",
     "phone" => "2376XXXXXXXX",
     "reference" => "order_12345",
     "notify_url" => "https://example.com/webhooks/ashtechpay",
@@ -117,14 +117,14 @@ curl_close($ch);
 | --- | --- | --- |
 | `amount` | Oui | Montant positif à collecter |
 | `currency` | Oui | Devise du pays sélectionné |
-| `country` | Oui | Code pays actif, par exemple `CM` |
-| `operator` | Oui | Code opérateur renvoyé par `/v1/countries` |
+| `country_code` | Oui | Code pays actif, par exemple `CM` |
+| `operator` | Oui | Nom exact de l'opérateur renvoyé par `/v1/countries` (par exemple `MTN Money`), sensible au catalogue actif |
 | `phone` | Oui | Numéro international associé au wallet |
-| `reference` | Oui | Référence unique de votre commande |
+| `reference` | Non | Référence de votre commande (191 caractères maximum), conservée comme `merchant_reference` et utilisée pour les reprises idempotentes |
 | `notify_url` | Non | URL HTTPS de votre webhook marchand |
 
 <Warning>
-  Ne déduisez pas le code opérateur à partir de la marque affichée à l'utilisateur. Utilisez le catalogue retourné par AshTech Pay pour envoyer la valeur attendue par l'API.
+  `country_code` est obligatoire (le champ `country` n'est pas accepté). Ne déduisez pas le nom de l'opérateur à partir de la marque affichée à l'utilisateur : utilisez exactement la valeur retournée par `/v1/countries`, par exemple `MTN Money` ou `Orange Money`.
 </Warning>
 
 ## Statut

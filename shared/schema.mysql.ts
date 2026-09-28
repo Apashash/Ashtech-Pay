@@ -4,9 +4,9 @@
  * This module intentionally has the same public names as schema.ts, but does
  * not import pg-core.  The small column factory below keeps the definitions
  * readable while still creating real Drizzle MySQL columns (rather than
- * SQL-string placeholders).  MySQL has no partial or expression indexes:
- * those constraints are therefore enforced by the service layer before an
- * insert (the affected columns are noted below).
+ * SQL-string placeholders). MySQL has no partial or expression indexes:
+ * predicate-based constraints are enforced by the service layer, while
+ * nullable keys use regular unique indexes where that preserves the contract.
  */
 import { randomUUID } from "node:crypto";
 import { createInsertSchema } from "drizzle-zod";
@@ -60,13 +60,16 @@ export const users = mysqlTable("users", common([
 export const transactions = mysqlTable("transactions", common([
   "id","userId","type","amount","currency","status","description","recipientId","recipientName","recipientPhone",
   "recipientCountry","operatorId","feeAmount","ashtechFeeAmount","totalAmount","paymentMethod","reference",
-  "paymentLinkId","paymentIntentId","payerName","payerEmail","externalReference","notifyUrl","source","metadata",
+  "paymentLinkId","paymentIntentId","payerName","payerEmail","externalReference","notifyUrl","source","merchantReference","metadata",
   "createdAt","confirmedAt",
 ], {
   id: id(), amount: money("amount").notNull(), feeAmount: money("fee_amount"), ashtechFeeAmount: money("ashtech_fee_amount"),
-  totalAmount: money("total_amount"), metadata: js("metadata"), createdAt: dt("created_at"), confirmedAt: timestamp("confirmed_at"),
+  totalAmount: money("total_amount"), merchantReference: varchar("merchant_reference", { length: 191 }),
+  metadata: js("metadata"), createdAt: dt("created_at"), confirmedAt: timestamp("confirmed_at"),
 }), (t) => ({
-  userIdx: index("tx_user_id_idx").on(t.userId), statusIdx: index("tx_status_idx").on(t.status),
+  userIdx: index("tx_user_id_idx").on(t.userId),
+  apiMerchantReferenceUnique: uniqueIndex("transactions_api_user_merchant_reference_unique").on(t.userId, t.merchantReference),
+  statusIdx: index("tx_status_idx").on(t.status),
   createdIdx: index("tx_created_at_idx").on(t.createdAt), statusTypeIdx: index("tx_status_type_idx").on(t.status, t.type),
   // Partial API/reference and UUID-only PawaPay indexes are enforced in storage.
 }));

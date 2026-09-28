@@ -730,6 +730,7 @@ export class DatabaseStorage implements IStorage {
         eq(transactions.source, "api"),
         or(
           eq(transactions.reference, reference),
+          eq(transactions.merchantReference, reference),
           isMysqlDialect
             ? sql`JSON_UNQUOTE(JSON_EXTRACT(${transactions.metadata}, '$.merchantReference')) = ${reference}`
             : sql`${transactions.metadata}->>'merchantReference' = ${reference}`,

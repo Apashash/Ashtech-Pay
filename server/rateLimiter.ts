@@ -48,7 +48,8 @@ export const apiV1Limiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req: Request) => {
     const auth = String(req.headers.authorization || "");
-    const key = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+    const match = /^Bearer\s+(\S+)\s*$/i.exec(auth);
+    const key = match?.[1] || "";
     const identity = key
       ? `key:${crypto.createHash("sha256").update(key).digest("hex").slice(0, 24)}`
       : `ip:${getIp(req)}`;

@@ -5,6 +5,7 @@ import {
   AFRIBAPAY_MAX_PAYIN_AMOUNT,
   AFRIBAPAY_MIN_PAYIN_AMOUNT,
   classifyAfribaPayoutStatus,
+  isRetryableAfribaOtpRejection,
   parseAfribaPayWebhook,
   validateAfribaPayinAmount,
   verifyAfribaPayWebhookSignature,
@@ -58,4 +59,22 @@ test("AfribaPay payin amount validation uses the conservative documented range",
   assert.equal(validateAfribaPayinAmount(AFRIBAPAY_MAX_PAYIN_AMOUNT), undefined);
   assert.match(validateAfribaPayinAmount(99) || "", /supérieur ou égal/);
   assert.match(validateAfribaPayinAmount(AFRIBAPAY_MAX_PAYIN_AMOUNT + 1) || "", /inférieur ou égal/);
+});
+
+test("AfribaPay OTP rejection classifier keeps invalid codes retryable only", () => {
+  assert.equal(isRetryableAfribaOtpRejection({
+    message: "Code OTP invalide ou expiré",
+    providerCode: "invalid_otp",
+  }), true);
+  assert.equal(isRetryableAfribaOtpRejection({
+    message: "OTP rejected by the operator",
+  }), true);
+  assert.equal(isRetryableAfribaOtpRejection({
+    message: "Internal server error",
+    providerCode: "server_error",
+  }), false);
+  assert.equal(isRetryableAfribaOtpRejection({
+    message: "Amount is outside the allowed range",
+    providerCode: "amount_out_of_range",
+  }), false);
 });

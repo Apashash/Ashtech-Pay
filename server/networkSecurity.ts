@@ -83,12 +83,26 @@ async function resolvePublicAddress(hostname: string): Promise<{ address: string
   if (!hostname.includes(".")) return null;
 
   const records = await dns.lookup(hostname, { all: true, verbatim: true });
-  const publicRecord = records.find((record) => !isPrivateOrReservedIp(record.address));
-  if (!publicRecord) return null;
+  // Reject mixed public/private answers instead of choosing only a public
+  // address. Otherwise a hostname could still target an internal address for
+  // consumers that resolve it differently.
+  if (!records.length || records.some((record) => isPrivateOrReservedIp(record.address))) return null;
+  const publicRecord = records[0];
   return {
     address: publicRecord.address,
     family: publicRecord.family as 4 | 6,
   };
+}
+
+export async function isSafeWebhookDestination(rawUrl: unknown): Promise<boolean> {
+  if (typeof rawUrl !== "string" || !rawUrl.trim()) return false;
+  const parsed = isSafeWebhookUrlShape(rawUrl.trim());
+  if (!parsed) return false;
+  try {
+    return (await resolvePublicAddress(parsed.hostname)) !== null;
+  } catch {
+    return false;
+  }
 }
 
 export async function postJsonToSafeWebhook(

@@ -1,7 +1,7 @@
 import { pool } from "./db";
 
 const MYSQL_AUXILIARY_SCHEMA_NAME = "mysql-runtime-auxiliary";
-const MYSQL_AUXILIARY_SCHEMA_VERSION = "2026-09-26-v3";
+const MYSQL_AUXILIARY_SCHEMA_VERSION = "2026-09-28-api-idempotency-otp-v1";
 
 const KYC_DOCUMENTS_TABLE_SQL = `CREATE TABLE IF NOT EXISTS kyc_documents (
   id VARCHAR(191) NOT NULL PRIMARY KEY,
@@ -82,9 +82,14 @@ export async function ensureMysqlAuxiliarySchema(): Promise<void> {
       user_id VARCHAR(191),
       context JSON NOT NULL,
       expires_at DATETIME(3) NOT NULL,
+      claimed_by VARCHAR(191),
+      claimed_until DATETIME(3),
       created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
       CONSTRAINT api_otp_sessions_user_fk FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB`,
+    `ALTER TABLE api_otp_sessions ADD COLUMN IF NOT EXISTS claimed_by VARCHAR(191) NULL`,
+    `ALTER TABLE api_otp_sessions ADD COLUMN IF NOT EXISTS claimed_until DATETIME(3) NULL`,
+    `ALTER TABLE transactions ADD COLUMN IF NOT EXISTS merchant_reference VARCHAR(191) NULL`,
     `CREATE TABLE IF NOT EXISTS merchant_webhook_deliveries (
       id VARCHAR(191) NOT NULL PRIMARY KEY,
       merchant_id VARCHAR(191),
@@ -181,6 +186,20 @@ export async function ensureMysqlAuxiliarySchema(): Promise<void> {
       try {
         await pool.query(
           "ALTER TABLE payment_links ADD UNIQUE KEY payment_links_user_idempotency_unique (user_id, idempotency_key)",
+        );
+      } catch (error: any) {
+        const code = String(error?.code || "");
+        const message = String(error?.message || "");
+        if (code !== "ER_DUP_KEYNAME" && !/duplicate key name|already exists/i.test(message)) {
+          throw error;
+        }
+      }
+
+      // Merchant-supplied Direct API references must be unique per merchant.
+      // Existing rows keep NULL and therefore do not conflict with this index.
+      try {
+        await pool.query(
+          "ALTER TABLE transactions ADD UNIQUE KEY transactions_api_user_merchant_reference_unique (user_id, merchant_reference)",
         );
       } catch (error: any) {
         const code = String(error?.code || "");

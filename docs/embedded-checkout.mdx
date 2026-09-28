@@ -15,6 +15,8 @@ Pour ce flux :
 
 Pour une simple redirection vers une page Hosted Checkout, **seule `hp_live_...` est nécessaire**. Le navigateur reçoit uniquement le `payment_link`, jamais une clé secrète.
 
+La clé `hp_live_...` doit appartenir à un compte existant, vérifié et non suspendu. Une clé absente, inconnue, révoquée ou mal formée renvoie `401`; un compte non vérifié ou suspendu renvoie `403`. La clé Checkout est indépendante de la clé Direct API.
+
 ## Flux complet
 
 1. Votre backend crée un lien avec `hp_live_...`.
@@ -34,6 +36,8 @@ Endpoint :
 ```http
 POST https://www.ashtechpay.com/api/v1/hosted-payment/create
 ```
+
+Cet endpoint accepte uniquement `Authorization: Bearer hp_live_...` (pas l'authentification Basic) et est limité à **20 demandes par minute et par adresse IP**, en plus de la limite partagée de **120 demandes par minute et par clé**. La consultation de statut exige elle aussi une clé Checkout valide et partage la limite de 120 demandes par minute par clé, sans la limite spécifique de création.
 
 La requête doit être faite depuis votre backend :
 
@@ -222,6 +226,8 @@ L'ouverture du lien ne crée pas un nouveau lien. Le lien doit toujours être cr
 - Un lien Hosted Checkout expire 30 minutes après sa création.
 - Un lien expiré renvoie `410` et ne peut plus lancer un paiement.
 
+Pour un lien à montant variable, `amount` reste `null` avant confirmation. Après confirmation, il correspond au **montant brut facturé au client**, et non au montant net crédité après frais.
+
 ## URLs de succès et d'annulation
 
 Les URLs de retour sont configurées dans la configuration de la clé Checkout :
@@ -283,13 +289,15 @@ Les statuts possibles sont :
 
 Le webhook est recommandé pour déclencher votre logique métier. La consultation de statut sert de contrôle ou de récupération si votre serveur a manqué une notification.
 
+`paid_at` correspond à l'heure de confirmation du paiement, et non à l'heure de création du lien. Pour un montant variable, `amount` correspond au brut payé par le client.
+
 ## Webhooks
 
 ### Configuration
 
-Passez `notify_url` lors de la création du lien pour définir l'URL de ce lien. Si `notify_url` n'est pas fourni, la configuration webhook de la clé Checkout ou du compte est utilisée.
+Passez `notify_url` lors de la création du lien pour définir l'URL de ce lien. Cette valeur explicite est prioritaire. Si elle n'est pas fournie, la configuration `notifyUrl` de la clé Checkout sélectionnée est utilisée ; pour la clé historique, la configuration Hosted Page du compte reste utilisée pour compatibilité. Sans URL effective, aucun webhook marchand ne peut être livré.
 
-L'URL doit être publique et utiliser HTTPS. Les URLs localhost, réseau privé et adresses internes sont refusées.
+L'URL doit être une URL HTTPS publique. Les URLs localhost, loopback, réseau privé, link-local et autres adresses internes sont bloquées lors de la livraison ; la destination est revalidée à chaque tentative. Utilisez donc une URL valide dès la création.
 
 ### Événements
 

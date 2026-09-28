@@ -89,7 +89,7 @@ import {
   sandboxStatusLabel,
   type SandboxCollectStatus,
 } from "./sandboxTestNumbers";
-import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, checkAfribaPayStatus, checkAfribaPayoutStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, getAfribaPayOtpInfo, confirmAfribaPayOtp, isAfribaPayOtpRequiredMessage, verifyAfribaPayWebhookSignature, validateAfribaPayinAmount } from "./afribapay";
+import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, checkAfribaPayStatus, checkAfribaPayoutStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, getAfribaPayOtpInfo, confirmAfribaPayOtp, isAfribaPayOtpRequiredMessage, isRetryableAfribaOtpRejection, verifyAfribaPayWebhookSignature, validateAfribaPayinAmount } from "./afribapay";
 import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, initiatePixPayPayout, checkPixPayStatus, computePixPayFees, parsePixPayWebhook, PIXPAY_CURRENCY_MAP, PIXPAY_SUPPORTED_COUNTRIES, detectPixPayFlowType, getPixPayServiceId, PIXPAY_OTP_USSD_CODES } from "./pixpay";
 import { assertPawaPayProviderActive, classifyPawaPayControlledTransaction, createPawaPayDeposit, createPawaPayId, createPawaPayPayout, createPawaPayPaymentPage, getPawaPayActiveConfiguration, getPawaPayDeposit, getPawaPayPayout, resolvePawaPayOperationConfiguration, PAWAPAY_CUSTOMER_MESSAGE } from "./pawapay";
 import { addPendingPayment, removePendingPayment, expireCryptoPaymentIfNeeded } from "./paymentPoller";
@@ -130,7 +130,7 @@ import {
   savePrivateKycUpload,
 } from "./kycPrivateDocuments";
 import { ensureMysqlKycSubmissionSchema } from "./mysqlBootstrap";
-import { isPrivateOrReservedIp } from "./networkSecurity";
+import { isPrivateOrReservedIp, isSafeWebhookDestination } from "./networkSecurity";
 import {
   GoogleDriveStorageError,
   isGoogleDriveConfigured,
@@ -189,6 +189,35 @@ import {
 // ─── Helper: URL de callback webhook avec token d'authentification ────────────
 // Appelle les fournisseurs de paiement avec le token dans l'URL pour que leurs
 // callbacks soient authentifiés automatiquement (WEBHOOK_SECRET requis).
+async function normalizeSafeNotifyUrl(value: unknown): Promise<{ valid: boolean; url: string | null }> {
+  if (value === null || value === undefined || value === "") return { valid: true, url: null };
+  if (typeof value !== "string") return { valid: false, url: null };
+  const url = value.trim();
+  if (!url) return { valid: true, url: null };
+  if (!(await isSafeWebhookDestination(url))) return { valid: false, url: null };
+  return { valid: true, url };
+}
+
+function readTransactionMetadata(value: unknown): Record<string, any> {
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, any>
+    : {};
+}
+
+function parseHostedBearerKey(authorization: unknown): string | null {
+  if (typeof authorization !== "string") return null;
+  const match = /^Bearer\s+(\S+)\s*$/i.exec(authorization);
+  return match?.[1]?.startsWith("hp_live_") ? match[1] : null;
+}
+
 function buildWebhookUrl(path: string, baseUrl = process.env.APP_URL || ""): string {
   const base = baseUrl.replace(/\/$/, "");
   const token = process.env.WEBHOOK_SECRET;
@@ -1680,15 +1709,33 @@ const DUMMY_BCRYPT_HASH = "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZd
 type OtpContext = {
   userId?: string;
   operator: string;
+  operatorId?: string;
   country: string;
   phone: string;
   amount: number;
   currency: string;
+  walletCurrency?: string;
+  merchantReference?: string;
   afribaTransactionId: string;
   expiresAt: number;
   otpType?: "api" | "ussd";
   ussdCode?: string;
 };
+const AFRIBA_COUNTRY_PREFIXES: Record<string, string> = {
+  CM: "237", SN: "221", CI: "225", BF: "226", ML: "223",
+  GN: "224", BJ: "229", TG: "228", NE: "227", CD: "243",
+  CG: "242", CF: "236", TD: "235", GA: "241", GQ: "240",
+  MG: "261", RW: "250", KE: "254", TZ: "255", UG: "256",
+  GH: "233", NG: "234",
+};
+
+function normalizeAfribaOtpPhone(phone: string, countryCode: string): string {
+  let digits = String(phone || "").replace(/\D/g, "");
+  const prefix = AFRIBA_COUNTRY_PREFIXES[countryCode.toUpperCase()];
+  if (prefix && digits.startsWith(prefix)) digits = digits.slice(prefix.length);
+  return digits;
+}
+
 const otpContextCache = new Map<string, OtpContext>();
 
 async function persistOtpContext(reference: string, context: OtpContext): Promise<void> {
@@ -1697,7 +1744,8 @@ async function persistOtpContext(reference: string, context: OtpContext): Promis
       `INSERT INTO api_otp_sessions (reference, user_id, context, expires_at)
        VALUES (?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
-         user_id = VALUES(user_id), context = VALUES(context), expires_at = VALUES(expires_at)`,
+         user_id = VALUES(user_id), context = VALUES(context), expires_at = VALUES(expires_at),
+         claimed_by = NULL, claimed_until = NULL`,
       [reference, context.userId || null, JSON.stringify(context), new Date(context.expiresAt)],
     );
     otpContextCache.set(reference, context);
@@ -1707,15 +1755,13 @@ async function persistOtpContext(reference: string, context: OtpContext): Promis
     INSERT INTO api_otp_sessions (reference, user_id, context, expires_at)
     VALUES (${reference}, ${context.userId || null}, ${JSON.stringify(context)}::jsonb, to_timestamp(${context.expiresAt / 1000}))
     ON CONFLICT (reference) DO UPDATE
-      SET user_id = EXCLUDED.user_id, context = EXCLUDED.context, expires_at = EXCLUDED.expires_at
+      SET user_id = EXCLUDED.user_id, context = EXCLUDED.context, expires_at = EXCLUDED.expires_at,
+          claimed_by = NULL, claimed_until = NULL
   `);
   otpContextCache.set(reference, context);
 }
 
-async function loadOtpContext(reference: string): Promise<OtpContext | undefined> {
-  const cached = otpContextCache.get(reference);
-  if (cached && cached.expiresAt > Date.now()) return cached;
-  if (cached) otpContextCache.delete(reference);
+async function loadOtpContextFromDatabase(reference: string): Promise<OtpContext | undefined> {
   if (isMysqlDialect) {
     const result = await pool.query(
       `SELECT context FROM api_otp_sessions
@@ -1734,6 +1780,116 @@ async function loadOtpContext(reference: string): Promise<OtpContext | undefined
   const context = (result.rows[0] as any)?.context as OtpContext | undefined;
   if (context) otpContextCache.set(reference, context);
   return context;
+}
+
+async function loadOtpContext(reference: string): Promise<OtpContext | undefined> {
+  const cached = otpContextCache.get(reference);
+  if (cached && cached.expiresAt > Date.now()) return cached;
+  if (cached) otpContextCache.delete(reference);
+  return loadOtpContextFromDatabase(reference);
+}
+
+function otpContextReferences(reference: string, context: OtpContext): string[] {
+  return Array.from(new Set([
+    reference,
+    context.afribaTransactionId,
+    context.merchantReference,
+  ].filter((value): value is string => Boolean(value))));
+}
+
+async function claimOtpContext(
+  reference: string,
+  context: OtpContext,
+  claimId: string,
+): Promise<boolean> {
+  const references = otpContextReferences(reference, context);
+  let claimReferences: string[];
+  if (isMysqlDialect) {
+    const placeholders = references.map(() => "?").join(", ");
+    const available = await pool.query(
+      `SELECT reference FROM api_otp_sessions
+        WHERE reference IN (${placeholders}) AND expires_at > NOW()`,
+      references,
+    );
+    claimReferences = available.rows.map((row: any) => String(row.reference));
+  } else {
+    const available = await pool.query(
+      `SELECT reference FROM api_otp_sessions
+        WHERE reference = ANY($1::text[]) AND expires_at > NOW()`,
+      [references],
+    );
+    claimReferences = available.rows.map((row: any) => String(row.reference));
+  }
+  if (!claimReferences.length) return false;
+
+  const expiresAt = new Date(context.expiresAt);
+  let claimedCount = 0;
+  if (isMysqlDialect) {
+    const placeholders = claimReferences.map(() => "?").join(", ");
+    const result = await pool.query(
+      `UPDATE api_otp_sessions
+          SET claimed_by = ?, claimed_until = ?
+        WHERE reference IN (${placeholders})
+          AND expires_at > NOW()
+          AND (claimed_by IS NULL OR claimed_until <= NOW())`,
+      [claimId, expiresAt, ...claimReferences],
+    );
+    claimedCount = result.rowCount;
+  } else {
+    const result = await pool.query(
+      `UPDATE api_otp_sessions
+          SET claimed_by = $1, claimed_until = $2
+        WHERE reference = ANY($3::text[])
+          AND expires_at > NOW()
+          AND (claimed_by IS NULL OR claimed_until <= NOW())
+        RETURNING reference`,
+      [claimId, expiresAt, claimReferences],
+    );
+    claimedCount = result.rows.length;
+  }
+  if (claimedCount === claimReferences.length) return true;
+  await releaseOtpContextClaim(claimReferences, claimId);
+  return false;
+}
+
+async function releaseOtpContextClaim(references: string[], claimId: string): Promise<void> {
+  for (const reference of references) otpContextCache.delete(reference);
+  if (!references.length) return;
+  if (isMysqlDialect) {
+    const placeholders = references.map(() => "?").join(", ");
+    await pool.query(
+      `UPDATE api_otp_sessions
+          SET claimed_by = NULL, claimed_until = NULL
+        WHERE reference IN (${placeholders}) AND claimed_by = ?`,
+      [...references, claimId],
+    );
+    return;
+  }
+  await pool.query(
+    `UPDATE api_otp_sessions
+        SET claimed_by = NULL, claimed_until = NULL
+      WHERE reference = ANY($1::text[]) AND claimed_by = $2`,
+    [references, claimId],
+  );
+}
+
+async function deleteClaimedOtpContext(reference: string, context: OtpContext, claimId: string): Promise<void> {
+  const references = otpContextReferences(reference, context);
+  for (const reference of references) otpContextCache.delete(reference);
+  if (isMysqlDialect) {
+    const placeholders = references.map(() => "?").join(", ");
+    await pool.query(
+      `DELETE FROM api_otp_sessions
+        WHERE reference IN (${placeholders}) AND claimed_by = ?`,
+      [...references, claimId],
+    );
+    return;
+  }
+  await pool.query(
+    `DELETE FROM api_otp_sessions
+      WHERE reference = ANY($1::text[]) AND claimed_by = $2`,
+    [references, claimId],
+  );
 }
 
 async function deleteOtpContext(reference: string): Promise<void> {
@@ -17964,6 +18120,19 @@ export async function registerRoutes(
         return res.status(400).json({ error: parsed.error, message: parsed.message });
       }
       const request: DirectCryptoRequest = parsed.value;
+      if (request.reference && request.reference.trim().length > 191) {
+        return res.status(400).json({
+          error: "invalid_reference",
+          message: "reference doit contenir au maximum 191 caractères.",
+        });
+      }
+      const notifyUrlValidation = await normalizeSafeNotifyUrl(request.notifyUrl);
+      if (!notifyUrlValidation.valid) {
+        return res.status(400).json({
+          error: "invalid_notify_url",
+          message: "notify_url doit être une URL HTTPS publique et joignable.",
+        });
+      }
 
       const disabled = parseDisabledCryptoAssets(
         (await storage.getSetting("crypto_disabled_assets"))?.value,
@@ -18029,10 +18198,40 @@ export async function registerRoutes(
 
       const merchantReference = request.reference?.trim() || null;
       const reference = generateTransactionReference("deposit");
+      const respondToCryptoIdempotentReplay = (existing: any, metadata = readTransactionMetadata(existing.metadata)) => {
+        const status = existing.status === "completed" ? "success" : existing.status;
+        const response = {
+          transaction_id: existing.id,
+          reference: existing.reference,
+          merchant_reference: existing.merchantReference || metadata.merchantReference || merchantReference,
+          status,
+          payment_method: "crypto",
+          asset_code: metadata.assetCode || request.assetCode,
+          network: selectedNetwork.id,
+          address: metadata.address || null,
+          memo: metadata.memo || null,
+          memo_type: metadata.memoType || null,
+          amount: request.amount,
+          currency: originalCurrency,
+          amount_usdt: Number(existing.totalAmount || amounts.grossUsdt),
+          credited_amount: Number(existing.amount),
+          fee_amount: Number(existing.feeAmount || 0),
+          expires_at: metadata.expiresAt || null,
+          created_at: existing.createdAt,
+          idempotent_replay: true,
+        };
+        if (status === "pending" && !metadata.address) {
+          return res.status(202).json({
+            ...response,
+            message: "La création de l'adresse est encore en cours. Consultez le statut de la transaction avant de réessayer.",
+          });
+        }
+        return res.status(200).json(response);
+      };
       if (merchantReference) {
         const existing = await storage.getApiTransactionByMerchantReference(merchant.id, merchantReference);
         if (existing) {
-          const existingMetadata = (existing as any).metadata || {};
+          const existingMetadata = readTransactionMetadata(existing.metadata);
           const sameRequest =
             Number(existing.totalAmount || existing.amount) === Number(amounts.grossUsdt) &&
             String(existingMetadata.assetCode || "").toUpperCase() === request.assetCode.toUpperCase() &&
@@ -18043,25 +18242,7 @@ export async function registerRoutes(
               message: "Cette reference existe déjà avec des paramètres différents.",
             });
           }
-          return res.status(200).json({
-            transaction_id: existing.id,
-            reference: existing.reference,
-            merchant_reference: existingMetadata.merchantReference || merchantReference,
-            status: existing.status === "completed" ? "success" : existing.status,
-            payment_method: "crypto",
-            asset_code: existingMetadata.assetCode || request.assetCode,
-            network: selectedNetwork.id,
-            address: existingMetadata.address || null,
-            memo: existingMetadata.memo || null,
-            memo_type: existingMetadata.memoType || null,
-            amount: request.amount,
-            currency: originalCurrency,
-            amount_usdt: Number(existing.totalAmount || amounts.grossUsdt),
-            credited_amount: Number(existing.amount),
-            fee_amount: Number(existing.feeAmount || 0),
-            created_at: existing.createdAt,
-            idempotent_replay: true,
-          });
+          return respondToCryptoIdempotentReplay(existing, existingMetadata);
         }
       }
 
@@ -18079,8 +18260,9 @@ export async function registerRoutes(
           description: `Paiement API crypto ${request.assetCode} — ${originalAmount ?? amounts.grossUsdt} ${originalCurrency}`,
           paymentMethod: "crypto",
           reference,
-          notifyUrl: request.notifyUrl || null,
+          notifyUrl: notifyUrlValidation.url,
           source: "api",
+          merchantReference,
           metadata: {
             assetCode: request.assetCode,
             sdk: "direct",
@@ -18094,21 +18276,18 @@ export async function registerRoutes(
           ? await storage.getApiTransactionByMerchantReference(merchant.id, merchantReference)
           : await storage.getTransactionByReference(reference);
         if (raced) {
-          return res.status(200).json({
-            transaction_id: raced.id,
-            reference: raced.reference,
-            status: raced.status === "completed" ? "success" : raced.status,
-            payment_method: "crypto",
-            asset_code: request.assetCode,
-            network: selectedNetwork.id,
-            amount: request.amount,
-            currency: originalCurrency,
-            amount_usdt: Number(raced.totalAmount || amounts.grossUsdt),
-            credited_amount: Number(raced.amount),
-            fee_amount: Number(raced.feeAmount || 0),
-            created_at: raced.createdAt,
-            idempotent_replay: true,
-          });
+          const racedMetadata = readTransactionMetadata(raced.metadata);
+          const sameRequest =
+            Number(raced.totalAmount || raced.amount) === Number(amounts.grossUsdt) &&
+            String(racedMetadata.assetCode || "").toUpperCase() === request.assetCode.toUpperCase() &&
+            String(racedMetadata.originalCurrency || raced.currency).toUpperCase() === originalCurrency.toUpperCase();
+          if (!sameRequest) {
+            return res.status(409).json({
+              error: "idempotency_conflict",
+              message: "Cette reference existe déjà avec des paramètres différents.",
+            });
+          }
+          return respondToCryptoIdempotentReplay(raced, racedMetadata);
         }
         throw reservationError;
       }
@@ -18259,9 +18438,28 @@ export async function registerRoutes(
         amount, currency, phone, operator: operatorName, country_code, reference, notify_url,
         preAuthorisationCode, preauthorizationCode, otp,
       } = req.body;
+      if (reference !== undefined && reference !== null && typeof reference !== "string") {
+        return res.status(400).json({
+          error: "invalid_reference",
+          message: "reference doit être une chaîne de caractères.",
+        });
+      }
       const merchantReference = typeof reference === "string" && reference.trim()
         ? reference.trim()
         : null;
+      if (merchantReference && merchantReference.length > 191) {
+        return res.status(400).json({
+          error: "invalid_reference",
+          message: "reference ne doit pas dépasser 191 caractères.",
+        });
+      }
+      const notifyUrlValidation = await normalizeSafeNotifyUrl(notify_url);
+      if (!notifyUrlValidation.valid) {
+        return res.status(400).json({
+          error: "invalid_notify_url",
+          message: "notify_url doit être une URL HTTPS publique et joignable.",
+        });
+      }
       const pawaPayPreAuthorisationCode = preAuthorisationCode || preauthorizationCode || otp;
 
       // ── Validation ────────────────────────────────────────────────────────
@@ -18450,36 +18648,59 @@ export async function registerRoutes(
        // but every provider receives an AshTech-generated reference.
        const depositRef = generateTransactionReference("deposit");
 
-       if (merchantReference && !req.body.otp) {
-         const existing = await storage.getApiTransactionByMerchantReference(merchant.id, merchantReference);
-         if (existing) {
-           const sameRequest =
-             parseFloat(String(existing.totalAmount || existing.amount)) === amountNum &&
-             String(existing.currency).toUpperCase() === walletCurrency.toUpperCase() &&
-             String(existing.recipientPhone || "") === String(phone) &&
-             String(existing.operatorId || "") === String((operatorRecord as any).id || "");
-           if (!sameRequest) {
-             return res.status(409).json({
-               error: "idempotency_conflict",
-               message: "Cette reference existe déjà avec des paramètres différents.",
-             });
-           }
-           return res.status(200).json({
-             transaction_id: existing.id,
-             reference: existing.reference,
-             merchant_reference: merchantReference,
-             status: existing.status === "completed" ? "success" : existing.status,
-             amount: parseFloat(String(existing.totalAmount || existing.amount)),
-             credited_amount: parseFloat(String(existing.amount)),
-             fee_amount: parseFloat(String(existing.feeAmount || "0")),
-             currency: normalizeApiCurrency(existing.currency),
-             operator: operatorName,
-             phone,
-             country_code: country.code,
-             created_at: existing.createdAt,
-             idempotent_replay: true,
+       const respondToCollectIdempotentReplay = async (existing: any) => {
+         const existingMetadata = readTransactionMetadata(existing.metadata);
+         const existingCountry = existing.recipientCountry || existingMetadata.countryCode;
+         const sameRequest =
+           parseFloat(String(existing.totalAmount || existing.amount)) === amountNum &&
+           String(existing.currency).toUpperCase() === walletCurrency.toUpperCase() &&
+           String(existing.recipientPhone || "") === String(phone) &&
+           String(existing.operatorId || "") === String((operatorRecord as any).id || "") &&
+           (!existingCountry || String(existingCountry).toUpperCase() === country.code.toUpperCase());
+         if (!sameRequest) {
+           return res.status(409).json({
+             error: "idempotency_conflict",
+             message: "Cette reference existe déjà avec des paramètres différents.",
            });
          }
+         const existingOtpContext = existing.reference
+           ? await loadOtpContextFromDatabase(existing.reference)
+           : undefined;
+         if (existingOtpContext) {
+           const ussdCode = existingOtpContext.ussdCode || null;
+           const message = existingOtpContext.otpType === "ussd" && ussdCode
+             ? `OTP requis. Composez ${ussdCode} sur votre téléphone pour obtenir votre code, puis relancez la requête avec les champs 'otp' et 'reference'.`
+             : "OTP requis. Un code a été envoyé par SMS. Relancez la requête avec les champs 'otp' et 'reference'.";
+           return res.status(400).json({
+             error: "otp_required",
+             message,
+             reference: existingOtpContext.afribaTransactionId,
+             ...(existingOtpContext.merchantReference
+               ? { merchant_reference: existingOtpContext.merchantReference }
+               : {}),
+             ussd_code: ussdCode,
+           });
+         }
+         return res.status(200).json({
+           transaction_id: existing.id,
+           reference: existing.reference,
+           merchant_reference: existingMetadata.merchantReference || merchantReference,
+           status: existing.status === "completed" ? "success" : existing.status,
+           amount: parseFloat(String(existing.totalAmount || existing.amount)),
+           credited_amount: parseFloat(String(existing.amount)),
+           fee_amount: parseFloat(String(existing.feeAmount || "0")),
+           currency: normalizeApiCurrency(existing.currency),
+           operator: operatorName,
+           phone,
+           country_code: country.code,
+           created_at: existing.createdAt,
+           idempotent_replay: true,
+         });
+       };
+
+       if (merchantReference && !req.body.otp) {
+         const existing = await storage.getApiTransactionByMerchantReference(merchant.id, merchantReference);
+         if (existing) return await respondToCollectIdempotentReplay(existing);
        }
 
       // ── PixPay OTP pre-check ──────────────────────────────────────────────
@@ -18515,7 +18736,7 @@ export async function registerRoutes(
       }
       if (paymentProvider === "afribapay" && req.body.otp && req.body.reference) {
         const otpMerchantReference = String(req.body.reference).trim();
-        const ctx = await loadOtpContext(otpMerchantReference);
+        const ctx = await loadOtpContextFromDatabase(otpMerchantReference);
         if (!ctx) {
           return res.status(400).json({
             error: "otp_expired",
@@ -18525,29 +18746,90 @@ export async function registerRoutes(
         if (ctx.userId && ctx.userId !== merchant.id) {
           return res.status(403).json({ error: "forbidden", message: "Cette session OTP n'appartient pas à votre compte." });
         }
-        const callbackUrlOtp = buildWebhookUrl("/api/afribapay/webhook");
-        const afribapayCurrencyOtp = AFRIBAPAY_ISO_CURRENCY[country.code.toUpperCase()] || country.currency;
+        const existingTxOtp = await storage.getTransactionByReference(ctx.afribaTransactionId);
+        if (!existingTxOtp || existingTxOtp.userId !== merchant.id) {
+          return res.status(404).json({ error: "not_found", message: "La transaction de cette session OTP est introuvable." });
+        }
+        const sessionMerchantReference = ctx.merchantReference
+          || existingTxOtp.merchantReference
+          || readTransactionMetadata(existingTxOtp.metadata).merchantReference
+          || null;
+        const currentAfribaOperator = resolveAfribaPayOperatorCode(operatorRecord, operatorName);
+        const matchesOtpRequest =
+          Math.round(amountNum * 100) === Math.round(ctx.amount * 100) &&
+          country.code.toUpperCase() === ctx.country.toUpperCase() &&
+          (!ctx.walletCurrency || normalizeApiCurrency(ctx.walletCurrency) === expectedIso) &&
+          (!ctx.operatorId || String((operatorRecord as any).id) === String(ctx.operatorId)) &&
+          currentAfribaOperator === ctx.operator &&
+          normalizeAfribaOtpPhone(phone, country.code) === String(ctx.phone || "").replace(/\D/g, "");
+        if (!matchesOtpRequest) {
+          return res.status(409).json({
+            error: "otp_request_mismatch",
+            message: "La confirmation OTP doit reprendre le montant, la devise, le téléphone, l'opérateur et le pays de la requête initiale.",
+          });
+        }
+        const claimId = crypto.randomUUID();
+        if (!(await claimOtpContext(otpMerchantReference, ctx, claimId))) {
+          return res.status(409).json({
+            error: "otp_confirmation_in_progress",
+            message: "Une confirmation OTP est déjà en cours pour cette session. Attendez sa réponse avant de réessayer.",
+          });
+        }
+
+        const appBaseUrl = (process.env.APP_URL || `${req.protocol}://${req.get("host")}`).replace(/\/+$/, "");
+        const callbackUrlOtp = buildWebhookUrl("/api/afribapay/webhook", appBaseUrl);
         const confirmedResponse = await confirmAfribaPayOtp({
           operator: ctx.operator,
           country: ctx.country,
           phone_number: ctx.phone,
           amount: ctx.amount,
-          currency: afribapayCurrencyOtp,
+          currency: ctx.currency,
           order_id: ctx.afribaTransactionId,
           reference_id: ctx.afribaTransactionId,
           otp_code: req.body.otp as string,
           notify_url: callbackUrlOtp,
-          return_url: `${process.env.APP_URL}/dashboard/deposit?status=success`,
-          cancel_url: `${process.env.APP_URL}/dashboard/deposit?status=cancelled`,
+          return_url: `${appBaseUrl}/dashboard/deposit?status=success`,
+          cancel_url: `${appBaseUrl}/dashboard/deposit?status=cancelled`,
           lang: "fr",
         });
-        await deleteOtpContext(otpMerchantReference);
-        if (otpMerchantReference !== ctx.afribaTransactionId) {
-          await deleteOtpContext(ctx.afribaTransactionId);
-        }
-        const existingTxOtp = await storage.getTransactionByReference(ctx.afribaTransactionId);
         if (!confirmedResponse.success) {
-          if (existingTxOtp) await storage.updateTransactionStatus(existingTxOtp.id, "failed");
+          if (isRetryableAfribaOtpRejection(confirmedResponse)) {
+            await releaseOtpContextClaim(
+              otpContextReferences(otpMerchantReference, ctx),
+              claimId,
+            );
+            return res.status(400).json({
+              error: "invalid_otp",
+              message: sanitizeGatewayMessage(confirmedResponse.message, "Code OTP invalide ou expiré."),
+              reference: ctx.afribaTransactionId,
+              ...(sessionMerchantReference ? { merchant_reference: sessionMerchantReference } : {}),
+            });
+          }
+          if (isAmbiguousProviderInitiationFailure(confirmedResponse)) {
+            await deleteClaimedOtpContext(otpMerchantReference, ctx, claimId);
+            const externalReference = ctx.afribaTransactionId;
+            addPendingPayment({
+              transactionId: existingTxOtp.id,
+              reference: existingTxOtp.reference || ctx.afribaTransactionId,
+              externalReference,
+              attempts: 0,
+              userId: merchant.id,
+              type: "deposit",
+              amount: String(existingTxOtp.amount),
+              provider: "afribapay",
+              countryCode: ctx.country,
+            });
+            return res.status(202).json({
+              transaction_id: existingTxOtp.id,
+              reference: existingTxOtp.reference || ctx.afribaTransactionId,
+              ...(sessionMerchantReference ? { merchant_reference: sessionMerchantReference } : {}),
+              status: "pending",
+              message: "Le fournisseur n'a pas confirmé la réponse. Ne renvoyez pas le code OTP; consultez le statut de la transaction.",
+              created_at: existingTxOtp.createdAt,
+            });
+          }
+          await deleteClaimedOtpContext(otpMerchantReference, ctx, claimId);
+          await storage.claimTransactionStatus(existingTxOtp.id, "failed");
           return res.status(502).json(buildProviderErrorPayload({
             error: "gateway_error",
             message: confirmedResponse.message,
@@ -18559,34 +18841,33 @@ export async function registerRoutes(
             sensitiveValues: [phone],
           }));
         }
+        await deleteClaimedOtpContext(otpMerchantReference, ctx, claimId);
         const extRefOtp = confirmedResponse.transaction_id || ctx.afribaTransactionId;
-        if (existingTxOtp) {
-          await storage.updateTransactionExternalReference(existingTxOtp.id, extRefOtp);
-          addPendingPayment({
-            transactionId: existingTxOtp.id,
-            reference: existingTxOtp.reference || ctx.afribaTransactionId,
-            externalReference: extRefOtp,
-            attempts: 0,
-            userId: merchant.id,
-            type: "deposit",
-            amount: ctx.amount.toString(),
-            provider: "afribapay",
-            countryCode: country.code,
-          });
-        }
+        await storage.updateTransactionExternalReference(existingTxOtp.id, extRefOtp);
+        addPendingPayment({
+          transactionId: existingTxOtp.id,
+          reference: existingTxOtp.reference || ctx.afribaTransactionId,
+          externalReference: extRefOtp,
+          attempts: 0,
+          userId: merchant.id,
+          type: "deposit",
+          amount: String(existingTxOtp.amount),
+          provider: "afribapay",
+          countryCode: ctx.country,
+        });
         return res.status(202).json({
-          transaction_id: existingTxOtp?.id || ctx.afribaTransactionId,
-          reference: existingTxOtp?.reference || ctx.afribaTransactionId,
-          merchant_reference: otpMerchantReference,
+          transaction_id: existingTxOtp.id,
+          reference: existingTxOtp.reference || ctx.afribaTransactionId,
+          ...(sessionMerchantReference ? { merchant_reference: sessionMerchantReference } : {}),
           status: "pending",
-          amount: amountNum,
-          credited_amount: creditedAmount,
-          fee_amount: ashtechFeeAmount,
-          currency: normalizeApiCurrency(walletCurrency),
+          amount: parseFloat(String(existingTxOtp.totalAmount || existingTxOtp.amount)),
+          credited_amount: parseFloat(String(existingTxOtp.amount)),
+          fee_amount: parseFloat(String(existingTxOtp.feeAmount || "0")),
+          currency: normalizeApiCurrency(existingTxOtp.currency),
           operator: operatorName,
-          phone,
-          country_code: country.code,
-          created_at: (existingTxOtp as any)?.createdAt,
+          phone: existingTxOtp.recipientPhone,
+          country_code: ctx.country,
+          created_at: existingTxOtp.createdAt,
         });
       }
 
@@ -18608,40 +18889,41 @@ export async function registerRoutes(
         const otpInfoPre = await getAfribaPayOtpInfo(country.code, afribaOpCodePre);
         if (otpInfoPre.required && !req.body.otp) {
           // Normalize phone (same logic as main AfribaPay block below)
-          const COUNTRY_PREFIXES_PRE: Record<string, string> = {
-            CM: "237", SN: "221", CI: "225", BF: "226", ML: "223",
-            GN: "224", BJ: "229", TG: "228", NE: "227", CD: "243",
-            CG: "242", CF: "236", TD: "235", GA: "241", GQ: "240",
-            MG: "261", RW: "250", KE: "254", TZ: "255", UG: "256",
-            GH: "233", NG: "234",
-          };
-          let localPhonePre = phone.replace(/\s/g, "");
-          if (localPhonePre.startsWith("+")) localPhonePre = localPhonePre.slice(1);
-          const countryPrefixPre = COUNTRY_PREFIXES_PRE[country.code.toUpperCase()];
-          if (countryPrefixPre && localPhonePre.startsWith(countryPrefixPre)) {
-            localPhonePre = localPhonePre.slice(countryPrefixPre.length);
-          }
+          const localPhonePre = normalizeAfribaOtpPhone(phone, country.code);
           const afribapayCurrencyPre = AFRIBAPAY_ISO_CURRENCY[country.code.toUpperCase()] || normalizeApiCurrency(walletCurrency);
           const callbackUrlPre = buildWebhookUrl("/api/afribapay/webhook");
 
           // Create the transaction NOW so it exists when the client confirms the OTP
-          const txPre = await storage.createTransaction({
-            userId: merchant.id,
-            type: "deposit",
-            amount: creditedAmount.toString(),
-            currency: walletCurrency,
-            status: "pending",
-            description: `Paiement API — ${operatorName} — ${phone}`,
-            paymentMethod: "mobile_money",
-            reference: depositRef,
-            operatorId: (operatorRecord as any).id,
-            feeAmount: ashtechFeeAmount.toFixed(2),
-            totalAmount: amountNum.toFixed(2),
-            recipientPhone: phone,
-            notifyUrl: notify_url || null,
-            source: "api",
-            metadata: merchantReference ? { merchantReference } : undefined,
-          });
+          let txPre: Transaction;
+          try {
+            txPre = await storage.createTransaction({
+              userId: merchant.id,
+              type: "deposit",
+              amount: creditedAmount.toString(),
+              currency: walletCurrency,
+              status: "pending",
+              description: `Paiement API — ${operatorName} — ${phone}`,
+              paymentMethod: "mobile_money",
+              reference: depositRef,
+              operatorId: (operatorRecord as any).id,
+              feeAmount: ashtechFeeAmount.toFixed(2),
+              totalAmount: amountNum.toFixed(2),
+              recipientPhone: phone,
+              notifyUrl: notifyUrlValidation.url,
+              source: "api",
+              merchantReference,
+            metadata: {
+              ...(merchantReference ? { merchantReference } : {}),
+              countryCode: country.code,
+            },
+            });
+          } catch (reservationError) {
+            const raced = merchantReference
+              ? await storage.getApiTransactionByMerchantReference(merchant.id, merchantReference)
+              : undefined;
+            if (raced) return await respondToCollectIdempotentReplay(raced);
+            throw reservationError;
+          }
 
           if (otpInfoPre.type === "api") {
             // SMS-type OTP: AfribaPay sends the code — trigger it now.
@@ -18675,13 +18957,19 @@ export async function registerRoutes(
           const otpContext: OtpContext = {
             userId: merchant.id,
             operator: afribaOpCodePre,
+            operatorId: String((operatorRecord as any).id),
             country: country.code,
             phone: localPhonePre,
+            walletCurrency,
             amount: amountNum,
             currency: afribapayCurrencyPre,
+            merchantReference: merchantReference || undefined,
             afribaTransactionId: depositRef,
             expiresAt: Date.now() + 15 * 60 * 1000, // 15 min
             otpType: otpInfoPre.type === "none" ? undefined : otpInfoPre.type,
+            ussdCode: otpInfoPre.ussdCode?.includes("montant")
+              ? otpInfoPre.ussdCode.replace(/montant/gi, String(Math.round(amountNum)))
+              : (otpInfoPre.ussdCode || undefined),
           };
           await persistOtpContext(depositRef, otpContext);
           if (merchantReference && merchantReference !== depositRef) {
@@ -18735,32 +19023,44 @@ export async function registerRoutes(
          }
        }
        const pawaPayDepositId = paymentProvider === "pawapay" ? createPawaPayId() : undefined;
-       const transaction = await storage.createTransaction({
-        userId: merchant.id,
-        type: "deposit",
-        amount: creditedAmount.toString(),
-        currency: walletCurrency,
-        status: "pending",
-        description: `Paiement API — ${operatorName} — ${phone}`,
-        paymentMethod: "mobile_money",
-        reference: depositRef,
-        operatorId: (operatorRecord as any).id,
-        feeAmount: ashtechFeeAmount.toFixed(2),
-        totalAmount: amountNum.toFixed(2),
-        recipientPhone: phone,
-        notifyUrl: notify_url || null,
-        source: "api",
-         ...(pawaPayDepositId ? { externalReference: pawaPayDepositId } : {}),
-        metadata: {
-              ...(merchantReference ? { merchantReference } : {}),
-              ...(pawaPayDepositId ? {
-              paymentProvider: "pawapay",
-              pawaCountry: pawaPayCountry(country.code),
-              countryCode: country.code,
-              walletCurrency,
-              } : {}),
-            },
-      });
+       let transaction: Transaction;
+       try {
+         transaction = await storage.createTransaction({
+           userId: merchant.id,
+           type: "deposit",
+           amount: creditedAmount.toString(),
+           currency: walletCurrency,
+           status: "pending",
+           description: `Paiement API — ${operatorName} — ${phone}`,
+           paymentMethod: "mobile_money",
+           reference: depositRef,
+           operatorId: (operatorRecord as any).id,
+           feeAmount: ashtechFeeAmount.toFixed(2),
+           totalAmount: amountNum.toFixed(2),
+           recipientPhone: phone,
+           recipientCountry: country.code,
+           notifyUrl: notifyUrlValidation.url,
+           source: "api",
+           merchantReference,
+           ...(pawaPayDepositId ? { externalReference: pawaPayDepositId } : {}),
+           metadata: {
+             ...(merchantReference ? { merchantReference } : {}),
+             countryCode: country.code,
+             ...(pawaPayDepositId ? {
+               paymentProvider: "pawapay",
+               pawaCountry: pawaPayCountry(country.code),
+               countryCode: country.code,
+               walletCurrency,
+             } : {}),
+           },
+         });
+       } catch (reservationError) {
+         const raced = merchantReference
+           ? await storage.getApiTransactionByMerchantReference(merchant.id, merchantReference)
+           : undefined;
+         if (raced) return await respondToCollectIdempotentReplay(raced);
+         throw reservationError;
+       }
 
       // ── Call payment provider ──────────────────────────────────────────────
       const callbackUrl = buildWebhookUrl("/api/afribapay/webhook");
@@ -18792,20 +19092,7 @@ export async function registerRoutes(
         const afribaOpCode = resolveAfribaPayOperatorCode(operatorRecord, operatorName);
         const afribapayCurrency = AFRIBAPAY_ISO_CURRENCY[country.code.toUpperCase()] || country.currency;
 
-        // Normalize phone: strip spaces, leading +, then country prefix
-        const COUNTRY_PREFIXES: Record<string, string> = {
-          CM: "237", SN: "221", CI: "225", BF: "226", ML: "223",
-          GN: "224", BJ: "229", TG: "228", NE: "227", CD: "243",
-          CG: "242", CF: "236", TD: "235", GA: "241", GQ: "240",
-          MG: "261", RW: "250", KE: "254", TZ: "255", UG: "256",
-          GH: "233", NG: "234",
-        };
-        let localPhone = phone.replace(/\s/g, "");
-        if (localPhone.startsWith("+")) localPhone = localPhone.slice(1);
-        const countryPrefix = COUNTRY_PREFIXES[country.code.toUpperCase()];
-        if (countryPrefix && localPhone.startsWith(countryPrefix)) {
-          localPhone = localPhone.slice(countryPrefix.length);
-        }
+        const localPhone = normalizeAfribaOtpPhone(phone, country.code);
 
         // OTP operators (Orange CI/BF, Moov CI/BF, etc.) are fully handled above:
         //   first call  → initiate OTP + cache (returns 400 otp_required + reference)
@@ -18852,18 +19139,38 @@ export async function registerRoutes(
           await persistOtpContext(depositRef, {
             userId: merchant.id,
             operator: afribaOpCode,
+            operatorId: String((operatorRecord as any).id),
             country: country.code,
             phone: localPhone,
+            walletCurrency,
             amount: amountNum,
             currency: afribapayCurrency,
+            merchantReference: merchantReference || undefined,
             afribaTransactionId: depositRef,
             expiresAt: Date.now() + 15 * 60 * 1000,
             otpType: "api",
           });
+          if (merchantReference && merchantReference !== depositRef) {
+            await persistOtpContext(merchantReference, {
+              userId: merchant.id,
+              operator: afribaOpCode,
+              operatorId: String((operatorRecord as any).id),
+              country: country.code,
+              phone: localPhone,
+              walletCurrency,
+              amount: amountNum,
+              currency: afribapayCurrency,
+              merchantReference,
+              afribaTransactionId: depositRef,
+              expiresAt: Date.now() + 15 * 60 * 1000,
+              otpType: "api",
+            });
+          }
           return res.status(400).json({
             error: "otp_required",
             message: "OTP requis. Un code a été envoyé par SMS. Relancez la requête avec les champs 'otp' et 'reference'.",
             reference: depositRef,
+            ...(merchantReference ? { merchant_reference: merchantReference } : {}),
           });
         } else {
           await storage.updateTransactionStatus(transaction.id, "failed");
@@ -18998,11 +19305,12 @@ export async function registerRoutes(
       }
 
       const isoStatus = latestTx.status === "completed" ? "success" : latestTx.status;
+      const latestMetadata = readTransactionMetadata((latestTx as any).metadata);
 
       const responseBody: Record<string, any> = {
         transaction_id: latestTx.id,
         reference: latestTx.reference,
-        merchant_reference: ((latestTx as any).metadata || {}).merchantReference || null,
+        merchant_reference: (latestTx as any).merchantReference || latestMetadata.merchantReference || null,
         status: isoStatus,
         amount: parseFloat((latestTx as any).totalAmount || latestTx.amount),
         credited_amount: parseFloat(latestTx.amount),
@@ -19027,13 +19335,12 @@ export async function registerRoutes(
       }
       // Crypto-only fields are added without changing the Mobile Money response.
       if (latestTx.paymentMethod === "crypto") {
-        const metadata = (latestTx as any).metadata || {};
         responseBody.payment_method = "crypto";
-        responseBody.asset_code = metadata.assetCode || null;
-        responseBody.address = metadata.address || null;
-        responseBody.memo = metadata.memo || null;
-        responseBody.memo_type = metadata.memoType || null;
-        responseBody.expires_at = metadata.expiresAt || null;
+        responseBody.asset_code = latestMetadata.assetCode || null;
+        responseBody.address = latestMetadata.address || null;
+        responseBody.memo = latestMetadata.memo || null;
+        responseBody.memo_type = latestMetadata.memoType || null;
+        responseBody.expires_at = latestMetadata.expiresAt || null;
         responseBody.amount_usdt = parseFloat((tx as any).totalAmount || tx.amount);
         responseBody.credited_amount_usdt = parseFloat(tx.amount);
         responseBody.fee_amount_usdt = parseFloat((tx as any).feeAmount || "0");
@@ -19148,10 +19455,17 @@ export async function registerRoutes(
         if (value === null || value === undefined) return null;
         return typeof value === "string" ? value.trim() || null : null;
       };
+      const notifyUrlValidation = await normalizeSafeNotifyUrl(req.body?.notifyUrl);
+      if (!notifyUrlValidation.valid) {
+        return res.status(400).json({
+          error: "invalid_notify_url",
+          message: "notifyUrl doit être une URL HTTPS publique et joignable.",
+        });
+      }
       const key = await storage.createHostedPageKey(userId, name, {
         successUrl: normalizeUrl(req.body?.successUrl),
         cancelUrl: normalizeUrl(req.body?.cancelUrl),
-        notifyUrl: normalizeUrl(req.body?.notifyUrl),
+        notifyUrl: notifyUrlValidation.url,
       });
       res.status(201).json(key);
     } catch (e: any) {
@@ -19183,10 +19497,17 @@ export async function registerRoutes(
         if (value === null || value === undefined) return null;
         return typeof value === "string" ? value.trim() || null : null;
       };
+        const notifyUrlValidation = await normalizeSafeNotifyUrl(req.body?.notifyUrl);
+        if (!notifyUrlValidation.valid) {
+          return res.status(400).json({
+            error: "invalid_notify_url",
+            message: "notifyUrl doit être une URL HTTPS publique et joignable.",
+          });
+        }
       const key = await storage.updateHostedPageKeyUrls(userId, req.params.id, {
         successUrl: normalizeUrl(req.body?.successUrl),
         cancelUrl: normalizeUrl(req.body?.cancelUrl),
-        notifyUrl: normalizeUrl(req.body?.notifyUrl),
+          notifyUrl: notifyUrlValidation.url,
       });
       if (!key) return res.status(404).json({ error: "not_found" });
       res.json(key);
@@ -19219,7 +19540,16 @@ export async function registerRoutes(
       const data: any = {};
       if (successUrl !== undefined) data.successUrl = successUrl;
       if (cancelUrl !== undefined) data.cancelUrl = cancelUrl;
-      if (notifyUrl !== undefined) data.notifyUrl = notifyUrl || null;
+      if (notifyUrl !== undefined) {
+        const notifyUrlValidation = await normalizeSafeNotifyUrl(notifyUrl);
+        if (!notifyUrlValidation.valid) {
+          return res.status(400).json({
+            error: "invalid_notify_url",
+            message: "notifyUrl doit être une URL HTTPS publique et joignable.",
+          });
+        }
+        data.notifyUrl = notifyUrlValidation.url;
+      }
       if (regenerate) {
         data.hpLive = generateHpKey("hp_live_");
       }
@@ -19232,11 +19562,10 @@ export async function registerRoutes(
   });
 
   // POST /api/v1/hosted-payment/create — create a hosted payment link (uses existing /pay/:slug page)
-  app.post("/api/v1/hosted-payment/create", hostedPaymentLimiter, async (req: Request, res: Response) => {
+  app.post("/api/v1/hosted-payment/create", apiV1Limiter, hostedPaymentLimiter, async (req: Request, res: Response) => {
     try {
-      const authHeader = req.headers.authorization || "";
-      const hpKey = authHeader.replace("Bearer ", "").trim();
-      if (!hpKey.startsWith("hp_live_")) {
+      const hpKey = parseHostedBearerKey(req.headers.authorization);
+      if (!hpKey) {
         return res.status(401).json({ error: "unauthorized", message: "Invalid hp_live key." });
       }
        const merchant = await storage.getUserByHpKey(hpKey);
@@ -19244,6 +19573,9 @@ export async function registerRoutes(
        const hostedKey = await storage.getHostedPageKeyByHpLive(hpKey);
       if (!merchant.isVerified) {
         return res.status(403).json({ error: "account_not_verified", message: "Votre compte n'est pas vérifié. Complétez la vérification KYC pour accéder à l'API." });
+      }
+      if ((merchant as any).isBanned) {
+        return res.status(403).json({ error: "account_banned", message: "Votre compte n'est pas autorisé à utiliser cette API." });
       }
       const {
         amount,
@@ -19366,12 +19698,23 @@ export async function registerRoutes(
 
       const expiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30 min
 
-       // Use the selected key's notify_url. The legacy key keeps the
-       // historical account-level configuration for compatibility.
-       const merchantConfig = hostedKey?.id === "legacy"
-         ? hostedKey
-         : await storage.getHostedPageConfig(merchant.id).catch(() => null);
-      const effectiveNotifyUrl = notify_url || (merchantConfig as any)?.notifyUrl || null;
+       const explicitNotifyValidation = await normalizeSafeNotifyUrl(notify_url);
+       if (!explicitNotifyValidation.valid) {
+         return res.status(400).json({
+           error: "invalid_notify_url",
+           message: "notify_url doit être une URL HTTPS publique et joignable.",
+         });
+       }
+       const storedNotifyValidation = explicitNotifyValidation.url
+         ? explicitNotifyValidation
+         : await normalizeSafeNotifyUrl(hostedKey?.notifyUrl);
+       if (!storedNotifyValidation.valid) {
+         return res.status(400).json({
+           error: "invalid_notify_url",
+           message: "L'URL notifyUrl configurée pour cette clé n'est pas une URL HTTPS publique et joignable.",
+         });
+       }
+      const effectiveNotifyUrl = storedNotifyValidation.url;
 
       // Create a real payment link in the existing system → uses the existing /pay/:slug page
        let paymentLink;
@@ -19418,15 +19761,20 @@ export async function registerRoutes(
   });
 
   // GET /api/v1/hosted-payment/:payment_id — check payment link status
-  app.get("/api/v1/hosted-payment/:payment_id", async (req: Request, res: Response) => {
+  app.get("/api/v1/hosted-payment/:payment_id", apiV1Limiter, async (req: Request, res: Response) => {
     try {
-      const authHeader = req.headers.authorization || "";
-      const hpKey = authHeader.replace("Bearer ", "").trim();
-      if (!hpKey.startsWith("hp_live_")) {
+      const hpKey = parseHostedBearerKey(req.headers.authorization);
+      if (!hpKey) {
         return res.status(401).json({ error: "unauthorized", message: "Invalid hp_live key." });
       }
       const merchant = await storage.getUserByHpKey(hpKey);
       if (!merchant) return res.status(401).json({ error: "unauthorized" });
+      if (!merchant.isVerified) {
+        return res.status(403).json({ error: "account_not_verified", message: "Votre compte n'est pas vérifié." });
+      }
+      if ((merchant as any).isBanned) {
+        return res.status(403).json({ error: "account_banned", message: "Votre compte n'est pas autorisé à utiliser cette API." });
+      }
 
       const link = await storage.getPaymentLinkById(req.params.payment_id);
       if (!link) return res.status(404).json({ error: "not_found" });
@@ -19453,12 +19801,14 @@ export async function registerRoutes(
         payment_id: link.id,
         slug: link.slug,
         is_fixed_amount: link.isFixedAmount,
-        amount: link.isFixedAmount ? parseFloat(link.amount) : (successTxn ? parseFloat(successTxn.amount) : null),
+         amount: link.isFixedAmount
+           ? parseFloat(link.amount)
+           : (successTxn ? parseFloat(String(successTxn.totalAmount || successTxn.amount)) : null),
         currency: link.currency,
         description: link.description,
         allowed_countries: link.allowedCountries,
         status,
-        paid_at: successTxn?.createdAt ?? null,
+         paid_at: successTxn?.confirmedAt ?? null,
         created_at: link.createdAt,
         expires_at: link.expiresAt,
       });

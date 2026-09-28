@@ -3,7 +3,7 @@ title: "Webhooks"
 description: "Synchronisez vos commandes avec les événements AshTech Pay."
 ---
 
-Configurez un `notify_url` HTTPS lors de la création de votre paiement ou dans la configuration Hosted Checkout.
+Configurez un `notify_url` HTTPS public lors de la création de votre paiement ou dans la configuration Hosted Checkout. Utilisez une URL stable, sans localhost, adresse privée ou destination interne : ces destinations sont bloquées au moment de la livraison.
 
 AshTech Pay envoie les notifications avec ces headers :
 
@@ -13,7 +13,7 @@ X-Ashtech-Timestamp: 1735643554
 X-Ashtech-Signature: sha256=...
 ```
 
-Quand votre secret webhook `whsec_...` est configuré, vérifiez :
+Les notifications sont mises en file avant livraison, dédupliquées par transaction et événement, et signées avec votre secret webhook `whsec_...`. Si aucun secret webhook n'est configuré, la livraison n'est pas envoyée : elle reste en attente et réessaie périodiquement jusqu'à la configuration du secret.
 
 ```text
 HMAC-SHA256(webhook_secret, timestamp + "." + raw_request_body)
@@ -24,7 +24,7 @@ La vérification doit utiliser le corps brut avant le parsing JSON. Refusez les 
 ## Bon traitement d'un webhook
 
 1. Répondez rapidement avec un statut HTTP `2xx`.
-2. Vérifiez la signature si elle est fournie pour votre compte.
+2. Vérifiez toujours la signature avec votre secret configuré.
 3. Rendez le traitement idempotent avec l'identifiant de transaction et votre référence.
 4. Rechargez le statut côté serveur avant de créditer ou livrer.
 5. Traitez les événements en double sans créer deux commandes.
@@ -59,6 +59,8 @@ app.post("/webhooks/ashtechpay", express.raw({ type: "application/json" }), asyn
 ## Ne faites pas confiance au navigateur
 
 Une page de succès peut être fermée, rejouée ou modifiée. Utilisez le webhook ou une vérification serveur de `GET /v1/transaction/:id` pour confirmer le paiement.
+
+Les erreurs HTTP, les erreurs réseau et les réponses non-`2xx` sont réessayées avec un délai croissant, jusqu'à huit tentatives avant l'échec permanent. Les notifications restent dédupliquées : rendez votre traitement idempotent.
 
 <Note>
   Conservez les payloads reçus et les réponses de votre traitement pendant la durée nécessaire à votre support et à vos rapprochements comptables.
