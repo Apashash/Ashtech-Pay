@@ -9,6 +9,12 @@ Plesk's NPM panel installs from its configured application root and branch, not 
 
 **How to apply:** Verify the Plesk Git source, branch, application root, and last deployed revision before changing application code. Do not rely on a repository `preinstall` script to repair an `ENOTEMPTY` rename: npm may fail during node_modules reconciliation before lifecycle scripts run. The remote app root must receive the new package metadata and have its stale installation tree removed or replaced with a clean `npm ci`.
 
+Plesk can still report `ERR_PNPM_IGNORED_BUILDS` when an `onlyBuiltDependencies` allowlist exists in the app root; file presence alone does not prove the install process reads that workspace configuration.
+
+**Why:** The Node.js panel hides the actual working directory and pnpm binary used by its install action, so a different root or pnpm version can ignore a valid project setting.
+
+**How to apply:** Use Plesk's Run Script control for a read-only diagnostic of `process.cwd()`, Node/pnpm versions, package/lock/workspace-file presence, and `pnpm config get onlyBuiltDependencies`. Never print environment variables or secrets.
+
 Plesk can also serve a mixed release: the browser may receive freshly uploaded `dist/public` assets while Passenger still runs an older `dist/index.cjs`. Validate a representative API behavior, not only the client bundle, before declaring production synchronized.
 
 **Why:** The payment-link page showed the new client error text, but the live POST still followed the old server order and failed on the database insert before reaching the current provider validation.

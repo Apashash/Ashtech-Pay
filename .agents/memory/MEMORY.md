@@ -7,7 +7,7 @@
 - [botGuard/ipBlocker IP-ban design](botguard-ip-ban-design.md) — no whole-IP bans/lockouts from a single bad request or one account's failed logins (CGNAT collateral damage); honeypot paths must never prefix a real route; auth lockouts must be per-account first, IP-wide only at a much higher threshold.
 - [Clean 404 for scanner probe paths](clean-404-scanner-probes.md) — probe/honeypot paths must return a real branded HTML 404 page, not bare status/text, or scanners flag it as an anomaly.
 - [Plesk .htaccess bypasses Node security](plesk-htaccess-bypasses-node-security.md) — production (Plesk/Apache) SPA fallback in client/public/.htaccess can 200 on /.env, /wp-admin etc. before Node ever sees the request; must patch both layers and rebuild to verify.
-- [Plesk dependency sync](plesk-dependency-sync.md) — Plesk NPM installs its own app-root copy; repository dependency fixes do nothing until that root and branch are synchronized.
+- [Plesk dependency sync](plesk-dependency-sync.md) — verify the deployed root and actual pnpm cwd/version/allowlist before changing packages when Plesk install errors persist.
 - [Plesk Nginx upload limit](plesk-nginx-upload-limit.md) — Plesk/Nginx can reject multipart uploads above ~2 MB with 413 before Node; compress KYC images client-side or raise the proxy limit.
 - [Plesk npm registry](plesk-npm-registry.md) — package-lock may contain Replit firewall URLs; project .npmrc must force the public registry host for installs outside Replit.
 - [Admin path injection](admin-path-injection.md) — .htaccess must use passthrough (not static index.html) so Node.js injects window.__ADMIN_PATH__; server/index.ts now loads .env manually at startup because Passenger may not pass Plesk env vars to process.env.
