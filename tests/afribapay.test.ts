@@ -5,9 +5,9 @@ import {
   AFRIBAPAY_MAX_PAYIN_AMOUNT,
   AFRIBAPAY_MIN_PAYIN_AMOUNT,
   classifyAfribaPayoutStatus,
-  combineAfribaPayPayinStatuses,
   isRetryableAfribaOtpRejection,
   parseAfribaPayWebhook,
+  shouldCheckAfribaPayOrderIdFallback,
   validateAfribaPayinAmount,
   verifyAfribaPayWebhookSignature,
 } from "../server/afribapay";
@@ -55,12 +55,15 @@ test("AfribaPay payout HTTP 404 and NOT_FOUND are non-final", () => {
   assert.equal(classifyAfribaPayoutStatus(200, "SUCCESS"), "completed");
 });
 
-test("AfribaPay payin status checks combine provider and AshTech references safely", () => {
-  assert.equal(combineAfribaPayPayinStatuses("completed", "completed"), "completed");
-  assert.equal(combineAfribaPayPayinStatuses("failed", "failed"), "failed");
-  assert.equal(combineAfribaPayPayinStatuses("completed", "pending"), "completed");
-  assert.equal(combineAfribaPayPayinStatuses("pending", "failed"), "failed");
-  assert.equal(combineAfribaPayPayinStatuses("completed", "failed"), "pending");
+test("AfribaPay AshTech order_id fallback is only checked after 24h while still pending", () => {
+  const dayMs = 24 * 60 * 60 * 1000;
+  const now = 2_000_000_000_000;
+
+  assert.equal(shouldCheckAfribaPayOrderIdFallback("pending", now - dayMs + 1, now), false);
+  assert.equal(shouldCheckAfribaPayOrderIdFallback("pending", now - dayMs, now), true);
+  assert.equal(shouldCheckAfribaPayOrderIdFallback("pending", now - dayMs - 1, now), true);
+  assert.equal(shouldCheckAfribaPayOrderIdFallback("completed", now - dayMs - 1, now), false);
+  assert.equal(shouldCheckAfribaPayOrderIdFallback("failed", now - dayMs - 1, now), false);
 });
 
 test("AfribaPay payin amount validation uses the conservative documented range", () => {

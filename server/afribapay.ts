@@ -617,15 +617,15 @@ export async function checkAfribaPayStatus(
   }
 }
 
-export function combineAfribaPayPayinStatuses(
+const AFRIBAPAY_ORDER_ID_FALLBACK_AFTER_MS = 24 * 60 * 60 * 1000;
+
+export function shouldCheckAfribaPayOrderIdFallback(
   transactionIdStatus: "completed" | "failed" | "pending",
-  orderIdStatus: "completed" | "failed" | "pending",
-): "completed" | "failed" | "pending" {
-  if (transactionIdStatus === orderIdStatus) return transactionIdStatus;
-  if (transactionIdStatus === "pending") return orderIdStatus;
-  if (orderIdStatus === "pending") return transactionIdStatus;
-  // Conflicting terminal reports must not settle or fail a payment.
-  return "pending";
+  startedAt: number,
+  now = Date.now(),
+): boolean {
+  return transactionIdStatus === "pending"
+    && now - startedAt >= AFRIBAPAY_ORDER_ID_FALLBACK_AFTER_MS;
 }
 
 export function classifyAfribaPayoutStatus(
