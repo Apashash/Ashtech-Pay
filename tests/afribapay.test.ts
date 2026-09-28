@@ -5,6 +5,7 @@ import {
   AFRIBAPAY_MAX_PAYIN_AMOUNT,
   AFRIBAPAY_MIN_PAYIN_AMOUNT,
   classifyAfribaPayoutStatus,
+  combineAfribaPayPayinStatuses,
   isRetryableAfribaOtpRejection,
   parseAfribaPayWebhook,
   validateAfribaPayinAmount,
@@ -52,6 +53,14 @@ test("AfribaPay payout HTTP 404 and NOT_FOUND are non-final", () => {
   assert.equal(classifyAfribaPayoutStatus(200, "NOT_FOUND"), "pending");
   assert.equal(classifyAfribaPayoutStatus(200, "FAILED"), "failed");
   assert.equal(classifyAfribaPayoutStatus(200, "SUCCESS"), "completed");
+});
+
+test("AfribaPay payin status checks combine provider and AshTech references safely", () => {
+  assert.equal(combineAfribaPayPayinStatuses("completed", "completed"), "completed");
+  assert.equal(combineAfribaPayPayinStatuses("failed", "failed"), "failed");
+  assert.equal(combineAfribaPayPayinStatuses("completed", "pending"), "completed");
+  assert.equal(combineAfribaPayPayinStatuses("pending", "failed"), "failed");
+  assert.equal(combineAfribaPayPayinStatuses("completed", "failed"), "pending");
 });
 
 test("AfribaPay payin amount validation uses the conservative documented range", () => {

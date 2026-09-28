@@ -617,6 +617,17 @@ export async function checkAfribaPayStatus(
   }
 }
 
+export function combineAfribaPayPayinStatuses(
+  transactionIdStatus: "completed" | "failed" | "pending",
+  orderIdStatus: "completed" | "failed" | "pending",
+): "completed" | "failed" | "pending" {
+  if (transactionIdStatus === orderIdStatus) return transactionIdStatus;
+  if (transactionIdStatus === "pending") return orderIdStatus;
+  if (orderIdStatus === "pending") return transactionIdStatus;
+  // Conflicting terminal reports must not settle or fail a payment.
+  return "pending";
+}
+
 export function classifyAfribaPayoutStatus(
   httpStatus: number,
   providerStatus: string | undefined,

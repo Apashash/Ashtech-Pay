@@ -1,5 +1,5 @@
 import { storage } from "./storage";
-import { checkAfribaPayStatus, isAfribaPayCircuitOpen, isAfribaPayConfigured } from "./afribapay";
+import { checkAfribaPayStatus, combineAfribaPayPayinStatuses, isAfribaPayCircuitOpen, isAfribaPayConfigured } from "./afribapay";
 import { checkPixPayStatus } from "./pixpay";
 import { getPawaPayDeposit, isPawaPayUuidV4 } from "./pawapay";
 import { creditUserWallet } from "./walletHelper";
@@ -119,8 +119,31 @@ async function checkPaymentStatus(payment: PendingPayment): Promise<"pending" | 
       // If AfribaPay circuit is open (subscription invalid), don't make any HTTP calls.
       // Return "pending" — the normal timeout logic will auto-fail the transaction after 7 min.
       if (isAfribaPayCircuitOpen()) return "pending";
-      // Always query by order_id = our ASHPAY-DEP-... reference (what we sent to AfribaPay as order_id).
-      // externalReference = AfribaPay's transaction_id (PIM...) — do NOT use it for status query.
+      const providerReference = payment.externalReference?.trim();
+      if (providerReference && providerReference !== payment.reference) {
+        // Query AfribaPay with its PIM transaction_id as well as the original
+        // AshTech order_id. Keep the order_id check for compatibility; when
+        // both return conflicting terminal states, leave the transaction pending.
+        const [providerResult, orderResult] = await Promise.all([
+          checkAfribaPayStatus(providerReference, "transaction_id"),
+          checkAfribaPayStatus(payment.reference, "order_id"),
+        ]);
+        if (
+          providerResult.status !== "pending" &&
+          orderResult.status !== "pending" &&
+          providerResult.status !== orderResult.status
+        ) {
+          console.warn(
+            `[PaymentPoller] AfribaPay reference mismatch for ${payment.reference}: transaction_id=${providerResult.status}, order_id=${orderResult.status}; keeping pending`,
+          );
+        }
+        const status = combineAfribaPayPayinStatuses(providerResult.status, orderResult.status);
+        console.log(
+          `[PaymentPoller] AfribaPay status for ${payment.reference}: transaction_id=${providerResult.status}, order_id=${orderResult.status}, resolved=${status}`,
+        );
+        return status;
+      }
+
       const result = await checkAfribaPayStatus(payment.reference, "order_id");
       console.log(`[PaymentPoller] AfribaPay status for ${payment.reference}: ${result.status}`, result.raw?.data?.status || "");
       return result.status;
