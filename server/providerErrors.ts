@@ -104,7 +104,7 @@ export function sanitizeProviderMessage(message: string | null | undefined, sens
   // but preserve the rest of the useful upstream diagnostic.
   safeMessage = safeMessage.replace(
     /\b(?:Afriba\s*Pay|Pix\s*Pay|Pawa\s*Pay|Izi\s*Change)\b/gi,
-    "le service de paiement",
+    "le fournisseur de paiement",
   );
 
   // E-mail addresses are not needed to diagnose a payment failure.

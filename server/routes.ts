@@ -2111,7 +2111,7 @@ async function revokeOtherSessionsForSingleDevice(userId: string): Promise<void>
 }
 
 // Charge les révocations de tokens depuis la DB au démarrage pour les restaurer en mémoire
-async function loadTokenRevocationsFromDb(): Promise<void> {
+export async function loadTokenRevocationsFromDb(): Promise<void> {
   try {
     const result = await db.execute(
       drizzleSql`SELECT id, token_revoked_before FROM users WHERE token_revoked_before IS NOT NULL AND token_revoked_before > 0`
@@ -2318,12 +2318,6 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  // Restaurer les révocations de tokens depuis la DB sans bloquer l'ouverture
-  // des routes. Sur Plesk/Supavisor, une requête de restauration peut attendre
-  // une connexion alors que le serveur est déjà capable de servir la page.
-  // La carte est hydratée dès que la DB répond ; le démarrage HTTP reste rapide.
-  void loadTokenRevocationsFromDb();
-
   // ── Filet de sécurité global : aucune réponse non-admin ne doit contenir
   //    un nom de fournisseur interne (AfribaPay/PixPay), même en cas d'erreur
   //    imprévue. Purge les champs texte "message" / "error" juste avant l'envoi.

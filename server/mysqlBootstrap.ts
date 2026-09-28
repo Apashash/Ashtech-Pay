@@ -1,7 +1,7 @@
 import { pool } from "./db";
 
 const MYSQL_AUXILIARY_SCHEMA_NAME = "mysql-runtime-auxiliary";
-const MYSQL_AUXILIARY_SCHEMA_VERSION = "2026-09-28-api-idempotency-otp-v1";
+const MYSQL_AUXILIARY_SCHEMA_VERSION = "2026-09-28-api-idempotency-otp-v2";
 
 const KYC_DOCUMENTS_TABLE_SQL = `CREATE TABLE IF NOT EXISTS kyc_documents (
   id VARCHAR(191) NOT NULL PRIMARY KEY,
@@ -89,6 +89,7 @@ export async function ensureMysqlAuxiliarySchema(): Promise<void> {
     ) ENGINE=InnoDB`,
     `ALTER TABLE api_otp_sessions ADD COLUMN IF NOT EXISTS claimed_by VARCHAR(191) NULL`,
     `ALTER TABLE api_otp_sessions ADD COLUMN IF NOT EXISTS claimed_until DATETIME(3) NULL`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS token_revoked_before BIGINT DEFAULT 0`,
     `ALTER TABLE transactions ADD COLUMN IF NOT EXISTS merchant_reference VARCHAR(191) NULL`,
     `CREATE TABLE IF NOT EXISTS merchant_webhook_deliveries (
       id VARCHAR(191) NOT NULL PRIMARY KEY,

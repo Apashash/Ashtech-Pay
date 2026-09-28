@@ -587,7 +587,7 @@ app.use((req, res, next) => {
   const { db } = await import("./db");
   const { sql } = await import("drizzle-orm");
   const { botGuard, hydrateBotBans } = await import("./botGuard");
-  const { registerRoutes } = await import("./routes");
+  const { registerRoutes, loadTokenRevocationsFromDb } = await import("./routes");
   const { serveStatic } = await import("./static");
   const { startPaymentPoller, recoverPendingDeposits } = await import("./paymentPoller");
   const { startPayoutPoller, recoverPendingPayouts } = await import("./payoutPoller");
@@ -1338,7 +1338,11 @@ app.use((req, res, next) => {
   startupStage = "ready";
   log(`serving on port ${port}; database migrations continue in background`);
   migrationPromise
-    .then(() => {
+    .then(async () => {
+      // Load persisted token revocations only after the dialect-specific schema
+      // migration has created the column. Routes stay behind the startup gate
+      // until this best-effort hydration completes.
+      await loadTokenRevocationsFromDb();
       migrationsReady = true;
       migrationStatus = "ready";
       migrationStage = "complete";
