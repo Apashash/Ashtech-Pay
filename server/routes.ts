@@ -2552,7 +2552,8 @@ export async function registerRoutes(
     next();
   });
 
-  // Platform maintenance must stop public checkout and external merchant API
+  // Platform maintenance must stop public checkout, user deposit operations,
+  // and external merchant API
   // traffic at the server boundary; frontend-only blocking is not sufficient.
   // Payment-provider webhooks and admin settings remain available.
   app.use(async (req, res, next) => {

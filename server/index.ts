@@ -38,6 +38,7 @@ import { isSpaRoute } from "./spaRoutes";
 import { createServer } from "http";
 import { encryptField, hmacField } from "./fieldEncryption";
 import { formatDebugError, shouldExposeDebugErrors } from "./errorDiagnostics";
+import { normalizeServiceMaintenancePayload } from "./platformMaintenance";
 
 const app = express();
 const httpServer = createServer(app);
@@ -511,7 +512,10 @@ app.use((req, res, next) => {
             bodyJson.code === "KYC_SUBMISSION_FAILED"
           )
         );
-      const sanitized = isCryptoApi || isSafeProviderFailure || isAdminPendingPayoutFailure
+      const maintenancePayload = normalizeServiceMaintenancePayload(bodyJson);
+      const sanitized = maintenancePayload
+        ? maintenancePayload
+        : isCryptoApi || isSafeProviderFailure || isAdminPendingPayoutFailure
         ? {
             ...(typeof bodyJson.error === "string" ? { error: bodyJson.error } : { error: "server_error" }),
             ...(typeof bodyJson.message === "string" ? { message: bodyJson.message } : {}),

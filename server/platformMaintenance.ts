@@ -4,6 +4,7 @@ const HTML_CHECKOUT_PATH = /^\/(?:pay|hpay|checkout)\/[^/]+\/?$/;
 const API_PREFIXES = [
   "/v1",
   "/api/v1",
+  "/api/deposits",
   "/api/payment-links/public",
   "/api/public/hosted-session",
   "/api/checkout",
@@ -23,6 +24,29 @@ export function getMaintenanceResponseKind(pathname: string): MaintenanceRespons
 
 export const SERVICE_MAINTENANCE_MESSAGE =
   "Service en maintenance. Veuillez réessayer dans quelques instants.";
+
+export function normalizeServiceMaintenancePayload(body: unknown): {
+  error: "service_maintenance";
+  code: "SERVICE_MAINTENANCE";
+  message: string;
+} | null {
+  if (!body || typeof body !== "object") return null;
+  const payload = body as Record<string, unknown>;
+  if (
+    payload.error !== "service_maintenance" ||
+    payload.code !== "SERVICE_MAINTENANCE"
+  ) {
+    return null;
+  }
+
+  // Return a fixed message rather than trusting arbitrary contents from a
+  // response body that happens to use the maintenance error code.
+  return {
+    error: "service_maintenance",
+    code: "SERVICE_MAINTENANCE",
+    message: SERVICE_MAINTENANCE_MESSAGE,
+  };
+}
 
 export const SERVICE_MAINTENANCE_HTML = `<!doctype html>
 <html lang="fr">
