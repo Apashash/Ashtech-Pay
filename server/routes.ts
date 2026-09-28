@@ -111,6 +111,11 @@ import {
 import { enqueueMerchantWebhook } from "./merchantWebhook";
 import { buildProviderErrorPayload, sanitizeProviderMessage } from "./providerErrors";
 import { buildPublicPaymentStatus } from "./publicPaymentState";
+import {
+  getMaintenanceResponseKind,
+  SERVICE_MAINTENANCE_HTML,
+  SERVICE_MAINTENANCE_MESSAGE,
+} from "./platformMaintenance";
 import { buildPawaPayFeeUpdates } from "./feeUpdates";
 import {
   getAfribaPayPayoutPhone,
@@ -2545,6 +2550,32 @@ export async function registerRoutes(
       return res.status(403).json({ message: "Requête invalide (origine non autorisée)" });
     }
     next();
+  });
+
+  // Platform maintenance must stop public checkout and external merchant API
+  // traffic at the server boundary; frontend-only blocking is not sufficient.
+  // Payment-provider webhooks and admin settings remain available.
+  app.use(async (req, res, next) => {
+    const responseKind = getMaintenanceResponseKind(req.path);
+    if (!responseKind) return next();
+
+    try {
+      const setting = await storage.getSetting("maintenance_mode");
+      if (setting?.value !== "true") return next();
+    } catch (error: any) {
+      console.error("[Maintenance] Could not read maintenance_mode:", error?.message || error);
+      return next();
+    }
+
+    res.setHeader("Cache-Control", "no-store");
+    if (responseKind === "json") {
+      return res.status(503).json({
+        error: "service_maintenance",
+        code: "SERVICE_MAINTENANCE",
+        message: SERVICE_MAINTENANCE_MESSAGE,
+      });
+    }
+    return res.status(503).type("html").send(SERVICE_MAINTENANCE_HTML);
   });
 
   // Session middleware
