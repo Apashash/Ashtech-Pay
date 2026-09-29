@@ -180,21 +180,19 @@ export default function GlobalMessagePage() {
                 : "bg-gradient-to-r from-purple-600 via-violet-500 to-blue-500"
             }`} />
             <div className="space-y-6 p-5 sm:p-7 lg:p-8">
-              <div className="flex items-start gap-4">
-                <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
-                  isKycUpdate ? "bg-amber-500/10 text-amber-600" : "bg-purple-500/10 text-purple-600"
-                }`}>
-                  {isKycUpdate ? <Shield className="h-5 w-5" /> : <Megaphone className="h-5 w-5" />}
-                </div>
+              <div className={`flex items-start ${isKycUpdate ? "gap-4" : ""}`}>
+                {isKycUpdate && (
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600">
+                    <Shield className="h-5 w-5" />
+                  </div>
+                )}
                 <div className="min-w-0 flex-1 pt-0.5">
-                  <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider ${
-                    isKycUpdate
-                      ? "bg-amber-500/10 text-amber-700"
-                      : "bg-purple-500/10 text-purple-700"
-                  }`}>
-                    {isKycUpdate ? gm.actionRequired : gm.officialBadge}
-                  </span>
-                  <h2 className="mt-3 break-words text-xl font-semibold leading-snug tracking-tight text-foreground sm:text-2xl">
+                  {isKycUpdate && (
+                    <span className="inline-flex rounded-full bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-amber-700">
+                      {gm.actionRequired}
+                    </span>
+                  )}
+                  <h2 className={`${isKycUpdate ? "mt-3" : ""} break-words text-xl font-semibold leading-snug tracking-tight text-foreground sm:text-2xl`}>
                     {displayedItem.title}
                   </h2>
                 </div>
@@ -215,18 +213,15 @@ export default function GlobalMessagePage() {
 
               <footer className="flex flex-col gap-4 border-t border-border/70 pt-5 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3">
-                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
-                    isKycUpdate ? "bg-amber-500/10 text-amber-600" : "bg-purple-500/10 text-purple-600"
-                  }`}>
-                    {isKycUpdate ? <Shield className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
-                  </div>
+                  {isKycUpdate && (
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-500/10 text-amber-600">
+                      <Shield className="h-4 w-4" />
+                    </div>
+                  )}
                   <div>
                     <p className="text-sm font-semibold text-foreground">
                       {isKycUpdate ? gm.kycSignature : gm.team}
                     </p>
-                    {!isKycUpdate && (
-                      <p className="text-xs text-muted-foreground">{gm.officialBadge}</p>
-                    )}
                   </div>
                 </div>
 
