@@ -154,9 +154,11 @@ export default function GlobalMessagePage() {
               <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
                 {isKycUpdate ? gm.kycPageTitle : gm.pageTitle}
               </h1>
-              <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                {isKycUpdate ? gm.kycPageSubtitle : gm.pageSubtitle}
-              </p>
+              {isKycUpdate && (
+                <p className="mt-1 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+                  {gm.kycPageSubtitle}
+                </p>
+              )}
             </div>
           </div>
           {!isKycUpdate && sortedMessages.length > 0 && (
