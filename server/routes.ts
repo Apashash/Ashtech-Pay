@@ -5794,6 +5794,12 @@ export async function registerRoutes(
       const userId = req.userId!;
       const user = await storage.getUser(userId);
       if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
+      if (user.withdrawalBlocked) {
+        return res.status(403).json({
+          message: user.withdrawalBlockReason || "Votre compte a été restreint. Contactez le support.",
+          code: "WITHDRAWAL_BLOCKED",
+        });
+      }
 
       const lockRemaining = await getOtpOpLockRemaining(userId);
       if (lockRemaining > 0) {
@@ -5920,10 +5926,19 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Pays non trouvé" });
       }
       if (country.isActiveForTransfer === false) {
-        return res.status(400).json({ message: "Ce pays n'est pas disponible pour les transferts." });
+        return res.status(400).json({
+          message: "Ce pays n'est pas disponible pour les transferts.",
+          code: "OPERATION_DISABLED_BY_ADMIN",
+        });
       }
-      if (operator.countryId !== country.id || !operator.isActive || operator.isInMaintenance) {
+      if (operator.countryId !== country.id) {
         return res.status(400).json({ message: "Opérateur invalide pour le pays sélectionné." });
+      }
+      if (!operator.isActive || operator.isInMaintenance) {
+        return res.status(400).json({
+          message: OPERATOR_DISABLED_BY_ADMIN_MESSAGE,
+          code: "OPERATOR_DISABLED_BY_ADMIN",
+        });
       }
 
       const phoneValidationError = validateMobileMoneyPhone(
@@ -6552,11 +6567,19 @@ export async function registerRoutes(
 
       if (data.paymentMethod === "mobile_money") {
         if (!depositCountry || depositCountry.isActiveForDeposit === false) {
-          return res.status(400).json({ message: "Ce pays n'est pas disponible pour les dépôts." });
+          return res.status(400).json({
+            message: "Ce pays n'est pas disponible pour les dépôts.",
+            code: "OPERATION_DISABLED_BY_ADMIN",
+          });
         }
-        if (!operatorRecord || operatorRecord.countryId !== depositCountry.id ||
-            !operatorRecord.isActive || operatorRecord.isInMaintenance) {
+        if (!operatorRecord || operatorRecord.countryId !== depositCountry.id) {
           return res.status(400).json({ message: "Opérateur invalide pour le pays sélectionné." });
+        }
+        if (!operatorRecord.isActive || operatorRecord.isInMaintenance) {
+          return res.status(400).json({
+            message: OPERATOR_DISABLED_BY_ADMIN_MESSAGE,
+            code: "OPERATOR_DISABLED_BY_ADMIN",
+          });
         }
         const allFees = await storage.getAllFees();
         if (isOperatorDisabledByFee(allFees, operatorRecord.id, "deposit")) {
@@ -7125,6 +7148,12 @@ export async function registerRoutes(
       const userId = req.userId!;
       const user = await storage.getUser(userId);
       if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
+      if (user.withdrawalBlocked) {
+        return res.status(403).json({
+          message: user.withdrawalBlockReason || "Votre compte a été restreint. Contactez le support.",
+          code: "WITHDRAWAL_BLOCKED",
+        });
+      }
 
       const lockRemaining = await getOtpOpLockRemaining(userId);
       if (lockRemaining > 0) {
@@ -7229,7 +7258,10 @@ export async function registerRoutes(
       // Resolve country info for currency and country code
       const withdrawalCountry = await storage.getCountry(data.countryId);
       if (!withdrawalCountry || withdrawalCountry.isActiveForWithdrawal === false) {
-        return res.status(400).json({ message: "Ce pays n'est pas disponible pour les retraits." });
+        return res.status(400).json({
+          message: "Ce pays n'est pas disponible pour les retraits.",
+          code: "OPERATION_DISABLED_BY_ADMIN",
+        });
       }
       const withdrawalCountryCode = withdrawalCountry.code.toUpperCase();
       // Use CURRENCY_ZONE for the internal wallet code (XOFN for NE, XOFM for ML, XOFT for TG, etc.)
@@ -7248,11 +7280,14 @@ export async function registerRoutes(
 
       // Fetch operator early to determine provider before fee calculation
       const withdrawalOperator = await storage.getOperator(data.operatorId);
-      if (!withdrawalOperator ||
-          withdrawalOperator.countryId !== withdrawalCountry.id ||
-          !withdrawalOperator.isActive ||
-          withdrawalOperator.isInMaintenance) {
+      if (!withdrawalOperator || withdrawalOperator.countryId !== withdrawalCountry.id) {
         return res.status(400).json({ message: "Opérateur invalide pour le pays sélectionné." });
+      }
+      if (!withdrawalOperator.isActive || withdrawalOperator.isInMaintenance) {
+        return res.status(400).json({
+          message: OPERATOR_DISABLED_BY_ADMIN_MESSAGE,
+          code: "OPERATOR_DISABLED_BY_ADMIN",
+        });
       }
       const allFees = await storage.getAllFees();
       if (isOperatorDisabledByFee(allFees, withdrawalOperator.id, "withdrawal")) {
@@ -9457,8 +9492,11 @@ export async function registerRoutes(
       if (!(user as any).isVerified) {
         return res.status(403).json({ message: "Votre compte doit être vérifié avant un retrait crypto." });
       }
-      if ((user as any).withdrawalBlockReason) {
-        return res.status(403).json({ message: (user as any).withdrawalBlockReason });
+      if ((user as any).withdrawalBlocked) {
+        return res.status(403).json({
+          message: (user as any).withdrawalBlockReason || "Votre compte a été restreint. Contactez le support.",
+          code: "WITHDRAWAL_BLOCKED",
+        });
       }
 
       const flow = req.body?.flow === "send" ? "send" : req.body?.flow === "withdrawal" ? "withdrawal" : "";

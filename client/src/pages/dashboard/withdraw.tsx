@@ -20,6 +20,7 @@ import { z } from "zod";
 import { useState, useEffect } from "react";
 import { formatCurrency } from "@/lib/currency";
 import { Link, useLocation } from "wouter";
+import { isAdminBlockedOperationError } from "@/lib/operation-errors";
 
 interface OperatorConfig {
   id: string;
@@ -316,7 +317,7 @@ export default function WithdrawPage() {
         setShowLockedDialog(true);
         return;
       }
-      toast({ title: "Erreur", description: error.message, variant: "destructive" });
+      toast({ title: isAdminBlockedOperationError(error) ? t.withdraw.blockedTitle : "Erreur", description: error.message, variant: "destructive" });
     },
   });
 
@@ -359,7 +360,7 @@ export default function WithdrawPage() {
         setShowCooldownDialog(true);
         return;
       }
-      toast({ title: "Erreur", description: error.message, variant: "destructive" });
+      toast({ title: isAdminBlockedOperationError(error) ? t.withdraw.blockedTitle : "Erreur", description: error.message, variant: "destructive" });
     },
   });
 

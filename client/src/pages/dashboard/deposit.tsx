@@ -23,6 +23,7 @@ import { CoinSelect } from "@/components/ui/coin-select";
 import { cryptoQrPayload } from "@/lib/crypto-qr";
 import { formatCryptoAmount, minimumCryptoAmount } from "@/lib/crypto-minimum";
 import { getPawaPayPinInstructions } from "@/lib/pawapay-instructions";
+import { isAdminBlockedOperationError } from "@/lib/operation-errors";
 
 interface OperatorConfig {
   id: string;
@@ -350,7 +351,7 @@ export default function DepositPage() {
         startDepositPolling(ref);
       }
     },
-    onError: (error: Error & { provider_code?: unknown; provider_status?: unknown }) => {
+    onError: (error: Error & { code?: string; provider_code?: unknown; provider_status?: unknown }) => {
       const authError = error as Error & { error?: string; pawaPayAuth?: any };
       if (authError.error === "pawa_preauthorisation_required") {
         setShowValidationMessage(true);
@@ -365,7 +366,7 @@ export default function DepositPage() {
           : "",
       ].filter(Boolean);
       toast({
-        title: t.deposit.toastError,
+        title: isAdminBlockedOperationError(error) ? t.deposit.blockedTitle : t.deposit.toastError,
         description: [error.message, diagnostics.join(" · ")].filter(Boolean).join("\n"),
         variant: "destructive",
       });
@@ -452,8 +453,8 @@ export default function DepositPage() {
         });
       }, 1000);
     },
-    onError: (error: Error) => {
-      toast({ title: "Erreur", description: error.message, variant: "destructive" });
+    onError: (error: Error & { code?: string }) => {
+      toast({ title: isAdminBlockedOperationError(error) ? t.deposit.blockedTitle : "Erreur", description: error.message, variant: "destructive" });
     },
   });
 

@@ -22,6 +22,7 @@ import { useMemo, useEffect, useState, useCallback } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useLocation } from "wouter";
 import { validateMobileMoneyPhone } from "@shared/mobile-money-phone";
+import { isAdminBlockedOperationError } from "@/lib/operation-errors";
 
 const INTERNAL_KEY = "__ashtech_interne__";
 
@@ -390,7 +391,7 @@ export default function SendMoneyPage() {
         setShowLockedDialog(true);
         return;
       }
-      toast({ title: "Erreur", description: error.message, variant: "destructive" });
+      toast({ title: isAdminBlockedOperationError(error) ? t.send.blockedTitle : "Erreur", description: error.message, variant: "destructive" });
     },
   });
 
@@ -439,7 +440,7 @@ export default function SendMoneyPage() {
         setShowCooldownDialog(true);
         return;
       }
-      toast({ title: "Erreur", description: error.message, variant: "destructive" });
+      toast({ title: isAdminBlockedOperationError(error) ? t.send.blockedTitle : "Erreur", description: error.message, variant: "destructive" });
     },
   });
 
@@ -485,7 +486,7 @@ export default function SendMoneyPage() {
         setShowCooldownDialog(true);
         return;
       }
-      toast({ title: "Erreur", description: error.message, variant: "destructive" });
+      toast({ title: isAdminBlockedOperationError(error) ? t.send.blockedTitle : "Erreur", description: error.message, variant: "destructive" });
     },
   });
 

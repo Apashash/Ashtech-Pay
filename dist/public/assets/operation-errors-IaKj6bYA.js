@@ -1,0 +1,1 @@
+const A=new Set(["WITHDRAWAL_BLOCKED","OPERATOR_DISABLED_BY_ADMIN","OPERATION_DISABLED_BY_ADMIN"]);function D(t){if(!t||typeof t!="object")return!1;const e=t.code;return typeof e=="string"&&A.has(e)}export{D as i};

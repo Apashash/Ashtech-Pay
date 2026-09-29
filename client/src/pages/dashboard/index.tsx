@@ -48,6 +48,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { useLanguage } from "@/lib/language";
 import { getAdminPath } from "@/lib/adminPath";
 import { getOperatorDisplayName } from "@/lib/operator-logos";
+import { isAdminBlockedOperationError } from "@/lib/operation-errors";
 import {
   getTransactionStatusCategory,
   isTransactionCompletedStatus,
@@ -156,6 +157,7 @@ const INTERNAL_TRANSFER_KEY = "__ashtech_interne__";
 
 function SendMoneyDialog({ open, onClose, wallets = [] }: { open: boolean; onClose: () => void, wallets?: WalletEntry[] }) {
   const { toast } = useToast();
+  const { t } = useLanguage();
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const primaryCurrency = user?.preferredCurrency || "XAF";
   const [selectedWallet, setSelectedWallet] = useState<string>(primaryCurrency);
@@ -193,8 +195,8 @@ function SendMoneyDialog({ open, onClose, wallets = [] }: { open: boolean; onClo
       reset();
       onClose();
     },
-    onError: (error: Error) => {
-      toast({ title: "Erreur", description: error.message, variant: "destructive" });
+    onError: (error: Error & { code?: string }) => {
+      toast({ title: isAdminBlockedOperationError(error) ? t.send.blockedTitle : "Erreur", description: error.message, variant: "destructive" });
     },
   });
 
@@ -220,8 +222,8 @@ function SendMoneyDialog({ open, onClose, wallets = [] }: { open: boolean; onClo
       reset();
       onClose();
     },
-    onError: (error: Error) => {
-      toast({ title: "Erreur", description: error.message, variant: "destructive" });
+    onError: (error: Error & { code?: string }) => {
+      toast({ title: isAdminBlockedOperationError(error) ? t.send.blockedTitle : "Erreur", description: error.message, variant: "destructive" });
     },
   });
 
@@ -325,6 +327,7 @@ function SendMoneyDialog({ open, onClose, wallets = [] }: { open: boolean; onClo
 
 function DepositDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { toast } = useToast();
+  const { t } = useLanguage();
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const form = useForm<z.infer<typeof depositSchema>>({
     resolver: zodResolver(depositSchema),
@@ -343,8 +346,8 @@ function DepositDialog({ open, onClose }: { open: boolean; onClose: () => void }
       form.reset();
       onClose();
     },
-    onError: (error: Error) => {
-      toast({ title: "Erreur", description: error.message, variant: "destructive" });
+    onError: (error: Error & { code?: string }) => {
+      toast({ title: isAdminBlockedOperationError(error) ? t.deposit.blockedTitle : "Erreur", description: error.message, variant: "destructive" });
     },
   });
 
@@ -392,6 +395,7 @@ function DepositDialog({ open, onClose }: { open: boolean; onClose: () => void }
 
 function WithdrawDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { toast } = useToast();
+  const { t } = useLanguage();
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const form = useForm<z.infer<typeof withdrawSchema>>({
     resolver: zodResolver(withdrawSchema),
@@ -410,8 +414,8 @@ function WithdrawDialog({ open, onClose }: { open: boolean; onClose: () => void 
       form.reset();
       onClose();
     },
-    onError: (error: Error) => {
-      toast({ title: "Erreur", description: error.message, variant: "destructive" });
+    onError: (error: Error & { code?: string }) => {
+      toast({ title: isAdminBlockedOperationError(error) ? t.withdraw.blockedTitle : "Erreur", description: error.message, variant: "destructive" });
     },
   });
 

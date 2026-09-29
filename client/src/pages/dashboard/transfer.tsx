@@ -14,9 +14,12 @@ import { Send, User as UserIcon, Loader2, ArrowRight, Shield } from "lucide-reac
 import { z } from "zod";
 import { formatCurrency } from "@/lib/currency";
 import { useLocation } from "wouter";
+import { useLanguage } from "@/lib/language";
+import { isAdminBlockedOperationError } from "@/lib/operation-errors";
 
 export default function TransferPage() {
   const { toast } = useToast();
+  const { t } = useLanguage();
   
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const balance = parseFloat(user?.balance || "0");
@@ -37,8 +40,8 @@ export default function TransferPage() {
       toast({ title: "Transfert effectué", description: "L'argent a été envoyé avec succès" });
       form.reset();
     },
-    onError: (error: Error) => {
-      toast({ title: "Erreur", description: error.message, variant: "destructive" });
+    onError: (error: Error & { code?: string }) => {
+      toast({ title: isAdminBlockedOperationError(error) ? t.send.blockedTitle : "Erreur", description: error.message, variant: "destructive" });
     },
   });
 

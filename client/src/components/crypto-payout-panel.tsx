@@ -16,6 +16,8 @@ import {
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { CryptoNetworkLogo } from "@/components/crypto-network-logo";
+import { useLanguage } from "@/lib/language";
+import { isAdminBlockedOperationError } from "@/lib/operation-errors";
 
 type CryptoPayoutFlow = "withdrawal" | "send";
 
@@ -81,6 +83,7 @@ function networkIdForAssetCode(assetCode: string, networks: CryptoNetwork[]): st
 
 export function CryptoPayoutPanel({ flow, onBack, embedded = false, showBalance = true, amount: controlledAmount, onAmountChange, onSuccess }: Props) {
   const { toast } = useToast();
+  const { t } = useLanguage();
   const [assetCode, setAssetCode] = useState("USDT.TRC20");
   const [localAmount, setLocalAmount] = useState("");
   const amount = controlledAmount ?? localAmount;
@@ -248,7 +251,13 @@ export function CryptoPayoutPanel({ flow, onBack, embedded = false, showBalance 
         ),
       });
     },
-    onError: (error: Error) => toast({ title: "Échec de l’envoi", description: error.message, variant: "destructive" }),
+    onError: (error: Error & { code?: string }) => toast({
+      title: isAdminBlockedOperationError(error)
+        ? (flow === "withdrawal" ? t.withdraw.blockedTitle : t.send.blockedTitle)
+        : "Échec de l’envoi",
+      description: error.message,
+      variant: "destructive",
+    }),
   });
 
   const requestOtp = async () => {
@@ -294,7 +303,13 @@ export function CryptoPayoutPanel({ flow, onBack, embedded = false, showBalance 
     try {
       await requestOtp();
     } catch (error: any) {
-      toast({ title: "Vérification impossible", description: error.message, variant: "destructive" });
+      toast({
+        title: isAdminBlockedOperationError(error)
+          ? (flow === "withdrawal" ? t.withdraw.blockedTitle : t.send.blockedTitle)
+          : "Vérification impossible",
+        description: error.message,
+        variant: "destructive",
+      });
     }
   };
 

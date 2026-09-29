@@ -389,6 +389,7 @@ const translations = {
     deposit: {
       title: "Recharger mon compte",
       subtitle: "Ajoutez de l'argent à votre portefeuille via Mobile Money",
+      blockedTitle: "Dépôt bloqué",
       currentBalance: "Solde actuel",
       noCountry: "Aucun pays ou opérateur n'est actuellement disponible. Veuillez réessayer plus tard.",
       sectionLabel: "Dépôt Mobile Money",
@@ -482,6 +483,7 @@ const translations = {
     withdraw: {
       title: "Retirer de l'argent",
       subtitle: "Retirez vos fonds vers votre compte",
+      blockedTitle: "Retrait bloqué",
       mainBalance: "Solde compte principal",
       insufficientBalance: "Solde insuffisant. Minimum :",
       unverifiedTitle: "Compte non vérifié",
@@ -537,6 +539,7 @@ const translations = {
     send: {
       title: "Envoyer de l'argent",
       subtitle: "Transfert instantané ou via Mobile Money",
+      blockedTitle: "Transfert bloqué",
       subtitleUnverified: "Envoyez de l'argent à un destinataire",
       unverifiedTitle: "Compte non vérifié",
       unverifiedDesc: "Pour envoyer de l'argent, vous devez d'abord vérifier votre compte.",
@@ -1836,6 +1839,7 @@ const translations = {
     deposit: {
       title: "Top up my account",
       subtitle: "Add money to your wallet via Mobile Money",
+      blockedTitle: "Deposit blocked",
       currentBalance: "Current balance",
       noCountry: "No country or operator is currently available. Please try again later.",
       sectionLabel: "Mobile Money Deposit",
@@ -1923,6 +1927,7 @@ const translations = {
     withdraw: {
       title: "Withdraw money",
       subtitle: "Withdraw your funds to your account",
+      blockedTitle: "Withdrawal blocked",
       mainBalance: "Main account balance",
       insufficientBalance: "Insufficient balance. Minimum:",
       unverifiedTitle: "Account not verified",
@@ -1973,6 +1978,7 @@ const translations = {
     send: {
       title: "Send money",
       subtitle: "Instant transfer or via Mobile Money",
+      blockedTitle: "Transfer blocked",
       subtitleUnverified: "Send money to a recipient",
       unverifiedTitle: "Account not verified",
       unverifiedDesc: "To send money, you must first verify your account.",
