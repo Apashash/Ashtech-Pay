@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import {
   ChevronLeft, ChevronRight, CheckCheck, Trash2, ArrowDownCircle,
-  ArrowUpCircle, Send, Megaphone, MessageSquare, ShieldCheck, Clock3, X, Loader2, ExternalLink,
+  ArrowUpCircle, Send, MessageSquare, ShieldCheck, Clock3, X, Loader2, ExternalLink,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/dashboard-layout";
 import { GlobalMessageIcon } from "@/components/global-message-icon";

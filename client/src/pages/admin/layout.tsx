@@ -1,5 +1,6 @@
 import { getAdminPath } from "@/lib/adminPath";
 import { AdminPinProvider } from "@/hooks/use-admin-pin";
+import { GlobalMessageIcon } from "@/components/global-message-icon";
 import { useState, useEffect, useRef, useLayoutEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -126,7 +127,7 @@ const menuItems: MenuItem[] = [
   { icon: Mail, label: "Campagnes Email", href: `${ADMIN}/email-campaigns` },
   { icon: Code2, label: "Gestion des API", href: `${ADMIN}/api-management` },
   { icon: Link2, label: "Liens de paiement", href: `${ADMIN}/links` },
-  { icon: MessageSquare, label: "Message Global", href: `${ADMIN}/global-messages` },
+  { icon: GlobalMessageIcon, label: "Message Global", href: `${ADMIN}/global-messages` },
   { icon: MessageSquare, label: "Support", href: `${ADMIN}/support` },
   { icon: ShieldBan, label: "IPs Bloquées", href: `${ADMIN}/blocked-ips` },
   { icon: Shield, label: "Logs & Sécurité", href: `${ADMIN}/logs` },

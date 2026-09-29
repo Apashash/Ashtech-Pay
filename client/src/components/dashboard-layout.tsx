@@ -50,7 +50,6 @@ import {
   Coins,
   RefreshCw,
   Receipt,
-  Megaphone,
   Phone,
   Wrench,
 } from "lucide-react";
