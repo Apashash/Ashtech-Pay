@@ -59,6 +59,7 @@ import { MySqlSessionStore } from "./mysqlSessionStore";
 import { wrapSessionStoreWithTokenDedup } from "./tokenDeduplicatingSessionStore";
 import { pool, db, sessionPool, poolStats } from "./db";
 import { transactions as transactionsTable, users as usersTable, wallets as walletsTable, supportTickets, ticketMessages } from "@shared/schema-runtime";
+import { getOperatorDisplayName, operatorNamesMatch } from "@shared/operator-display";
 import { and, count, desc, eq, sql, sql as drizzleSql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import multer from "multer";
@@ -279,7 +280,7 @@ function resolveAfribaPayOperatorCode(operatorRecord: any, operatorName: string)
 const PAWAPAY_ALPHA3_COUNTRIES: Record<string, string> = {
   BJ: "BEN", BF: "BFA", CD: "COD", CI: "CIV", CM: "CMR", CG: "COG", GA: "GAB",
   GH: "GHA", KE: "KEN", ML: "MLI", MW: "MWI", MZ: "MOZ", NG: "NGA", RW: "RWA",
-  SN: "SEN", TZ: "TZA", UG: "UGA", ZM: "ZMB", ET: "ETH", LS: "LSO", SL: "SLE",
+  SN: "SEN", TG: "TGO", TZ: "TZA", UG: "UGA", ZM: "ZMB", ET: "ETH", LS: "LSO", SL: "SLE",
 };
 function toPawaPayCurrency(currency: string): string {
   return /^XAF|^XOF/.test(currency.toUpperCase()) ? currency.slice(0, 3).toUpperCase() : currency.toUpperCase();
@@ -298,6 +299,7 @@ function resolvePawaPayProviderCode(operator: any, name: string, countryCode: st
   }
   const brand = name.toLowerCase();
   const country = pawaPayCountry(countryCode);
+  if (brand.includes("mixx") || /t[\s_-]?money/.test(brand)) return `TMONEY_${country}`;
   if (brand.includes("mtn")) return `MTN_MOMO_${country}`;
   if (brand.includes("orange")) return `ORANGE_${country}`;
   if (brand.includes("airtel")) return `AIRTEL_${country}`;
@@ -18132,10 +18134,10 @@ export async function registerRoutes(
             code: c.code,
             name: c.name,
              currency: normalizeApiCurrency(countryWalletCurrency(c)),
-            operators: supportedOperators.map((o: any) => o.name),
+            operators: supportedOperators.map((o: any) => getOperatorDisplayName(o.name)),
             unavailable_operators: supportedOperators
               .filter((o: any) => isOperatorDisabledByFee(allFees, o.id, "deposit"))
-              .map((o: any) => o.name),
+              .map((o: any) => getOperatorDisplayName(o.name)),
           };
         })
       );
@@ -18570,7 +18572,7 @@ export async function registerRoutes(
        const allFees = await storage.getAllFees();
        const countryOps = await storage.getOperatorsByCountry(country.id);
        const requestedOperator = countryOps.find(
-         (o: any) => o.name.toLowerCase() === operatorName.toLowerCase()
+         (o: any) => operatorNamesMatch(o.name, operatorName)
        );
        if (requestedOperator && isOperatorDisabledByFee(allFees, requestedOperator.id, "deposit")) {
          return res.status(422).json({
@@ -18581,7 +18583,7 @@ export async function registerRoutes(
        }
        const operatorRecord = countryOps.find(
          (o: any) =>
-           o.name.toLowerCase() === operatorName.toLowerCase() &&
+           operatorNamesMatch(o.name, operatorName) &&
            o.isActive &&
             !o.isInMaintenance &&
             !isOperatorDisabledByFee(allFees, o.id, "deposit")
@@ -18593,7 +18595,7 @@ export async function registerRoutes(
               !o.isInMaintenance &&
               !isOperatorDisabledByFee(allFees, o.id, "deposit")
             )
-           .map((o: any) => o.name)
+           .map((o: any) => getOperatorDisplayName(o.name))
            .join(", ");
         return res.status(422).json({
           error: "unprocessable",
@@ -18632,7 +18634,7 @@ export async function registerRoutes(
            credited_amount: sandboxCreditedAmount,
            fee_amount: sandboxFeeAmount,
            currency: expectedIso,
-           operator: operatorName,
+           operator: getOperatorDisplayName(operatorName),
            phone,
            country_code: country.code,
            message: sandboxStatusLabel(sandboxStatus),
@@ -18778,7 +18780,7 @@ export async function registerRoutes(
            credited_amount: parseFloat(String(existing.amount)),
            fee_amount: parseFloat(String(existing.feeAmount || "0")),
            currency: normalizeApiCurrency(existing.currency),
-           operator: operatorName,
+           operator: getOperatorDisplayName(operatorName),
            phone,
            country_code: country.code,
            created_at: existing.createdAt,
@@ -18952,7 +18954,7 @@ export async function registerRoutes(
           credited_amount: parseFloat(String(existingTxOtp.amount)),
           fee_amount: parseFloat(String(existingTxOtp.feeAmount || "0")),
           currency: normalizeApiCurrency(existingTxOtp.currency),
-          operator: operatorName,
+          operator: getOperatorDisplayName(operatorName),
           phone: existingTxOtp.recipientPhone,
           country_code: ctx.country,
           created_at: existingTxOtp.createdAt,
@@ -19342,7 +19344,7 @@ export async function registerRoutes(
         credited_amount: creditedAmount,
         fee_amount: ashtechFeeAmount,
         currency: normalizeApiCurrency(walletCurrency),
-        operator: operatorName,
+        operator: getOperatorDisplayName(operatorName),
         phone,
         country_code: country.code,
         created_at: (transaction as any).createdAt,
@@ -19388,7 +19390,7 @@ export async function registerRoutes(
       if ((latestTx as any).operatorId) {
         try {
           const op = await storage.getOperator((latestTx as any).operatorId);
-          if (op) operatorName = op.name;
+          if (op) operatorName = getOperatorDisplayName(op.name);
         } catch (_) { /* non-blocking */ }
       }
 
@@ -19473,7 +19475,7 @@ export async function registerRoutes(
                ? parseFloat(feeRecord.ashtechMargin ?? "2.0")
                : 2.0;
              return {
-               name: o.name,
+               name: getOperatorDisplayName(o.name),
                total_fee_pct: parseFloat((providerFee + ashtechMargin).toFixed(2)),
                provider_fee_pct: parseFloat(providerFee.toFixed(2)),
                ashtech_margin_pct: parseFloat(ashtechMargin.toFixed(2)),
@@ -19487,7 +19489,7 @@ export async function registerRoutes(
              currency: normalizeApiCurrency(countryWalletCurrency(c)),
              total_fee_pct: primaryFee.total_fee_pct,
              ashtech_margin_pct: primaryFee.ashtech_margin_pct,
-            operators: activeOps.map((o: any) => o.name),
+            operators: activeOps.map((o: any) => getOperatorDisplayName(o.name)),
              operator_fees: operatorFees,
           };
         })

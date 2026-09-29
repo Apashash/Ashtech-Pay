@@ -1,7 +1,4 @@
-export function getOperatorDisplayName(name: string | null | undefined): string {
-  const label = name?.trim() ?? "";
-  return /t[\s_-]?money/i.test(label) ? "Mixx By Yas" : label;
-}
+export { getOperatorDisplayName } from "@shared/operator-display";
 
 export function getOperatorLogo(name: string): string | null {
   const n = name.toLowerCase().trim();

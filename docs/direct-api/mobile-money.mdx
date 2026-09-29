@@ -118,13 +118,13 @@ curl_close($ch);
 | `amount` | Oui | Montant positif à collecter |
 | `currency` | Oui | Devise du pays sélectionné |
 | `country_code` | Oui | Code pays actif, par exemple `CM` |
-| `operator` | Oui | Nom exact de l'opérateur renvoyé par `/v1/countries` (par exemple `MTN Money`), sensible au catalogue actif |
+| `operator` | Oui | Nom exact de l'opérateur renvoyé par `/v1/countries` (par exemple `MTN Money` ou `Mixx By Yas`), sensible au catalogue actif |
 | `phone` | Oui | Numéro international associé au wallet |
 | `reference` | Non | Référence de votre commande (191 caractères maximum), conservée comme `merchant_reference` et utilisée pour les reprises idempotentes |
 | `notify_url` | Non | URL HTTPS de votre webhook marchand |
 
 <Warning>
-  `country_code` est obligatoire (le champ `country` n'est pas accepté). Ne déduisez pas le nom de l'opérateur à partir de la marque affichée à l'utilisateur : utilisez exactement la valeur retournée par `/v1/countries`, par exemple `MTN Money` ou `Orange Money`.
+  `country_code` est obligatoire (le champ `country` n'est pas accepté). Utilisez exactement la valeur retournée par `/v1/countries`, par exemple `MTN Money`, `Orange Money` ou `Mixx By Yas` pour Togo. Les anciens noms T-Money restent acceptés pour compatibilité.
 </Warning>
 
 ## Statut
