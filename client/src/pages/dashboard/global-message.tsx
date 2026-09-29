@@ -172,13 +172,11 @@ export default function GlobalMessagePage() {
           </div>
         ) : displayedItem ? (
           <article className={`overflow-hidden rounded-2xl border bg-card shadow-sm ${
-            isKycUpdate ? "border-amber-500/25" : "border-purple-500/20"
+            isKycUpdate ? "border-amber-500/25" : "border-border"
           }`}>
-            <div className={`h-1.5 ${
-              isKycUpdate
-                ? "bg-gradient-to-r from-amber-500 to-orange-400"
-                : "bg-gradient-to-r from-purple-600 via-violet-500 to-blue-500"
-            }`} />
+            {isKycUpdate && (
+              <div className="h-1.5 bg-gradient-to-r from-amber-500 to-orange-400" />
+            )}
             <div className="space-y-6 p-5 sm:p-7 lg:p-8">
               <div className={`flex items-start ${isKycUpdate ? "gap-4" : ""}`}>
                 {isKycUpdate && (
@@ -243,7 +241,7 @@ export default function GlobalMessagePage() {
                   <Button
                     onClick={acknowledgeAnnouncement}
                     disabled={markAsReadMutation.isPending}
-                    className="gap-2 bg-purple-600 text-white hover:bg-purple-700"
+                    className="gap-2 border-blue-600 bg-blue-600 text-white hover:border-blue-700 hover:bg-blue-700 focus-visible:ring-blue-500"
                     data-testid="button-global-message-ack"
                   >
                     {markAsReadMutation.isPending
