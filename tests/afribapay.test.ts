@@ -4,9 +4,11 @@ import crypto from "node:crypto";
 import {
   AFRIBAPAY_MAX_PAYIN_AMOUNT,
   AFRIBAPAY_MIN_PAYIN_AMOUNT,
+  classifyAfribaPayinStatus,
   classifyAfribaPayoutStatus,
   isRetryableAfribaOtpRejection,
   parseAfribaPayWebhook,
+  resolveAfribaPayPayinTransactionId,
   shouldCheckAfribaPayOrderIdFallback,
   validateAfribaPayinAmount,
   verifyAfribaPayWebhookSignature,
@@ -50,9 +52,27 @@ test("AfribaPay webhook parser keeps reference_id and terminal statuses", () => 
 test("AfribaPay payout HTTP 404 and NOT_FOUND are non-final", () => {
   assert.equal(classifyAfribaPayoutStatus(404, "FAILED"), "pending");
   assert.equal(classifyAfribaPayoutStatus(404, "NOT_FOUND"), "pending");
+  assert.equal(classifyAfribaPayoutStatus(503, "FAILED"), "pending");
   assert.equal(classifyAfribaPayoutStatus(200, "NOT_FOUND"), "pending");
+  assert.equal(classifyAfribaPayoutStatus(200, "ERROR"), "pending");
   assert.equal(classifyAfribaPayoutStatus(200, "FAILED"), "failed");
   assert.equal(classifyAfribaPayoutStatus(200, "SUCCESS"), "completed");
+});
+
+test("AfribaPay pay-in lookup errors and missing IDs remain pending", () => {
+  assert.equal(classifyAfribaPayinStatus(404, "FAILED"), "pending");
+  assert.equal(classifyAfribaPayinStatus(503, "SUCCESS"), "pending");
+  assert.equal(classifyAfribaPayinStatus(200, "NOT_FOUND"), "pending");
+  assert.equal(classifyAfribaPayinStatus(200, "ERROR"), "pending");
+  assert.equal(classifyAfribaPayinStatus(200, "FAILED"), "failed");
+  assert.equal(classifyAfribaPayinStatus(200, "SUCCESS"), "completed");
+});
+
+test("AfribaPay status uses only a distinct provider transaction ID", () => {
+  assert.equal(resolveAfribaPayPayinTransactionId("provider-tx", "ashtech-order"), "provider-tx");
+  assert.equal(resolveAfribaPayPayinTransactionId(" ashtech-order ", "ashtech-order"), null);
+  assert.equal(resolveAfribaPayPayinTransactionId("   ", "ashtech-order"), null);
+  assert.equal(resolveAfribaPayPayinTransactionId(undefined, "ashtech-order"), null);
 });
 
 test("AfribaPay AshTech order_id fallback is only checked after 24h while still pending", () => {

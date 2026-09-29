@@ -82,6 +82,7 @@ test("PawaPay validates MSISDN, currency, and documented decimal amount format",
 test("PawaPay normalizes provider transaction states", () => {
   assert.equal(normalizePawaPayStatus("COMPLETED"), "completed");
   assert.equal(normalizePawaPayStatus("REJECTED"), "failed");
+  assert.equal(normalizePawaPayStatus("NOT_FOUND"), "pending");
   assert.equal(normalizePawaPayStatus("ACCEPTED"), "pending");
 });
 

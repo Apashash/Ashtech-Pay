@@ -398,6 +398,32 @@ export async function initiatePixPayWave(params: PixPayWaveParams): Promise<PixP
 }
 
 // ─── Status check (use sparingly — PixPay warns against abuse) ───────────────
+export function classifyPixPayStatusResponse(
+  httpOk: boolean,
+  data: any,
+): "completed" | "failed" | "pending" {
+  // Missing lookups and non-successful HTTP responses are ambiguous, not
+  // evidence that a payment failed.
+  if (!httpOk || data?.statut_code !== 200 || !data.data) return "pending";
+
+  const d = Array.isArray(data.data) ? data.data[0] : data.data;
+  if (!d) return "pending";
+
+  const state = (d.state || d.status || "").toUpperCase();
+  if (state === "SUCCESS" || state === "SUCCESSFUL" || state === "COMPLETED") {
+    return "completed";
+  }
+  if (
+    state === "FAILED"
+    || state === "CANCELLED"
+    || state === "FAILURE"
+    || state === "CANCEL"
+  ) {
+    return "failed";
+  }
+  return "pending";
+}
+
 export async function checkPixPayStatus(
   transactionId: string,
   countryCode: string = "CM"
@@ -412,34 +438,7 @@ export async function checkPixPayStatus(
     const data = await res.json();
     console.log(`[PixPay Status] raw response for ${transactionId}:`, JSON.stringify(maskPiiInObject(data)));
 
-    const serializedResponse = JSON.stringify(data).toLowerCase();
-    if (
-      data.statut_code === 404
-      || /\bnot[_ -]?found\b|\bintrouvable\b|\bdoes not exist\b/.test(serializedResponse)
-    ) {
-      return { status: "failed", raw: data };
-    }
-
-    if (data.statut_code !== 200 || !data.data) return { status: "pending", raw: data };
-
-    // PixPay may return data.data as a single object or an array
-    const d = Array.isArray(data.data) ? data.data[0] : data.data;
-    if (!d) return { status: "pending", raw: data };
-
-    const state = (d.state || d.status || "").toUpperCase();
-    if (state === "SUCCESS" || state === "SUCCESSFUL" || state === "COMPLETED") {
-      return { status: "completed", raw: data };
-    } else if (
-      state === "FAILED"
-      || state === "CANCELLED"
-      || state === "FAILURE"
-      || state === "CANCEL"
-      || state === "NOT_FOUND"
-      || state === "NOT FOUND"
-    ) {
-      return { status: "failed", raw: data };
-    }
-    return { status: "pending", raw: data };
+    return { status: classifyPixPayStatusResponse(res.ok, data), raw: data };
   } catch (err: any) {
     console.error("[PixPay Status] Error:", err);
     return { status: "pending" };

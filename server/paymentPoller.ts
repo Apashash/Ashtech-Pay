@@ -1,5 +1,11 @@
 import { storage } from "./storage";
-import { checkAfribaPayStatus, isAfribaPayCircuitOpen, isAfribaPayConfigured, shouldCheckAfribaPayOrderIdFallback } from "./afribapay";
+import {
+  checkAfribaPayStatus,
+  isAfribaPayCircuitOpen,
+  isAfribaPayConfigured,
+  resolveAfribaPayPayinTransactionId,
+  shouldCheckAfribaPayOrderIdFallback,
+} from "./afribapay";
 import { checkPixPayStatus } from "./pixpay";
 import { getPawaPayDeposit, isPawaPayUuidV4 } from "./pawapay";
 import { creditUserWallet } from "./walletHelper";
@@ -7,17 +13,16 @@ import { sendPayerConfirmationEmail } from "./email";
 import { notifyDepositConfirmed, notifyDepositFailed } from "./telegram";
 import { enqueueMerchantWebhook } from "./merchantWebhook";
 import { buildProviderErrorPayload } from "./providerErrors";
+import {
+  isProviderStatusPollDue,
+  recoveredStatusPollLastCheckedAt,
+} from "./providerStatusPolicy";
 
-// Status endpoints are rate-limited by providers. A 10s base loop plus a
-// provider-specific AfribaPay cadence avoids repeatedly asking for the same
-// transaction while keeping webhook-less payments reasonably responsive.
+// This scheduler tick is separate from provider lookup cadence; actual status
+// checks use age-based backoff to reduce duplicate and stale provider requests.
 const POLL_INTERVAL = 10 * 1000;
-const AFRIBAPAY_STATUS_INTERVAL_MS = 30 * 1000;
 const CRYPTO_PENDING_TIMEOUT_MS = 15 * 60 * 1000;
 const CRYPTO_EXPIRY_CHECK_INTERVAL_MS = 30 * 1000;
-// After 30 min, slow down polling to every 2 min to avoid hammering the gateway API.
-const SLOW_POLL_THRESHOLD_MS = 30 * 60 * 1000;  // 30 minutes
-const SLOW_POLL_INTERVAL_MS  = 2 * 60 * 1000;   // 2 minutes between checks for old payments
 
 interface PendingPayment {
   transactionId: string;
@@ -32,11 +37,12 @@ interface PendingPayment {
   payerName?: string | null;
   countryCode?: string; // used for PixPay API key selection
   startedAt: number;
-  lastCheckedAt: number; // used for slow-poll throttling
+  lastCheckedAt: number; // used for progressive provider-status backoff
 }
 
 const pendingPayments = new Map<string, PendingPayment>();
 const cryptoExpiryInFlight = new Set<string>();
+const pendingPaymentStatusChecks = new Set<string>();
 
 export function addPendingPayment(
   payment: Omit<PendingPayment, "attempts" | "startedAt" | "lastCheckedAt"> &
@@ -44,7 +50,14 @@ export function addPendingPayment(
 ) {
   console.log(`[PaymentPoller] Adding pending payment: ${payment.reference} (provider: ${payment.provider || "unknown"})`);
   const now = Date.now();
-  pendingPayments.set(payment.reference, { ...payment, attempts: payment.attempts ?? 0, startedAt: now, lastCheckedAt: 0 });
+  const existing = pendingPayments.get(payment.reference);
+  pendingPayments.set(payment.reference, {
+    ...existing,
+    ...payment,
+    attempts: existing?.attempts ?? payment.attempts ?? 0,
+    startedAt: existing?.startedAt ?? now,
+    lastCheckedAt: existing?.lastCheckedAt ?? 0,
+  });
   if (payment.type === "deposit" || payment.type === "payment_link") {
     void storage.ensurePendingPaymentNotification({
       userId: payment.userId,
@@ -119,8 +132,11 @@ async function checkPaymentStatus(payment: PendingPayment): Promise<"pending" | 
       // If AfribaPay circuit is open (subscription invalid), don't make any HTTP calls.
       // Return "pending" — provider outages do not time out or auto-fail deposits.
       if (isAfribaPayCircuitOpen()) return "pending";
-      const providerReference = payment.externalReference?.trim();
-      const hasProviderReference = Boolean(providerReference && providerReference !== payment.reference);
+      const providerReference = resolveAfribaPayPayinTransactionId(
+        payment.externalReference,
+        payment.reference,
+      );
+      const hasProviderReference = Boolean(providerReference);
       let transactionIdStatus: "pending" | "completed" | "failed" = "pending";
       if (hasProviderReference) {
         const providerResult = await checkAfribaPayStatus(providerReference!, "transaction_id");
@@ -156,6 +172,7 @@ async function checkPaymentStatus(payment: PendingPayment): Promise<"pending" | 
     } else if (payment.provider === "pawapay") {
       // PawaPay's UUID is persisted as externalReference; never query using
       // our merchant-facing reference.
+      if (!isPawaPayUuidV4(payment.externalReference)) return "pending";
       const result = await getPawaPayDeposit(payment.externalReference);
       console.log(`[PaymentPoller] PawaPay status for ${payment.reference}: ${result.status}`);
       if (result.status === "failed") {
@@ -424,28 +441,25 @@ async function pollPendingPayments() {
     }
     const entries = Array.from(pendingPayments.entries());
     for (const [reference, payment] of entries) {
+      if (pendingPaymentStatusChecks.has(reference)) continue;
       try {
-        const ageMs = now - payment.startedAt;
-        const isOld = ageMs >= SLOW_POLL_THRESHOLD_MS;
+        if (!isProviderStatusPollDue(payment.startedAt, payment.lastCheckedAt, now)) continue;
 
-        // Slow-poll throttle: once a payment is older than 30 min, only check
-        // every 2 minutes instead of every 3 seconds to avoid spamming the gateway.
-        const minimumInterval = payment.provider === "afribapay"
-          ? AFRIBAPAY_STATUS_INTERVAL_MS
-          : 0;
-        if (minimumInterval > 0 && payment.lastCheckedAt > 0 &&
-            now - payment.lastCheckedAt < minimumInterval) {
+        pendingPaymentStatusChecks.add(reference);
+        payment.lastCheckedAt = now;
+        const transaction = await storage.getTransactionById(payment.transactionId);
+        if (!transaction || transaction.reference !== reference || transaction.status !== "pending") {
+          removePendingPayment(reference);
           continue;
         }
-        if (isOld) {
-          const timeSinceLastCheck = now - payment.lastCheckedAt;
-          if (payment.lastCheckedAt > 0 && timeSinceLastCheck < SLOW_POLL_INTERVAL_MS) {
-            continue; // skip this cycle — not yet time to check
-          }
+        // Always use the provider reference currently persisted on this exact
+        // local transaction; never poll a stale in-memory or merchant reference.
+        payment.externalReference = transaction.externalReference || transaction.reference;
+        if (payment.provider === "pawapay" && !isPawaPayUuidV4(payment.externalReference)) {
+          continue;
         }
 
         payment.attempts++;
-        payment.lastCheckedAt = now;
 
         const status = await checkPaymentStatus(payment);
         if (status === "completed" || status === "failed") {
@@ -454,6 +468,8 @@ async function pollPendingPayments() {
         // "pending" → keep in queue, poll again next cycle (no timeout, no auto-cancel)
       } catch (entryErr: any) {
         console.error(`[PaymentPoller] Unexpected error for ${reference}:`, entryErr?.message);
+      } finally {
+        pendingPaymentStatusChecks.delete(reference);
       }
     }
   } catch (err: any) {
@@ -565,7 +581,8 @@ export async function recoverPendingDeposits() {
           countryCode: recoveredCountryCode,
           paymentIntentId: tx.paymentIntentId,
           startedAt: createdAt,
-          lastCheckedAt: 0,
+          // Resume soon after restart while spreading recovered requests.
+          lastCheckedAt: recoveredStatusPollLastCheckedAt(tx.reference, createdAt, now),
         });
         recovered++;
       }
@@ -600,7 +617,7 @@ async function expirePendingCryptoPayments(now: number): Promise<void> {
 
 export function startPaymentPoller() {
   if (pollerInterval) { console.log("[PaymentPoller] Already running"); return; }
-  console.log(`[PaymentPoller] Starting payment poller (every ${POLL_INTERVAL / 1000}s, AfribaPay status every ${AFRIBAPAY_STATUS_INTERVAL_MS / 1000}s, crypto timeout ${CRYPTO_PENDING_TIMEOUT_MS / 60000}min, slow-poll after ${SLOW_POLL_THRESHOLD_MS / 60000}min)`);
+  console.log(`[PaymentPoller] Starting payment poller (scheduler tick ${POLL_INTERVAL / 1000}s, provider status checks use progressive backoff, crypto timeout ${CRYPTO_PENDING_TIMEOUT_MS / 60000}min)`);
   pollerInterval = setInterval(pollPendingPayments, POLL_INTERVAL);
 }
 

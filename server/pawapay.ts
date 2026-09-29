@@ -3,6 +3,8 @@
  * database dependency, so callers can decide how and when to persist requests.
  */
 
+import { createAsyncTtlCache } from "./providerStatusPolicy";
+
 export const PAWAPAY_PRODUCTION_BASE_URL = "https://api.pawapay.io/v2";
 /** PawaPay customer-facing transaction narration. */
 export const PAWAPAY_CUSTOMER_MESSAGE = "AshTech sarl";
@@ -121,7 +123,16 @@ export class PawaPayConfigurationError extends Error {
 
 const ACTIVE_CONF_TTL_MS = 5 * 60 * 1000;
 const DEFAULT_TIMEOUT_MS = 15_000;
+const STATUS_READ_CACHE_TTL_MS = 15_000;
 let activeConfCache = new Map<string, { value: unknown; expiresAt: number }>();
+const depositStatusReadCache = createAsyncTtlCache<string, PawaPayResult>(
+  STATUS_READ_CACHE_TTL_MS,
+  Date.now,
+);
+const payoutStatusReadCache = createAsyncTtlCache<string, PawaPayResult>(
+  STATUS_READ_CACHE_TTL_MS,
+  Date.now,
+);
 
 const PAWAPAY_COUNTRY_ALIASES: Record<string, string> = {
   BJ: "BEN", BEN: "BEN", BF: "BFA", BFA: "BFA", CD: "COD", COD: "COD",
@@ -330,7 +341,7 @@ export function formatPawaPayAmount(amount: string | number): string {
 export function normalizePawaPayStatus(status: unknown): PawaPayStatus {
   const value = typeof status === "string" ? status.toUpperCase() : "";
   if (["COMPLETED", "SUCCESSFUL", "SUCCEEDED"].includes(value)) return "completed";
-  if (["FAILED", "REJECTED", "CANCELLED", "EXPIRED", "ERROR", "NOT_FOUND", "NOT FOUND"].includes(value)) return "failed";
+  if (["FAILED", "REJECTED", "CANCELLED", "EXPIRED"].includes(value)) return "failed";
   return "pending";
 }
 
@@ -546,7 +557,14 @@ export async function createPawaPayDeposit(params: PawaPayDepositParams): Promis
 }
 
 export async function getPawaPayDeposit(depositId: string): Promise<PawaPayResult> {
-  return request(`/deposits/${encodeURIComponent(checkedId(depositId))}`, "GET");
+  const id = checkedId(depositId);
+  return depositStatusReadCache.get(id, async () => {
+    const result = await request(`/deposits/${encodeURIComponent(id)}`, "GET");
+    // HTTP errors and not-found lookups remain non-terminal. A GET failure is
+    // not proof that the original deposit was rejected.
+    if (result.providerStatus !== undefined) return { ...result, status: "pending" };
+    return result;
+  });
 }
 
 export async function createPawaPayPayout(params: PawaPayPayoutParams): Promise<PawaPayResult> {
@@ -561,7 +579,12 @@ export async function createPawaPayPayout(params: PawaPayPayoutParams): Promise<
 }
 
 export async function getPawaPayPayout(payoutId: string): Promise<PawaPayResult> {
-  return request(`/payouts/${encodeURIComponent(checkedId(payoutId))}`, "GET");
+  const id = checkedId(payoutId);
+  return payoutStatusReadCache.get(id, async () => {
+    const result = await request(`/payouts/${encodeURIComponent(id)}`, "GET");
+    if (result.providerStatus !== undefined) return { ...result, status: "pending" };
+    return result;
+  });
 }
 
 export async function createPawaPayPaymentPage(params: PawaPayPaymentPageParams): Promise<PawaPayResult> {

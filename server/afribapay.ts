@@ -603,18 +603,36 @@ export async function checkAfribaPayStatus(
     const rawStatus = (d?.status || d?.transaction_status || "").toUpperCase();
     console.log(`[AfribaPay PayinStatus] ${param} → HTTP ${res.status} | raw_status="${rawStatus}" | data=${JSON.stringify(maskPiiInObject(d))}`);
 
-    if (rawStatus === "SUCCESS" || rawStatus === "COMPLETED" || rawStatus === "SUCCESSFUL"
-        || rawStatus === "PAID" || rawStatus === "APPROVED") {
-      return { status: "completed", raw: data };
-    } else if (rawStatus === "FAILED" || rawStatus === "ERROR" || rawStatus === "CANCELLED"
-               || rawStatus === "REJECTED" || rawStatus === "EXPIRED") {
-      return { status: "failed", raw: data };
-    }
-    return { status: "pending", raw: data };
+    return { status: classifyAfribaPayinStatus(res.status, rawStatus), raw: data };
   } catch (err: any) {
     console.error("[AfribaPay PayinStatus] Error:", err);
     return { status: "pending" };
   }
+}
+
+export function classifyAfribaPayinStatus(
+  httpStatus: number,
+  providerStatus: string | undefined,
+): "completed" | "failed" | "pending" {
+  // Lookup failures are not payment failures; only a successful status
+  // response may carry a terminal pay-in state.
+  if (httpStatus < 200 || httpStatus >= 300) return "pending";
+  const status = String(providerStatus || "").toUpperCase();
+  if (["SUCCESS", "COMPLETED", "SUCCESSFUL", "PAID", "APPROVED"].includes(status)) {
+    return "completed";
+  }
+  if (["FAILED", "CANCELLED", "REJECTED", "EXPIRED"].includes(status)) {
+    return "failed";
+  }
+  return "pending";
+}
+
+export function resolveAfribaPayPayinTransactionId(
+  providerReference: string | null | undefined,
+  ashtechReference: string,
+): string | null {
+  const normalized = providerReference?.trim();
+  return normalized && normalized !== ashtechReference ? normalized : null;
 }
 
 const AFRIBAPAY_ORDER_ID_FALLBACK_AFTER_MS = 24 * 60 * 60 * 1000;
@@ -632,15 +650,15 @@ export function classifyAfribaPayoutStatus(
   httpStatus: number,
   providerStatus: string | undefined,
 ): "completed" | "failed" | "pending" {
-  // AfribaPay's public status-code table marks HTTP 404 as non-final. A failed
-  // lookup must not refund a payout that may already have been accepted.
-  if (httpStatus === 404) return "pending";
+  // Only successful status lookups can confirm a terminal state. HTTP errors
+  // and generic ERROR values do not prove that a payout was rejected.
+  if (httpStatus < 200 || httpStatus >= 300) return "pending";
 
   const status = String(providerStatus || "").toUpperCase();
   if (["SUCCESS", "COMPLETED", "SUCCESSFUL", "PAID", "APPROVED", "PROCESSED"].includes(status)) {
     return "completed";
   }
-  if (["FAILED", "ERROR", "CANCELLED", "REJECTED", "EXPIRED"].includes(status)) {
+  if (["FAILED", "CANCELLED", "REJECTED", "EXPIRED"].includes(status)) {
     return "failed";
   }
   // NOT_FOUND is not treated as terminal until AfribaPay confirms that

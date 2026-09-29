@@ -5,14 +5,13 @@ description: Withdrawals/transfers must never be auto-failed+refunded on timeout
 
 # Payouts (retraits & transferts) : jamais d'annulation automatique
 
-Rule: a payout (withdrawal / transfer_out) that has been debited must go to
-`pending_manual` for provider liquidity shortages, authentication errors,
-timeouts, 5xx, rate limits, and ambiguous messages. Definitive provider
-rejections (invalid number, unsupported operation/operator, or terminal
-`failed/refunded/cancelled`) must be marked rejected and the debit reversed.
-Distinguish a transaction-level `NOT_FOUND` status from an HTTP 404 returned by
-a status lookup; do not treat the bare HTTP code as definitive until AfribaPay
-confirms its meaning.
+Rule: a payout (withdrawal / transfer_out) that has been debited must not be
+failed or refunded for provider liquidity shortages, authentication errors,
+timeouts, 5xx, rate limits, HTTP 404 status lookups, `NOT_FOUND` values, or
+generic `ERROR` codes and other ambiguous responses. Keep it pending or route it
+to manual review.
+Definitive provider rejections and explicit terminal `failed/refunded/cancelled`
+statuses may be marked rejected and the debit reversed.
 
 Only a successful provider initiation/status may continue through automatic
 polling and settlement. An internal wallet balance check that fails before a
@@ -41,13 +40,16 @@ its own" behavior. AfribaPay's public status-code table labels HTTP 404
 that an already-submitted payout does not exist. Replacing an ambiguous provider
 ID or committing status separately from wallet mutation creates the same
 double-spend risk under timeouts, callbacks, admin actions, and process crashes.
+Generic `ERROR` codes may describe lookup or API failures rather than a terminal
+transaction state, so they are not safe refund triggers without provider confirmation.
 
-**How to apply:** any new payout path or poller must classify documented,
-confirmed terminal transaction statuses as failed+refunded; ambiguous HTTP
-errors, including bare 404 until clarified, default to pending/pending_manual.
-Persist the provider ID before submission, reuse it for every reconciliation,
-block manual terminal changes while unresolved, and settle status plus wallet
-mutation atomically.
+**How to apply:** any new payout path or poller must classify only explicit,
+confirmed terminal transaction statuses as failed+refunded. HTTP 404, `NOT_FOUND`,
+generic `ERROR`, timeouts, and ambiguous responses remain pending/pending_manual
+unless provider documentation confirms that exact response is terminal. Persist
+the provider ID before submission, reuse it for every reconciliation, block
+manual terminal changes while unresolved, and settle status plus wallet mutation
+atomically.
 
 Administrative reopening of a rejected withdrawal or transfer must also debit
 the previously refunded total from the original wallet in the same database

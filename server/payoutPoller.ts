@@ -7,13 +7,13 @@ import { getIziPayoutIdForPolling } from "./cryptoPayout";
 import { sendWithdrawalApprovedEmail } from "./email";
 import { notifyWithdrawalAutoValidated, notifyWithdrawalFailed } from "./telegram";
 import { setFailedCooldown } from "./failedCooldown";
+import { resolvePayoutStatusLookupReference } from "./providerStatusReferences";
+import {
+  isProviderStatusPollDue,
+  recoveredStatusPollLastCheckedAt,
+} from "./providerStatusPolicy";
 
-const POLL_INTERVAL  = 6_000; // 6 seconds
-// Pas de limite de tentatives : un payout reste suivi indéfiniment jusqu'à ce que
-// le fournisseur réponde succès ou échec. Après 30 min, on ralentit simplement la
-// cadence (toutes les 2 min) pour ménager les quotas API du fournisseur.
-const SLOW_AFTER_ATTEMPTS = 300;  // 300 × 6s = 30 minutes
-const SLOW_POLL_EVERY     = 20;   // 20 × 6s = vérification toutes les 2 min
+const POLL_INTERVAL = 10_000; // scheduler tick; provider lookups use progressive backoff
 
 interface PendingPayout {
   transactionId:  string;
@@ -25,6 +25,8 @@ interface PendingPayout {
   provider:       "afribapay" | "pixpay" | "pawapay" | "izichange";
   /** PawaPay UUID; distinct from the internal transaction reference. */
   externalReference?: string;
+  startedAt?: number;
+  lastCheckedAt?: number;
   countryCode:    string;
   txType:         string;
   txCurrency:     string;
@@ -33,21 +35,25 @@ interface PendingPayout {
 }
 
 const pendingPayouts = new Map<string, PendingPayout>();
+const pendingPayoutStatusChecks = new Set<string>();
 
-export function addPendingPayout(payout: Omit<PendingPayout, "attempts">) {
+export function addPendingPayout(
+  payout: Omit<PendingPayout, "attempts" | "startedAt" | "lastCheckedAt"> &
+    Partial<Pick<PendingPayout, "startedAt" | "lastCheckedAt">>,
+) {
   console.log(`[PayoutPoller] Tracking payout: ${payout.reference} (provider=${payout.provider}, country=${payout.countryCode})`);
-  pendingPayouts.set(payout.reference, { ...payout, attempts: 0 });
+  const existing = pendingPayouts.get(payout.reference);
+  pendingPayouts.set(payout.reference, {
+    ...existing,
+    ...payout,
+    attempts: existing?.attempts ?? 0,
+    startedAt: existing?.startedAt ?? payout.startedAt ?? Date.now(),
+    lastCheckedAt: existing?.lastCheckedAt ?? payout.lastCheckedAt ?? 0,
+  });
 }
 
 export function removePendingPayout(reference: string) {
   pendingPayouts.delete(reference);
-}
-
-function providerResponseIndicatesNotFound(raw: unknown): boolean {
-  if (!raw) return false;
-  const serialized = typeof raw === "string" ? raw : JSON.stringify(raw);
-  return /\bnot[_ -]?found\b|\bintrouvable\b|\bdoes not exist\b|\bno (?:such|matching) (?:transaction|payout)\b/i.test(serialized)
-    || /"(?:status|status_code|statut_code|providerStatus)"\s*:\s*"?404"?/i.test(serialized);
 }
 
 // ─── Recover pending payouts from DB on startup ───────────────────────────
@@ -63,6 +69,7 @@ export async function recoverPendingPayouts() {
     for (const t of pending) {
       const internalRef = t.reference ?? "";
       if (!internalRef) continue;
+      const payoutStartedAt = t.createdAt ? new Date(t.createdAt).getTime() : Date.now();
       const operator = t.operatorId ? await storage.getOperator(t.operatorId).catch(() => null) : null;
       const metadata = ((t as any).metadata || {}) as Record<string, any>;
       const configuredProvider = (
@@ -73,6 +80,10 @@ export async function recoverPendingPayouts() {
         : t.externalReference && isPawaPayUuidV4(t.externalReference) ? "pawapay" : configuredProvider;
       if (provider !== "afribapay" && provider !== "pixpay" && provider !== "pawapay" && provider !== "izichange") {
         console.warn(`[PayoutPoller] Skipping pending payout ${internalRef}: no supported provider`);
+        continue;
+      }
+      if (provider === "pawapay" && !isPawaPayUuidV4((t as any).externalReference)) {
+        console.warn(`[PayoutPoller] Skipping status lookup for ${internalRef}: missing valid PawaPay payout UUID`);
         continue;
       }
       const iziPayoutId = provider === "izichange"
@@ -117,6 +128,8 @@ export async function recoverPendingPayouts() {
         totalDebited:  t.totalAmount ?? t.amount ?? "0",
         attempts:      0,
         provider,
+        startedAt:     payoutStartedAt,
+        lastCheckedAt: recoveredStatusPollLastCheckedAt(pollerRef, payoutStartedAt),
         externalReference: provider === "izichange"
           ? iziPayoutId
           : (t as any).externalReference || metadata.iziPayoutId || undefined,
@@ -306,25 +319,29 @@ export async function processIziPayPayoutCallback(
   }, status);
 }
 
-async function checkProviderStatus(payout: PendingPayout): Promise<{ status: string; shouldRemove?: boolean }> {
+async function checkProviderStatus(
+  payout: PendingPayout,
+  lookupReference = payout.reference,
+): Promise<{ status: string; shouldRemove?: boolean }> {
   try {
     if (payout.provider === "afribapay") {
       // Missing credentials are a configuration state, not a provider failure.
       // Leave the payout pending without generating repeated failed requests.
       if (!isAfribaPayConfigured()) return { status: "pending" };
-      const result = await checkAfribaPayoutStatus(payout.reference, "order_id");
+      if (!lookupReference.trim()) return { status: "pending" };
+      const result = await checkAfribaPayoutStatus(lookupReference, "order_id");
       return { status: result.status };
     }
 
     if (payout.provider === "pixpay") {
-      const result = await checkPixPayStatus(payout.reference, payout.countryCode);
-      if (providerResponseIndicatesNotFound(result.raw)) return { status: "failed" };
+      if (!lookupReference.trim()) return { status: "pending" };
+      const result = await checkPixPayStatus(lookupReference, payout.countryCode);
       return { status: result.status };
     }
     if (payout.provider === "pawapay") {
-      const id = payout.externalReference || payout.reference;
+      const id = payout.externalReference;
+      if (!id || !isPawaPayUuidV4(id)) return { status: "pending" };
       const result = await getPawaPayPayout(id);
-      if (providerResponseIndicatesNotFound(result.raw)) return { status: "failed" };
       return { status: result.status };
     }
 
@@ -344,27 +361,56 @@ async function checkProviderStatus(payout: PendingPayout): Promise<{ status: str
     return { status: "pending" };
   } catch (err: any) {
     console.error(`[PayoutPoller] checkProviderStatus error for ${payout.reference}:`, err?.message);
-    if (Number(err?.status) === 404 || providerResponseIndicatesNotFound(err?.message)) return { status: "failed" };
     return { status: "pending" };
   }
 }
 
 async function pollPendingPayouts() {
   try {
+    const now = Date.now();
     const entries = Array.from(pendingPayouts.entries());
+    const checkedTransactions = new Set<string>();
     for (const [reference, payout] of entries) {
+      if (
+        checkedTransactions.has(payout.transactionId) ||
+        pendingPayoutStatusChecks.has(payout.transactionId)
+      ) continue;
+      if (!isProviderStatusPollDue(payout.startedAt ?? now, payout.lastCheckedAt ?? 0, now)) continue;
+      pendingPayoutStatusChecks.add(payout.transactionId);
+      checkedTransactions.add(payout.transactionId);
       try {
-        payout.attempts++;
-
-        // Suivi infini : aucune limite de tentatives. Après 30 min, on ralentit
-        // simplement la cadence à une vérification toutes les 2 min.
-        if (payout.attempts > SLOW_AFTER_ATTEMPTS && payout.attempts % SLOW_POLL_EVERY !== 0) {
+        payout.lastCheckedAt = now;
+        const transaction = await storage.getTransactionById(payout.transactionId);
+        if (
+          !transaction ||
+          !["pending", "processing", "pending_manual"].includes(transaction.status)
+        ) {
+          removePendingPayout(reference);
           continue;
         }
+        const metadata = ((transaction as any).metadata || {}) as Record<string, any>;
+        // Resolve every lookup from the current persisted transaction, not
+        // the potentially stale identifier held by this process's queue.
+        const iziPayoutId = payout.provider === "izichange"
+          ? getIziPayoutIdForPolling(transaction.externalReference, metadata)
+          : undefined;
+        const persistedProviderReference = resolvePayoutStatusLookupReference(
+          payout.provider,
+          transaction,
+          iziPayoutId,
+        );
+        if (!persistedProviderReference) continue;
+        if (payout.provider === "pawapay") {
+          // PawaPay status endpoints require a UUID, never the AshTech ref.
+          if (!isPawaPayUuidV4(persistedProviderReference)) continue;
+          payout.externalReference = persistedProviderReference;
+        } else if (payout.provider === "izichange") {
+          payout.externalReference = persistedProviderReference;
+        }
+        payout.attempts++;
 
-        const { status } = await checkProviderStatus(payout);
-
-        console.log(`[PayoutPoller] ${reference}: status=${status} provider=${payout.provider} (attempt ${payout.attempts}${payout.attempts > SLOW_AFTER_ATTEMPTS ? ", slow-poll 2min" : ""})`);
+        const { status } = await checkProviderStatus(payout, persistedProviderReference);
+        console.log(`[PayoutPoller] ${reference}: status=${status} provider=${payout.provider} (attempt ${payout.attempts})`);
 
         if (status === "completed" || status === "success") {
           await processPayout(payout, "success");
@@ -373,6 +419,8 @@ async function pollPendingPayouts() {
         }
       } catch (entryErr: any) {
         console.error(`[PayoutPoller] Unexpected error for ${reference}:`, entryErr?.message);
+      } finally {
+        pendingPayoutStatusChecks.delete(payout.transactionId);
       }
     }
   } catch (err: any) {
@@ -384,7 +432,7 @@ let pollerInterval: NodeJS.Timeout | null = null;
 
 export function startPayoutPoller() {
   if (pollerInterval) { console.log("[PayoutPoller] Already running"); return; }
-  console.log("[PayoutPoller] Starting payout poller (every 6 seconds)");
+  console.log(`[PayoutPoller] Starting payout poller (scheduler tick ${POLL_INTERVAL / 1000}s; provider status checks use progressive backoff)`);
   pollerInterval = setInterval(pollPendingPayouts, POLL_INTERVAL);
 }
 
