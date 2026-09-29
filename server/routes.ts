@@ -123,6 +123,7 @@ import {
   toLocalMobileMoneyPhone,
   validateMobileMoneyPhone,
 } from "@shared/mobile-money-phone";
+import { parseUserPhoneInput } from "@shared/user-phone";
 import { getVapidPublicKey, sendPushNotificationToAll } from "./push";
 import { buildTransactionBalanceSnapshots } from "./transactionBalances";
 import { formatDebugError, shouldExposeDebugErrors } from "./errorDiagnostics";
@@ -3820,13 +3821,24 @@ export async function registerRoutes(
         });
       }
 
-      const rawData = registerSchema.parse(req.body);
-      // Normalize: email → lowercase, username → lowercase, phone → strip + and spaces
+      const parsedPhone = parseUserPhoneInput(req.body?.phone);
+      if (!parsedPhone.ok) {
+        return res.status(400).json({
+          message: "Le numéro de téléphone contient des caractères non autorisés.",
+          code: "INVALID_PHONE_FORMAT",
+        });
+      }
+
+      const rawData = registerSchema.parse({
+        ...req.body,
+        phone: parsedPhone.phone ?? undefined,
+      });
+      // Normalize email and username; store phone numbers as digits only.
       const data = {
         ...rawData,
         email: rawData.email.trim().toLowerCase(),
         username: rawData.username.trim().toLowerCase(),
-        phone: normalizePhone(rawData.phone) ?? rawData.phone,
+        phone: parsedPhone.phone ?? undefined,
       };
 
       // Resolve the selected country from the database so registration uses
@@ -5184,7 +5196,14 @@ export async function registerRoutes(
       const stripHtml = (v: unknown) => typeof v === "string" ? v.replace(/<[^>]*>/g, "").trim() : undefined;
       const fullName  = stripHtml(req.body.fullName);
       const email     = typeof req.body.email === "string" ? req.body.email.trim().toLowerCase() : undefined;
-      const phone     = typeof req.body.phone === "string" ? normalizePhone(req.body.phone) : undefined;
+      const phoneResult = req.body.phone === undefined ? undefined : parseUserPhoneInput(req.body.phone);
+      if (phoneResult && !phoneResult.ok) {
+        return res.status(400).json({
+          message: "Le numéro de téléphone contient des caractères non autorisés.",
+          code: "INVALID_PHONE_FORMAT",
+        });
+      }
+      const phone = phoneResult?.phone;
       const country   = stripHtml(req.body.country);
 
       if (fullName !== undefined && fullName.length < 2) {
@@ -12995,6 +13014,16 @@ export async function registerRoutes(
       const updates: Record<string, unknown> = {};
       for (const field of ALLOWED_USER_FIELDS) {
         if (req.body[field] !== undefined) updates[field] = req.body[field];
+      }
+      if ("phone" in updates) {
+        const parsedPhone = parseUserPhoneInput(updates.phone);
+        if (!parsedPhone.ok) {
+          return res.status(400).json({
+            message: "Le numéro de téléphone contient des caractères non autorisés.",
+            code: "INVALID_PHONE_FORMAT",
+          });
+        }
+        updates.phone = parsedPhone.phone;
       }
       // Sanitize text fields to strip HTML tags (XSS prevention)
       for (const textField of ["fullName", "banReason", "withdrawalBlockReason"] as const) {
