@@ -6,6 +6,7 @@ import {
   ArrowUpCircle, Send, Megaphone, MessageSquare, ShieldCheck, Clock3, X, Loader2, ExternalLink,
 } from "lucide-react";
 import { DashboardLayout } from "@/components/dashboard-layout";
+import { GlobalMessageIcon } from "@/components/global-message-icon";
 import { Button } from "@/components/ui/button";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -185,7 +186,7 @@ export default function NotificationsPage() {
       case "payment_link_pending": return <Clock3 className="w-5 h-5 text-amber-500" />;
       case "withdrawal_confirmed": return <ArrowUpCircle   className="w-5 h-5 text-orange-500" />;
       case "transfer_received":    return <Send            className="w-5 h-5 text-blue-500" />;
-      case "global_message":       return <Megaphone       className="w-5 h-5 text-purple-500" />;
+      case "global_message":       return <GlobalMessageIcon className="h-5 w-5 rounded-md" />;
       case "admin_message":        return <MessageSquare   className="w-5 h-5 text-purple-500" />;
       case "kyc_update_required":  return <ShieldCheck    className="w-5 h-5 text-amber-500" />;
       default:                     return <img src="/notification-icon.png" alt="" aria-hidden="true" className="w-5 h-5 object-contain" />;

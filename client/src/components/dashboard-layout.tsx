@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { GlobalMessageIcon } from "@/components/global-message-icon";
 import { apiRequest, queryClient, removeAuthToken } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { User } from "@shared/schema";
@@ -538,7 +539,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                   data-testid="button-global-message-shortcut"
                   title="Message officiel"
                 >
-                  <Megaphone className="w-5 h-5 text-purple-500" />
+                  <GlobalMessageIcon className="h-6 w-6 rounded-md" />
                   {hasUnreadGlobalMessage && (
                     <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-red-500" />
                   )}

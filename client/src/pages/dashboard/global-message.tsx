@@ -1,4 +1,5 @@
 import { DashboardLayout } from "@/components/dashboard-layout";
+import { GlobalMessageIcon } from "@/components/global-message-icon";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
@@ -12,7 +13,6 @@ import {
   CheckCircle2,
   ChevronRight,
   Loader2,
-  Megaphone,
   RefreshCw,
   Shield,
 } from "lucide-react";
@@ -132,13 +132,13 @@ export default function GlobalMessagePage() {
 
         <header className="flex flex-col gap-4 border-b border-border/70 pb-6 sm:flex-row sm:items-end sm:justify-between">
           <div className="flex items-start gap-4">
-            <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border ${
-              isKycUpdate
-                ? "border-amber-500/25 bg-amber-500/10 text-amber-600"
-                : "border-purple-500/25 bg-purple-500/10 text-purple-600"
-            }`}>
-              {isKycUpdate ? <Shield className="h-6 w-6" /> : <Megaphone className="h-6 w-6" />}
-            </div>
+            {isKycUpdate ? (
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-amber-500/25 bg-amber-500/10 text-amber-600">
+                <Shield className="h-6 w-6" />
+              </div>
+            ) : (
+              <GlobalMessageIcon className="h-12 w-12 shrink-0 rounded-2xl" />
+            )}
             <div>
               <p className={`mb-1 text-xs font-semibold uppercase tracking-[0.16em] ${
                 isKycUpdate ? "text-amber-600" : "text-purple-600"
@@ -278,9 +278,7 @@ export default function GlobalMessagePage() {
                     aria-label={`${gm.openAnnouncement}: ${message.title}`}
                     className="flex w-full items-center gap-4 py-4 text-left transition-colors first:pt-1 last:pb-1 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
                   >
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-purple-500/10 text-purple-600">
-                      <Megaphone className="h-5 w-5" />
-                    </span>
+                    <GlobalMessageIcon className="h-11 w-11 shrink-0 rounded-xl" />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-semibold text-foreground sm:text-base">
                         {message.title}
@@ -297,9 +295,7 @@ export default function GlobalMessagePage() {
           </section>
         ) : (
           <div className="rounded-2xl border border-dashed border-border bg-card/50 px-5 py-14 text-center sm:py-20">
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
-              <Megaphone className="h-7 w-7 text-muted-foreground" />
-            </div>
+            <GlobalMessageIcon className="mx-auto mb-4 h-14 w-14 rounded-2xl" />
             <p className="text-sm text-muted-foreground">{gm.noMessage}</p>
             <Button variant="outline" onClick={() => setLocation("/dashboard")} className="mt-5">
               <ArrowLeft className="mr-1.5 h-4 w-4" />
