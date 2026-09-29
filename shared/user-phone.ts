@@ -1,15 +1,17 @@
-export type UserPhoneInputResult =
+export type PhoneInputResult =
   | { ok: true; phone: string | null }
   | { ok: false };
+
+export type UserPhoneInputResult = PhoneInputResult;
 
 const PHONE_PRESENTATION_CHARS = /^[+\d\s().-]+$/;
 
 /**
- * Validate and normalize a user's phone before writing it to the users table.
+ * Validate and normalize a phone value before persisting or forwarding it.
  * Common formatting is accepted, but letters and other arbitrary characters
  * are rejected instead of being silently stripped or stored.
  */
-export function parseUserPhoneInput(input: unknown): UserPhoneInputResult {
+export function parsePhoneInput(input: unknown): PhoneInputResult {
   if (input === undefined || input === null) {
     return { ok: true, phone: null };
   }
@@ -35,3 +37,5 @@ export function parseUserPhoneInput(input: unknown): UserPhoneInputResult {
   const phone = compact.startsWith("+") ? compact.slice(1) : compact;
   return phone ? { ok: true, phone } : { ok: false };
 }
+
+export const parseUserPhoneInput = parsePhoneInput;

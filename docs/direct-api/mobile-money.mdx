@@ -119,7 +119,7 @@ curl_close($ch);
 | `currency` | Oui | Devise du pays sélectionné |
 | `country_code` | Oui | Code pays actif, par exemple `CM` |
 | `operator` | Oui | Nom exact de l'opérateur renvoyé par `/v1/countries` (par exemple `MTN Money` ou `Mixx By Yas`), sensible au catalogue actif |
-| `phone` | Oui | Numéro international associé au wallet |
+| `phone` | Oui | Numéro international associé au wallet. Les séparateurs usuels sont acceptés; les lettres et autres caractères non téléphoniques sont refusés. |
 | `reference` | Non | Référence de votre commande (191 caractères maximum), conservée comme `merchant_reference` et utilisée pour les reprises idempotentes |
 | `notify_url` | Non | URL HTTPS de votre webhook marchand |
 

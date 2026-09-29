@@ -123,7 +123,7 @@ import {
   toLocalMobileMoneyPhone,
   validateMobileMoneyPhone,
 } from "@shared/mobile-money-phone";
-import { parseUserPhoneInput } from "@shared/user-phone";
+import { parsePhoneInput, parseUserPhoneInput } from "@shared/user-phone";
 import { getVapidPublicKey, sendPushNotificationToAll } from "./push";
 import { buildTransactionBalanceSnapshots } from "./transactionBalances";
 import { formatDebugError, shouldExposeDebugErrors } from "./errorDiagnostics";
@@ -18592,9 +18592,18 @@ export async function registerRoutes(
     try {
       const merchant = req.apiUser;
       const {
-        amount, currency, phone, operator: operatorName, country_code, reference, notify_url,
+        amount, currency, phone: rawPhone, operator: operatorName, country_code, reference, notify_url,
         preAuthorisationCode, preauthorizationCode, otp,
       } = req.body;
+      const parsedApiPhone = parsePhoneInput(rawPhone);
+      if (!parsedApiPhone.ok) {
+        return res.status(400).json({
+          error: "invalid_phone",
+          code: "INVALID_PHONE_FORMAT",
+          message: "phone doit contenir un numéro composé de chiffres, avec une mise en forme téléphonique usuelle facultative.",
+        });
+      }
+      const phone = parsedApiPhone.phone;
       if (reference !== undefined && reference !== null && typeof reference !== "string") {
         return res.status(400).json({
           error: "invalid_reference",
