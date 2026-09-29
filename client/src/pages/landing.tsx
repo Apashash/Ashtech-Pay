@@ -698,7 +698,7 @@ function OperatorLogosSection() {
   const operators = [
     { name: "Moov Money", src: "/op-moov.png" },
     { name: "MTN MoMo", src: "/op-mtn.jpeg" },
-    { name: "TMoney", src: "/op-tmoney.jpeg" },
+    { name: "Mixx By Yas", src: "/op-mixx-by-yas.png" },
     { name: "Airtel Money", src: "/op-airtel.png" },
     { name: "Vodacom", src: "/op-vodacom.jpeg" },
     { name: "Wave", src: "/op-wave.png" },
@@ -727,7 +727,7 @@ function OperatorLogosSection() {
           {duplicated.map((op, index) => (
             <div key={index} className="flex-shrink-0 flex flex-col items-center gap-2 mx-5" data-testid={`operator-logo-${index}`}>
               <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-border shadow-md bg-white flex items-center justify-center">
-                <img src={op.src} alt={op.name} className="w-full h-full object-cover" />
+                <img src={op.src} alt={op.name} className="w-full h-full object-contain" />
               </div>
               <span className="text-xs text-muted-foreground font-medium whitespace-nowrap max-w-[88px] text-center leading-tight">{op.name}</span>
             </div>

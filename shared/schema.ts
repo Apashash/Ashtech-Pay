@@ -501,7 +501,7 @@ export const MOBILE_OPERATORS: Record<string, string[]> = {
   "Mali": ["Orange Money", "Moov Money"],
   "Burkina Faso": ["Moov Money", "Orange Money", "Wallet LigdiCash"],
   "Benin": ["Celtiis Money", "Coris Money", "MTN Money", "Moov Money"],
-  "Togo": ["Flooz (Moov)", "T-Money"],
+  "Togo": ["Flooz (Moov)", "Mixx By Yas"],
   "Niger": ["Airtel Money"],
   "Gabon": ["Airtel Money", "Moov Money"],
   "RD Congo": ["Afri Money", "Airtel Money", "Mpesa Money", "Orange Money", "Vodacom"],

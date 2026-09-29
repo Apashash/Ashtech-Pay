@@ -57,6 +57,7 @@ import {
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { formatCurrency } from "@/lib/currency";
+import { getOperatorDisplayName } from "@/lib/operator-logos";
 import { apiRequest, queryClient, setAuthToken, getAuthHeaders } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { ALL_FX_CURRENCIES } from "@shared/schema";
@@ -1161,7 +1162,7 @@ export default function AdminUserDetail() {
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Opérateur</p>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Nom</span>
-                    <span className="font-medium">{txDetail.operator.name}</span>
+                    <span className="font-medium">{getOperatorDisplayName(txDetail.operator.name)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Type</span>

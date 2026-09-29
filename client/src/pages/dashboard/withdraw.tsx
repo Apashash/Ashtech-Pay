@@ -14,7 +14,7 @@ import type { User } from "@shared/schema";
 import { Smartphone, SmartphoneNfc, Coins, Loader2, CheckCircle, AlertCircle, Plus, Settings, Shield, Info, CreditCard, X, RefreshCw, Clock } from "lucide-react";
 import { useLanguage } from "@/lib/language";
 import { BottomSheet, BottomSheetContent, BottomSheetHeader, BottomSheetTitle, BottomSheetFooter } from "@/components/ui/bottom-sheet";
-import { getOperatorLogo } from "@/lib/operator-logos";
+import { getOperatorDisplayName, getOperatorLogo } from "@/lib/operator-logos";
 import { getCountryFlagEmoji } from "@/lib/country-flags";
 import { z } from "zod";
 import { useState, useEffect } from "react";
@@ -651,7 +651,7 @@ export default function WithdrawPage() {
                             }`}
                           >
                             {logo ? (
-                              <img src={logo} alt={op.name} className={`${isOrangeMoney ? "w-16 h-10" : "w-10 h-10"} object-contain rounded-xl ${isUnavailable ? "grayscale" : ""}`} />
+                              <img src={logo} alt={getOperatorDisplayName(op.name)} className={`${isOrangeMoney ? "w-16 h-10" : "w-10 h-10"} object-contain rounded-xl ${isUnavailable ? "grayscale" : ""}`} />
                             ) : (
                               <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isUnavailable ? "bg-gray-100" : "bg-muted"}`}>
                                 <Smartphone className={`w-6 h-6 ${isUnavailable ? "text-black" : "text-muted-foreground"}`} />
@@ -660,7 +660,7 @@ export default function WithdrawPage() {
                             <span className={`text-[11px] font-semibold text-center leading-tight px-1 ${
                               isUnavailable ? "text-black" : isSelected ? "text-primary" : "text-foreground"
                             }`}>
-                              {op.name}
+                              {getOperatorDisplayName(op.name)}
                             </span>
                             {isUnavailable && <span className="text-[8px] font-bold uppercase leading-none text-black">Indisponible</span>}
                           </button>
@@ -681,7 +681,7 @@ export default function WithdrawPage() {
                       <SelectContent>
                         {withdrawalNumbers.map((number) => (
                           <SelectItem key={number.id} value={number.id}>
-                            {number.phoneNumber} ({number.operatorName})
+                            {number.phoneNumber} ({getOperatorDisplayName(number.operatorName)})
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -787,7 +787,7 @@ export default function WithdrawPage() {
             {selectedOperatorData && (
               <div className="flex items-center justify-between px-4 py-3.5">
                 <span className="text-sm text-muted-foreground">{t.withdraw.confirmOperator}</span>
-                <span className="text-sm font-medium">{selectedOperatorData.name}</span>
+                <span className="text-sm font-medium">{getOperatorDisplayName(selectedOperatorData.name)}</span>
               </div>
             )}
             {form.getValues("accountDetails") && (

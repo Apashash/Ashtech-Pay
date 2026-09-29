@@ -35,6 +35,7 @@ import { formatCurrency, formatWalletBalance } from "@/lib/currency";
 import { useUpload } from "@/hooks/use-upload";
 import { useLanguage } from "@/lib/language";
 import { uploadPaymentLinkImage } from "@/lib/payment-link-image";
+import { getOperatorDisplayName } from "@/lib/operator-logos";
 
 const countryCodeMap: Record<string, string> = {
   "Cameroon": "cm",
@@ -1041,7 +1042,7 @@ export default function PaymentLinksPage() {
       for (const country of countriesList) {
         const operators = (country as any).operators || [];
         const operator = operators.find((o: { id: string; name: string }) => o.id === operatorValue);
-        if (operator) return operator.name;
+        if (operator) return getOperatorDisplayName(operator.name);
       }
       return operatorValue;
     }

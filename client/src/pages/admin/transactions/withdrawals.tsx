@@ -46,6 +46,7 @@ import {
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { formatCurrency } from "@/lib/currency";
+import { getOperatorDisplayName } from "@/lib/operator-logos";
 import { apiRequest, queryClient, getAuthHeaders } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Transaction, SupportedCurrency } from "@shared/schema";
@@ -175,7 +176,7 @@ export default function AdminWithdrawals() {
 
     const network = metadata.networkName || metadata.network;
     if (typeof network === "string" && network.trim()) return network.trim();
-    return transaction.operatorId ? operatorMap[transaction.operatorId] || "—" : "—";
+    return transaction.operatorId ? getOperatorDisplayName(operatorMap[transaction.operatorId]) || "—" : "—";
   };
 
   const getStatusBadge = (status: string) => {

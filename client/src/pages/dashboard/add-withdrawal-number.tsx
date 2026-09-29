@@ -11,6 +11,7 @@ import { Phone, Loader2, ArrowLeft, Check } from "lucide-react";
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useLanguage } from "@/lib/language";
+import { getOperatorDisplayName } from "@/lib/operator-logos";
 
 interface OperatorOption {
   id: string;
@@ -132,7 +133,7 @@ export default function AddWithdrawalNumberPage() {
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-medium">{operator.name}</span>
+                      <span className="font-medium">{getOperatorDisplayName(operator.name)}</span>
                       {selectedOperator === operator.name && (
                         <Check className="w-5 h-5 text-primary" />
                       )}

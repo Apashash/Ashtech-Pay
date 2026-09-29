@@ -20,7 +20,7 @@ import {
   Smartphone, CreditCard, ExternalLink, FileText, AlertTriangle,
   User, Mail, Phone, Hash, Clock, Copy, Bitcoin, ChevronDown, Hourglass
 } from "lucide-react";
-import { getOperatorLogo } from "@/lib/operator-logos";
+import { getOperatorDisplayName, getOperatorLogo } from "@/lib/operator-logos";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { SiPaypal } from "react-icons/si";
 import { useIziAssets, coinLogoUrl, networkLogoUrl } from "@/lib/use-crypto-assets";
@@ -780,7 +780,7 @@ export default function PaymentPage() {
                 <div className="absolute w-24 h-24 rounded-full bg-amber-500/10 animate-pulse" />
                 <div className="w-16 h-16 rounded-full overflow-hidden bg-white border-2 border-border shadow-md flex items-center justify-center relative z-10">
                   {selectedOperatorData && getOperatorLogo(selectedOperatorData.name) ? (
-                    <img src={getOperatorLogo(selectedOperatorData.name)!} alt={selectedOperatorData.name} className="w-full h-full object-cover" />
+                    <img src={getOperatorLogo(selectedOperatorData.name)!} alt={getOperatorDisplayName(selectedOperatorData.name)} className="w-full h-full object-contain" />
                   ) : (
                     <Phone className="w-7 h-7 text-amber-500" />
                   )}
@@ -801,7 +801,7 @@ export default function PaymentPage() {
                   {formatAmount(displayAmount, (displayCurrency as string) || "XAF")}
                 </p>
                 {selectedOperatorData && (
-                  <p className="text-sm text-muted-foreground mt-1">via {selectedOperatorData.name}</p>
+                  <p className="text-sm text-muted-foreground mt-1">via {getOperatorDisplayName(selectedOperatorData.name)}</p>
                 )}
               </div>
 
@@ -1081,7 +1081,7 @@ export default function PaymentPage() {
                     <div className="absolute w-24 h-24 rounded-full bg-amber-500/10 otp-logo-halo" />
                     <div className="w-16 h-16 rounded-full overflow-hidden bg-white border-2 border-border shadow-md flex items-center justify-center relative z-10">
                       {selectedOperatorData && getOperatorLogo(selectedOperatorData.name) ? (
-                        <img src={getOperatorLogo(selectedOperatorData.name)!} alt={selectedOperatorData.name} className="w-full h-full object-cover" />
+                        <img src={getOperatorLogo(selectedOperatorData.name)!} alt={getOperatorDisplayName(selectedOperatorData.name)} className="w-full h-full object-contain" />
                       ) : (
                         <Phone className="w-7 h-7 text-amber-500" />
                       )}
@@ -1104,7 +1104,7 @@ export default function PaymentPage() {
                       {formatAmount(displayAmount, (displayCurrency as string) || "XAF")}
                     </p>
                     {selectedOperatorData && (
-                      <p className="text-sm text-muted-foreground mt-1">via {selectedOperatorData.name}</p>
+                      <p className="text-sm text-muted-foreground mt-1">via {getOperatorDisplayName(selectedOperatorData.name)}</p>
                     )}
                   </div>
 
@@ -1286,7 +1286,7 @@ export default function PaymentPage() {
                     <div className="absolute w-24 h-24 rounded-full bg-blue-500/20 animate-ping" />
                     <div className="w-16 h-16 rounded-full overflow-hidden bg-white border-2 border-border shadow-md flex items-center justify-center relative z-10">
                       {selectedOperatorData && getOperatorLogo(selectedOperatorData.name) ? (
-                        <img src={getOperatorLogo(selectedOperatorData.name)!} alt={selectedOperatorData.name} className="w-full h-full object-cover" />
+                        <img src={getOperatorLogo(selectedOperatorData.name)!} alt={getOperatorDisplayName(selectedOperatorData.name)} className="w-full h-full object-contain" />
                       ) : (
                         <Smartphone className="w-7 h-7 text-muted-foreground" />
                       )}
@@ -1305,7 +1305,7 @@ export default function PaymentPage() {
                       {formatAmount(displayAmount, (displayCurrency as string) || "XAF")}
                     </p>
                     {selectedOperatorData && (
-                      <p className="text-sm text-muted-foreground mt-1">via {selectedOperatorData.name}</p>
+                      <p className="text-sm text-muted-foreground mt-1">via {getOperatorDisplayName(selectedOperatorData.name)}</p>
                     )}
                   </div>
                   {pawaPayAuth?.authType === "PROVIDER_AUTH" && (
@@ -1667,14 +1667,14 @@ export default function PaymentPage() {
                         }`}
                       >
                         {logo ? (
-                          <img src={logo} alt={op.name} className={`${isOrangeMoney ? "w-16 h-10" : "w-11 h-10"} object-contain rounded-lg bg-white ${isUnavailable ? "grayscale" : ""}`} loading="eager" decoding="async" />
+                          <img src={logo} alt={getOperatorDisplayName(op.name)} className={`${isOrangeMoney ? "w-16 h-10" : "w-11 h-10"} object-contain rounded-lg bg-white ${isUnavailable ? "grayscale" : ""}`} loading="eager" decoding="async" />
                         ) : (
                           <div className={`w-11 h-10 rounded-lg flex items-center justify-center ${isUnavailable ? "bg-gray-100" : "bg-primary/10"}`}>
                             <Smartphone className={`w-6 h-6 ${isUnavailable ? "text-black" : "text-primary"}`} />
                           </div>
                         )}
                         <span className={`text-xs font-medium text-center leading-tight px-1 ${isUnavailable ? "text-black" : isSelected ? "text-primary" : "text-foreground"}`}>
-                          {op.name}
+                          {getOperatorDisplayName(op.name)}
                         </span>
                         {isUnavailable && <span className="text-[9px] font-bold uppercase leading-none text-black">Indisponible</span>}
                       </button>

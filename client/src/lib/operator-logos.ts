@@ -1,3 +1,8 @@
+export function getOperatorDisplayName(name: string | null | undefined): string {
+  const label = name?.trim() ?? "";
+  return /t[\s_-]?money/i.test(label) ? "Mixx By Yas" : label;
+}
+
 export function getOperatorLogo(name: string): string | null {
   const n = name.toLowerCase().trim();
   if (n.includes("celtiis") || n.includes("celtis")) return "/op-celtiis.jpeg";
@@ -14,7 +19,7 @@ export function getOperatorLogo(name: string): string | null {
   if (n.includes("free")) return "/op-freemoney.png";
   if (n.includes("smart") || n.includes("smartcash")) return "/op-smartcash.png";
   if (n.includes("telecel")) return "/op-telecel.jpeg";
-  if (n.includes("tmoney") || n.includes("t-money")) return "/op-tmoney.jpeg";
+  if (n.includes("mixx") || /t[\s_-]?money/.test(n)) return "/op-mixx-by-yas.png";
   if (n.includes("vodacom")) return "/op-vodacom.jpeg";
   if (n.includes("vodafone")) return "/op-vodafone.jpeg";
   if (n.includes("wizall")) return "/op-wizall.png";

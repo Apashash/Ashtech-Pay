@@ -75,7 +75,7 @@ export function guessPawaPayProviderCode(operatorName: string, countryCode: stri
   if (normalizedName.includes("mpesa") || normalizedName.includes("m-pesa")) return `MPESA_${alpha3}`;
   if (normalizedName.includes("free")) return `FREE_${alpha3}`;
   if (normalizedName.includes("tigo")) return `TIGO_${alpha3}`;
-  if (normalizedName.includes("tmoney") || normalizedName.includes("t-money")) return `TMONEY_${alpha3}`;
+  if (normalizedName.includes("mixx") || normalizedName.includes("tmoney") || normalizedName.includes("t-money")) return `TMONEY_${alpha3}`;
   if (normalizedName.includes("togocel")) return `TOGOCEL_${alpha3}`;
   return "";
 }

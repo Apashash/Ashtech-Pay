@@ -18,6 +18,7 @@ import {
 import { useState } from "react";
 import { useLanguage } from "@/lib/language";
 import { useIziAssets } from "@/lib/use-crypto-assets";
+import { getOperatorDisplayName } from "@/lib/operator-logos";
 
 interface PublicOperator {
   id: string;
@@ -384,7 +385,7 @@ export default function FeeDetailsPage() {
                                           ) : (
                                             <Building2 className="w-3.5 h-3.5 text-muted-foreground" />
                                           )}
-                                          <span className="text-sm text-foreground">{op.name}</span>
+                                          <span className="text-sm text-foreground">{getOperatorDisplayName(op.name)}</span>
                                         </div>
                                         <div className="flex items-center gap-2">
                                           {fmtMin(opFee, country.currency) && (
@@ -411,7 +412,7 @@ export default function FeeDetailsPage() {
                                         ) : (
                                           <Building2 className="w-3.5 h-3.5 text-muted-foreground" />
                                         )}
-                                        <span className="text-sm text-muted-foreground">{op.name}</span>
+                                        <span className="text-sm text-muted-foreground">{getOperatorDisplayName(op.name)}</span>
                                       </div>
                                       <Badge variant="secondary" className="text-xs">
                                         {fmtFee(baseFee, country.currency)}

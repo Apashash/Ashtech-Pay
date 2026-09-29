@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SearchableSelectContent } from "@/components/ui/searchable-select-content";
 import { useToast } from "@/hooks/use-toast";
 import { Shield, Globe, CheckCircle2, XCircle, Loader2, Phone, AlertCircle } from "lucide-react";
+import { getOperatorDisplayName } from "@/lib/operator-logos";
 
 interface HostedSession {
   payment_id: string;
@@ -435,7 +436,7 @@ export default function HPayPage() {
                           <SelectContent>
                             {operators.map((op) => (
                               <SelectItem key={op.id} value={op.id} data-testid={`operator-option-${op.id}`}>
-                                {op.name}
+                                {getOperatorDisplayName(op.name)}
                               </SelectItem>
                             ))}
                           </SelectContent>

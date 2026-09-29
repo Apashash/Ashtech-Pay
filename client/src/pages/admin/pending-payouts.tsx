@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
+import { getOperatorDisplayName } from "@/lib/operator-logos";
 
 interface PendingPayout {
   id: string;
@@ -237,7 +238,7 @@ export default function AdminPendingPayoutsPage() {
                               {providerInfo.label}
                             </span>
                             <span className="text-xs text-muted-foreground">
-                              {payout.operatorName || "—"} · {payout.recipientCountry || "—"}
+                               {getOperatorDisplayName(payout.operatorName) || "—"} · {payout.recipientCountry || "—"}
                             </span>
                           </div>
                           <div className="flex items-center gap-2 mt-0.5">
@@ -270,7 +271,7 @@ export default function AdminPendingPayoutsPage() {
                           </div>
                           <div className="space-y-0.5">
                             <p className="text-xs text-muted-foreground">Opérateur / Pays</p>
-                            <p className="font-medium">{payout.operatorName || "—"} · {payout.recipientCountry || "—"}</p>
+                             <p className="font-medium">{getOperatorDisplayName(payout.operatorName) || "—"} · {payout.recipientCountry || "—"}</p>
                           </div>
                           <div className="space-y-0.5">
                             <p className="text-xs text-muted-foreground flex items-center gap-1"><User className="w-3 h-3" /> Utilisateur</p>

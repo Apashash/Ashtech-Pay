@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { useLanguage } from "@/lib/language";
 import { getTransactionStatusCategory } from "@shared/transaction-status";
+import { getOperatorDisplayName } from "@/lib/operator-logos";
 
 interface TransactionDetails extends Transaction {
   paymentLink?: { title: string; slug: string } | null;
@@ -425,7 +426,7 @@ export default function TransactionDetailPage({ params }: { params: { id: string
           )}
 
           {operatorInfo && (
-            <Row label={td.detailOperator} value={operatorInfo.name.toUpperCase()} />
+            <Row label={td.detailOperator} value={getOperatorDisplayName(operatorInfo.name).toUpperCase()} />
           )}
 
           {payerCountry && (

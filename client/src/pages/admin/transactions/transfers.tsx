@@ -46,6 +46,7 @@ import {
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { formatCurrency } from "@/lib/currency";
+import { getOperatorDisplayName } from "@/lib/operator-logos";
 import { apiRequest, queryClient, getAuthHeaders } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Transaction, SupportedCurrency } from "@shared/schema";
@@ -435,7 +436,7 @@ export default function AdminTransfers() {
                           <CreditCard className="w-4 h-4" />
                           <span className="text-sm">Opérateur</span>
                         </div>
-                        <span className="text-sm font-medium">{txDetails.operator.name}</span>
+                         <span className="text-sm font-medium">{getOperatorDisplayName(txDetails.operator.name)}</span>
                       </div>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 text-muted-foreground">

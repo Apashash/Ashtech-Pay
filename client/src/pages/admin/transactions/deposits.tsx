@@ -50,6 +50,7 @@ import {
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { formatCurrency } from "@/lib/currency";
+import { getOperatorDisplayName } from "@/lib/operator-logos";
 import { apiRequest, queryClient, getAuthHeaders } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Transaction, SupportedCurrency } from "@shared/schema";
@@ -447,7 +448,7 @@ export default function AdminDeposits() {
                         {tx.operatorId && operatorMap[tx.operatorId] ? (
                           <div className="flex items-center gap-1.5 text-primary font-medium text-sm">
                             <Smartphone className="w-3.5 h-3.5 flex-shrink-0" />
-                            {operatorMap[tx.operatorId]}
+                            {getOperatorDisplayName(operatorMap[tx.operatorId])}
                           </div>
                         ) : tx.paymentMethod === "crypto" ? (() => {
                           // metadata.assetCode (new) OR parse from description (old transactions)
@@ -793,7 +794,7 @@ export default function AdminDeposits() {
                           <CreditCard className="w-4 h-4" />
                           <span className="text-sm">Opérateur</span>
                         </div>
-                        <span className="text-sm font-medium">{txDetails.operator.name}</span>
+                        <span className="text-sm font-medium">{getOperatorDisplayName(txDetails.operator.name)}</span>
                       </div>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 text-muted-foreground">

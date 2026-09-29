@@ -13,7 +13,7 @@ import { CreditCard, Loader2, AlertCircle, Phone, CheckCircle, XCircle, Smartpho
 import { SearchableSelectContent } from "@/components/ui/searchable-select-content";
 import { useLanguage } from "@/lib/language";
 import { BottomSheet, BottomSheetContent, BottomSheetHeader, BottomSheetTitle, BottomSheetFooter } from "@/components/ui/bottom-sheet";
-import { getOperatorLogo } from "@/lib/operator-logos";
+import { getOperatorDisplayName, getOperatorLogo } from "@/lib/operator-logos";
 import { z } from "zod";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { formatCurrency } from "@/lib/currency";
@@ -1450,10 +1450,10 @@ export default function DepositPage() {
                                       }`}
                                     >
                                       {logo
-                                         ? <img src={logo} alt={op.name} className={`${isOrangeMoney ? "w-16 h-10" : "w-11 h-10"} object-contain rounded-xl ${isUnavailable ? "grayscale" : ""}`} />
+                                         ? <img src={logo} alt={getOperatorDisplayName(op.name)} className={`${isOrangeMoney ? "w-16 h-10" : "w-11 h-10"} object-contain rounded-xl ${isUnavailable ? "grayscale" : ""}`} />
                                          : <div className={`w-11 h-10 rounded-xl flex items-center justify-center ${isUnavailable ? "bg-gray-100" : "bg-primary/10"}`}><Smartphone className={`w-6 h-6 ${isUnavailable ? "text-black" : "text-primary"}`} /></div>
                                       }
-                                       <span className={`text-xs font-semibold text-center leading-tight px-1 ${isUnavailable ? "text-black" : isSelected ? "text-primary" : "text-foreground"}`}>{op.name}</span>
+                                       <span className={`text-xs font-semibold text-center leading-tight px-1 ${isUnavailable ? "text-black" : isSelected ? "text-primary" : "text-foreground"}`}>{getOperatorDisplayName(op.name)}</span>
                                        {isUnavailable && <span className="text-[9px] font-bold uppercase leading-none text-black">Indisponible</span>}
                                     </button>
                                   );

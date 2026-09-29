@@ -11,6 +11,7 @@ import { Phone, Loader2, ArrowLeft, Check, AlertTriangle } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useLocation, useParams } from "wouter";
 import { useLanguage } from "@/lib/language";
+import { getOperatorDisplayName } from "@/lib/operator-logos";
 
 interface CountryData {
   id: string;
@@ -166,7 +167,7 @@ export default function EditWithdrawalNumberPage() {
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-medium">{operator}</span>
+                      <span className="font-medium">{getOperatorDisplayName(operator)}</span>
                       {selectedOperator === operator && (
                         <Check className="w-5 h-5 text-primary" />
                       )}

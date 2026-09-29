@@ -19,6 +19,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { isProviderAvailable } from "@/lib/providerCountries";
 import type { Fee, Country, Operator } from "@shared/schema";
+import { getOperatorDisplayName } from "@/lib/operator-logos";
 
 interface EditState {
   fee: Fee | null;
@@ -34,7 +35,7 @@ const guessAfribaCode = (name: string): string => {
   if (n.includes("wave")) return "wave";
   if (n.includes("moov") || n.includes("flooz")) return "moov";
   if (n.includes("ligdi")) return "ligdicash";
-  if (n.includes("t-money") || n.includes("tmoney")) return "tmoney";
+  if (n.includes("mixx") || n.includes("t-money") || n.includes("tmoney")) return "tmoney";
   if (n.includes("airtel")) return "airtel";
   if (n.includes("free money") || n.includes("free")) return "free";
   if (n.includes("afrimoney")) return "afrimoney";
@@ -234,7 +235,7 @@ export default function AdminFeesTransfers() {
         ? afribaFeeVal + marginVal
         : pixpayFeeVal + marginVal;
       await createFeeMutation.mutateAsync({
-        name: `Envoi - ${editing.operator.name}`,
+        name: `Envoi - ${getOperatorDisplayName(editing.operator.name)}`,
         transactionType: "transfer",
         feeType: (editing.fee as any)?.feeType || "percentage",
         operatorId: editing.operator.id,
@@ -359,7 +360,7 @@ export default function AdminFeesTransfers() {
                              >
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-medium text-sm">{op.name}</span>
+                                 <span className="font-medium text-sm">{getOperatorDisplayName(op.name)}</span>
                                 {isAfribaPay ? (
                                   <Badge className="bg-yellow-500/20 text-yellow-600 border-yellow-500/30 text-xs shrink-0">
                                     <Zap className="w-3 h-3 mr-1" />AfribaPay
@@ -396,14 +397,14 @@ export default function AdminFeesTransfers() {
                                  checked={feeIsActive}
                                  disabled={operatorToggleMutation.isPending}
                                  onCheckedChange={(checked) => operatorToggleMutation.mutate({ operatorId: op.id, isActive: checked })}
-                                 aria-label={`${feeIsActive ? "Désactiver" : "Activer"} ${op.name} pour les envois`}
+                                  aria-label={`${feeIsActive ? "Désactiver" : "Activer"} ${getOperatorDisplayName(op.name)} pour les envois`}
                                  data-testid={`switch-operator-transfer-${op.id}`}
                                />
                                <button
                                  type="button"
                                  className="p-1 rounded-md hover:bg-muted"
                                  onClick={() => openEdit(op, country)}
-                                 aria-label={`Modifier les frais de ${op.name}`}
+                                  aria-label={`Modifier les frais de ${getOperatorDisplayName(op.name)}`}
                                >
                                  <Pencil className="w-4 h-4 text-muted-foreground" />
                                </button>
@@ -424,7 +425,7 @@ export default function AdminFeesTransfers() {
           <DialogContent className="flex flex-col max-h-[92vh]">
             <DialogHeader>
               <DialogTitle>
-                {editing?.needsCreate ? "Configurer les frais" : "Modifier les frais"} envoi — {editing?.operator.name} ({editing?.country.flag} {editing?.country.name})
+                 {editing?.needsCreate ? "Configurer les frais" : "Modifier les frais"} envoi — {getOperatorDisplayName(editing?.operator.name)} ({editing?.country.flag} {editing?.country.name})
               </DialogTitle>
             </DialogHeader>
             {editing && (() => {
@@ -433,7 +434,7 @@ export default function AdminFeesTransfers() {
                 <div className="overflow-y-auto flex-1 space-y-4 py-4 pr-1">
                   {editing.needsCreate && (
                     <div className="p-3 rounded-lg bg-orange-500/10 border border-orange-400/30 text-xs text-orange-500">
-                      Un frais spécifique sera créé pour <strong>{editing.operator.name}</strong> uniquement. Les autres opérateurs ne seront pas affectés.
+                       Un frais spécifique sera créé pour <strong>{getOperatorDisplayName(editing.operator.name)}</strong> uniquement. Les autres opérateurs ne seront pas affectés.
                     </div>
                   )}
                   <div className="space-y-2">

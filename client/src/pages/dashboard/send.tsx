@@ -14,7 +14,7 @@ import { Send, Globe, Loader2, AlertCircle, Shield, CheckCircle2, Smartphone, Tr
 import { SearchableSelectContent } from "@/components/ui/searchable-select-content";
 import { useLanguage } from "@/lib/language";
 import { BottomSheet, BottomSheetContent, BottomSheetHeader, BottomSheetTitle, BottomSheetFooter } from "@/components/ui/bottom-sheet";
-import { getOperatorLogo } from "@/lib/operator-logos";
+import { getOperatorDisplayName, getOperatorLogo } from "@/lib/operator-logos";
 import { getCountryFlagEmoji } from "@/lib/country-flags";
 import { z } from "zod";
 import { formatCurrency, formatWalletBalance } from "@/lib/currency";
@@ -801,11 +801,11 @@ export default function SendMoneyPage() {
                                       }`}
                                     >
                                       {logo
-                                         ? <img src={logo} alt={op.name} className={`${isOrangeMoney ? "w-16 h-9" : "w-9 h-9"} object-contain rounded-xl ${isUnavailable ? "grayscale" : ""}`} />
+                                         ? <img src={logo} alt={getOperatorDisplayName(op.name)} className={`${isOrangeMoney ? "w-16 h-9" : "w-9 h-9"} object-contain rounded-xl ${isUnavailable ? "grayscale" : ""}`} />
                                          : <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isUnavailable ? "bg-gray-100" : "bg-primary/10"}`}><Smartphone className={`w-5 h-5 ${isUnavailable ? "text-black" : "text-primary"}`} /></div>
                                       }
                                        <span className={`text-[11px] font-semibold text-center leading-tight px-1 ${isUnavailable ? "text-black" : isSelected ? "text-primary" : "text-foreground"}`}>
-                                        {op.name}
+                                        {getOperatorDisplayName(op.name)}
                                       </span>
                                        {isUnavailable && <span className="text-[8px] font-bold uppercase leading-none text-black">Indisponible</span>}
                                     </button>

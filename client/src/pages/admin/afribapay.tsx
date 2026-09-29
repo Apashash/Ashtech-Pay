@@ -10,6 +10,7 @@ import {
   AlertCircle, ChevronDown, ChevronRight, Loader2, Lock, Info
 } from "lucide-react";
 import type { Country, Operator } from "@shared/schema";
+import { getOperatorDisplayName } from "@/lib/operator-logos";
 
 interface AfribaOperator {
   operator_code: string;
@@ -42,7 +43,7 @@ function OperatorReadRow({
   return (
     <tr className="border-b hover:bg-muted/10">
       <td className="py-2.5 pr-4">
-        <div className="font-medium text-sm">{op.name}</div>
+         <div className="font-medium text-sm">{getOperatorDisplayName(op.name)}</div>
         <div className="text-xs text-muted-foreground">{op.type || "mobile_money"}</div>
       </td>
 
@@ -63,7 +64,7 @@ function OperatorReadRow({
           <div className="flex items-center gap-1.5">
             <span className="font-mono text-xs bg-muted px-2 py-0.5 rounded border">{code}</span>
             {afribaMatch && (
-              <span className="text-xs text-muted-foreground">{afribaMatch.operator_name}</span>
+              <span className="text-xs text-muted-foreground">{getOperatorDisplayName(afribaMatch.operator_name)}</span>
             )}
             {afribaMatch?.otp_required === 1 && (
               <Badge variant="outline" className="text-xs px-1 py-0">OTP</Badge>
@@ -339,7 +340,7 @@ export default function AdminAfribaPay() {
                                 <div className="flex flex-wrap gap-1">
                                   {data.operators.map(op => (
                                     <div key={op.operator_code} className="flex items-center gap-1 bg-muted rounded px-2 py-1">
-                                      <span className="text-xs font-medium">{op.operator_name}</span>
+                                      <span className="text-xs font-medium">{getOperatorDisplayName(op.operator_name)}</span>
                                       <span className="text-xs text-muted-foreground">({op.operator_code})</span>
                                       {op.otp_required === 1 && <Badge variant="outline" className="text-xs px-1 py-0">OTP</Badge>}
                                       {op.wallet === 1 && <Badge variant="secondary" className="text-xs px-1 py-0">Wallet</Badge>}

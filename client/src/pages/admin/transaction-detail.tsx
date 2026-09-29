@@ -18,6 +18,7 @@ import {
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { formatCurrency } from "@/lib/currency";
+import { getOperatorDisplayName } from "@/lib/operator-logos";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { SupportedCurrency } from "@shared/schema";
@@ -468,7 +469,7 @@ export default function AdminTransactionDetail() {
               {tx.currency && (
                 <InfoRow icon={<Coins className="w-4 h-4" />} label="Devise" value={<span className="font-mono font-semibold">{tx.currency}</span>} />
               )}
-              <InfoRow icon={<CreditCard className="w-4 h-4" />} label="Opérateur" value={tx.operator.name} />
+               <InfoRow icon={<CreditCard className="w-4 h-4" />} label="Opérateur" value={getOperatorDisplayName(tx.operator.name)} />
               <InfoRow icon={<Zap className="w-4 h-4" />} label="Fournisseur" value={
                 <span className="capitalize">{(tx.type === "deposit" && tx.operator.depositPaymentProvider) ? tx.operator.depositPaymentProvider : tx.operator.paymentProvider}</span>
               } />

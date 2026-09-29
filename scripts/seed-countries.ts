@@ -72,7 +72,7 @@ async function seedCountriesAndOperators() {
       { name: 'Airtel Money', code: 'NE' },
       { name: 'Orange Money', code: 'NE' },
       { name: 'Flooz (Moov)', code: 'TG' },
-      { name: 'T-Money', code: 'TG' },
+      { name: 'Mixx By Yas', code: 'TG' },
       { name: 'MTN Mobile Money', code: 'BJ' },
       { name: 'Moov Money', code: 'BJ' },
       { name: 'Orange Money', code: 'GW' },

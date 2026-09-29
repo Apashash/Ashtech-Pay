@@ -259,7 +259,7 @@ const AFRIBAPAY_OPERATOR_CODE_MAP: Record<string, string> = {
   orange: "orange", mtn: "mtn", moov: "moov", wave: "wave",
   airtel: "airtel", free: "free", expresso: "expresso",
   emoney: "emoney", ligdicash: "wligdicash",
-  walletligdicash: "wligdicash", tmoney: "tmoney", celtiis: "celtiis",
+  walletligdicash: "wligdicash", tmoney: "tmoney", mixxbyyas: "tmoney", celtiis: "celtiis",
   coris: "coris", corismoney: "coris",
   mpesa: "mpesa", vodacom: "vodacom",
   afrimoney: "afrimoney", djamo: "djamo", amanata: "amanata",

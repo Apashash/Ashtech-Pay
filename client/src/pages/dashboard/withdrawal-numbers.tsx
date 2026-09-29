@@ -9,6 +9,7 @@ import type { WithdrawalNumber, WithdrawalNumberChange } from "@shared/schema";
 import { Phone, Plus, Loader2, Edit, Trash2, Clock, CheckCircle2, XCircle, AlertCircle, ChevronLeft, ChevronRight, ArrowRight, ArrowLeft } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useLanguage } from "@/lib/language";
+import { getOperatorDisplayName } from "@/lib/operator-logos";
 
 const HISTORY_PAGE_SIZE = 5;
 
@@ -181,7 +182,7 @@ export default function WithdrawalNumbersPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-foreground">{number.phoneNumber}</p>
-                    <p className="text-xs text-muted-foreground">{number.operatorName}{number.label ? ` · ${number.label}` : ""}</p>
+                    <p className="text-xs text-muted-foreground">{getOperatorDisplayName(number.operatorName)}{number.label ? ` · ${number.label}` : ""}</p>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <Link href={`/dashboard/withdrawal-numbers/edit/${number.id}`}>

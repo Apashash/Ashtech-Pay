@@ -17,6 +17,7 @@ import { formatCurrency, formatWalletBalance } from "@/lib/currency";
 import { useLocation } from "wouter";
 import { useExchangeRates } from "@/hooks/use-exchange-rates";
 import { useLanguage } from "@/lib/language";
+import { getOperatorDisplayName } from "@/lib/operator-logos";
 import {
   getTransactionStatusCategory,
   isTransactionCompletedStatus,
@@ -465,7 +466,7 @@ export default function TransactionsPage() {
                               {apiBadge}
                             </div>
                             <p className="text-xs text-muted-foreground mt-0.5">
-                              {operatorName || (tx.description ? tx.description.slice(0, 28) : "—")}
+                              {getOperatorDisplayName(operatorName) || (tx.description ? tx.description.slice(0, 28) : "—")}
                               {tx.createdAt && <span className="ml-1">· {format(new Date(tx.createdAt), "HH:mm")}</span>}
                             </p>
                           </div>

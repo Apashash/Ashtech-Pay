@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Zap, Globe, Smartphone, ArrowLeftRight, Hash, ChevronDown, ChevronRight, Lock } from "lucide-react";
 import { useState } from "react";
 import type { Country, Operator } from "@shared/schema";
+import { getOperatorDisplayName } from "@/lib/operator-logos";
 
 // ─── Mirror of server-side lookup table (read-only reference) ─────────────────
 const SERVICE_ID_TABLE: Record<string, Partial<Record<string, { cash_in: number; cash_out: number }>>> = {
@@ -95,7 +96,7 @@ function OperatorRow({ op, countryCode }: { op: any; countryCode: string }) {
   return (
     <tr className="border-b hover:bg-muted/10">
       <td className="py-2.5 pr-4">
-        <div className="font-medium text-sm">{op.name}</div>
+         <div className="font-medium text-sm">{getOperatorDisplayName(op.name)}</div>
       </td>
 
       {/* Flow auto */}
