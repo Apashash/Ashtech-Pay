@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
 import { useEffect } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { format } from "date-fns";
 import { fr, enUS } from "date-fns/locale";
 import {
@@ -40,6 +40,7 @@ interface Notification {
 
 export default function GlobalMessagePage() {
   const [location, setLocation] = useLocation();
+  const search = useSearch();
   const { t, language } = useLanguage();
   const { toast } = useToast();
   const gm = t.globalMsg;
@@ -51,12 +52,11 @@ export default function GlobalMessagePage() {
   const { data: notificationData } = useQuery<{ notifications: Notification[]; unreadCount: number }>({
     queryKey: ["/api/notifications"],
   });
-  const notificationId = new URLSearchParams(
-    location.includes("?") ? location.slice(location.indexOf("?")) : window.location.search,
-  ).get("notificationId");
-  const requestedAnnouncementId = new URLSearchParams(
-    location.includes("?") ? location.slice(location.indexOf("?")) : window.location.search,
-  ).get("announcementId") ?? (
+  const searchParams = new URLSearchParams(
+    search || (location.includes("?") ? location.slice(location.indexOf("?")) : window.location.search),
+  );
+  const notificationId = searchParams.get("notificationId");
+  const requestedAnnouncementId = searchParams.get("announcementId") ?? (
     notificationId?.startsWith("global-") ? notificationId.slice("global-".length) : null
   );
   const kycNotification = notificationData?.notifications.find(
