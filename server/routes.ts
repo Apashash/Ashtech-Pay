@@ -1,7 +1,11 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage, normalizePhone } from "./storage";
-import { userKycStateFromSubmissionStatus } from "./kycStatusPolicy";
+import {
+  submissionStatusFromAdminKycStatus,
+  userKycStateForProfile,
+  userKycStateFromAdminStatus,
+} from "./kycStatusPolicy";
 import { appPath } from "./appPaths";
 import { audit, AUDIT } from "./auditLogger";
 import { setFailedCooldown, getFailedCooldown } from "./failedCooldown";
@@ -4621,7 +4625,11 @@ export async function registerRoutes(
       // The latest submission is authoritative for the dashboard badge.
       try {
         const latestKyc = await storage.getKycSubmissionByUserId(req.userId!);
-        const expectedKycState = userKycStateFromSubmissionStatus(latestKyc?.status);
+        const expectedKycState = userKycStateForProfile(
+          user.kycStatus,
+          Boolean(user.isVerified),
+          latestKyc?.status,
+        );
         if (
           expectedKycState &&
           (
@@ -13029,6 +13037,44 @@ export async function registerRoutes(
       }
       if (Object.keys(updates).length === 0) {
         return res.status(400).json({ message: "Aucun champ modifiable fourni." });
+      }
+
+      if ("isVerified" in updates && !("kycStatus" in updates)) {
+        return res.status(400).json({
+          message: "Le statut KYC doit accompagner la modification du champ de vérification.",
+        });
+      }
+      if ("kycStatus" in updates) {
+        const accountKycState = userKycStateFromAdminStatus(updates.kycStatus);
+        if (!accountKycState) {
+          return res.status(400).json({ message: "Statut KYC invalide." });
+        }
+        if (
+          "isVerified" in updates &&
+          Boolean(updates.isVerified) !== accountKycState.isVerified
+        ) {
+          return res.status(400).json({
+            message: "Le statut KYC et le champ de vérification sont incohérents.",
+          });
+        }
+
+        const submissionStatus = submissionStatusFromAdminKycStatus(accountKycState.kycStatus);
+        if (submissionStatus) {
+          const latestSubmission = await storage.getKycSubmissionByUserId(id);
+          if (latestSubmission) {
+            const updatedSubmission = await storage.updateKycSubmission(latestSubmission.id, {
+              status: submissionStatus,
+            });
+            if (!updatedSubmission || updatedSubmission.status !== submissionStatus) {
+              return res.status(409).json({
+                message: "Le statut du dossier KYC n'a pas été confirmé en base. Rechargez le compte avant de réessayer.",
+              });
+            }
+          }
+        }
+
+        updates.kycStatus = accountKycState.kycStatus;
+        updates.isVerified = accountKycState.isVerified;
       }
 
       const user = await storage.updateUser(id, updates);

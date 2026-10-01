@@ -3,7 +3,7 @@
 - [KYC guard trigger pgBouncer bug](kyc-guard-trigger.md) — sensitive-column guard trigger blocked is_verified updates on pgBouncer/Supavisor (application_name reset); fix: removed is_verified from blocked columns.
 - [MySQL mutation readbacks](mysql-returning-readback.md) — Drizzle MySQL mutations need explicit insert/update then SELECT readbacks instead of PostgreSQL-style returning results.
 - [MySQL aggregate result shape](mysql-aggregate-result-shape.md) — Drizzle MySQL `db.execute()` returns selected rows directly; PostgreSQL uses a `{ rows }` result wrapper.
-- [MySQL KYC update readback](kyc-mysql-returning.md) — persist the reviewed dossier first, then read back the latest submission and synchronize both account KYC flags.
+- [MySQL KYC update readback](kyc-mysql-returning.md) — admin status changes must update the latest dossier first, then synchronize both account KYC flags without reviving explicit rejections.
 - [botGuard/ipBlocker IP-ban design](botguard-ip-ban-design.md) — no whole-IP bans/lockouts from a single bad request or one account's failed logins (CGNAT collateral damage); honeypot paths must never prefix a real route; auth lockouts must be per-account first, IP-wide only at a much higher threshold.
 - [Clean 404 for scanner probe paths](clean-404-scanner-probes.md) — probe/honeypot paths must return a real branded HTML 404 page, not bare status/text, or scanners flag it as an anomaly.
 - [Plesk .htaccess bypasses Node security](plesk-htaccess-bypasses-node-security.md) — production (Plesk/Apache) SPA fallback in client/public/.htaccess can 200 on /.env, /wp-admin etc. before Node ever sees the request; must patch both layers and rebuild to verify.
