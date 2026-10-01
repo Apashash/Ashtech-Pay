@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { encryptField, decryptField, hmacField } from "./fieldEncryption";
+import { userKycStateFromSubmissionStatus } from "./kycStatusPolicy";
 
 /**
  * Normalize a phone number before DB storage or lookup:
@@ -3067,7 +3068,7 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(kycSubmissions)
       .where(eq(kycSubmissions.userId, userId))
-      .orderBy(desc(kycSubmissions.createdAt))
+      .orderBy(desc(kycSubmissions.createdAt), desc(kycSubmissions.updatedAt))
       .limit(1);
     return submission || undefined;
   }
@@ -3124,29 +3125,24 @@ export class DatabaseStorage implements IStorage {
     return result.count;
   }
 
+  private async syncAccountKycStateFromLatestSubmission(userId: string): Promise<void> {
+    const latestSubmission = await this.getKycSubmissionByUserId(userId);
+    const state = userKycStateFromSubmissionStatus(latestSubmission?.status);
+    if (!state) throw new Error("KYC_STATE_NOT_PERSISTED");
+
+    const updatedUser = await this.updateUser(userId, state);
+    if (
+      !updatedUser ||
+      updatedUser.kycStatus !== state.kycStatus ||
+      Boolean(updatedUser.isVerified) !== state.isVerified
+    ) {
+      throw new Error("KYC_STATE_NOT_PERSISTED");
+    }
+  }
+
   async approveKycSubmission(id: string, reviewerId: string, note?: string): Promise<KycSubmission | undefined> {
     const submission = await this.getKycSubmissionById(id);
     if (!submission) return undefined;
-
-    // Do not approve the submission unless the account-level KYC state is
-    // confirmed by a database readback. A successful HTTP response must not
-    // hide a silently ignored user update.
-    try {
-      const updatedUser = await this.updateUser(submission.userId, { kycStatus: "verified", isVerified: true });
-      if (!updatedUser || updatedUser.kycStatus !== "verified" || updatedUser.isVerified !== true) {
-        throw new Error("KYC_STATE_NOT_PERSISTED");
-      }
-    } catch (userUpdateErr: any) {
-      console.error("[KYC approve] updateUser failed:", userUpdateErr?.message || userUpdateErr);
-      // Keep compatibility with deployments that still have the legacy guard,
-      // but verify both fields before reporting approval.
-      await db.update(users).set({ kycStatus: "verified" }).where(eq(users.id, submission.userId));
-      invalidateUserCache(submission.userId);
-      const fallbackUser = await this.getUser(submission.userId);
-      if (!fallbackUser || fallbackUser.kycStatus !== "verified" || fallbackUser.isVerified !== true) {
-        throw new Error("KYC_STATE_NOT_PERSISTED");
-      }
-    }
 
     // Try full update (with reviewer fields). Fall back to status-only if columns
     // don't exist yet on older production deployments.
@@ -3167,8 +3163,9 @@ export class DatabaseStorage implements IStorage {
       }
       return updated;
     };
+    let updatedSubmission: KycSubmission;
     try {
-      return await persistSubmissionStatus({
+      updatedSubmission = await persistSubmissionStatus({
         status: "approved",
         reviewerId,
         reviewNote: note,
@@ -3177,18 +3174,15 @@ export class DatabaseStorage implements IStorage {
       });
     } catch (e) {
       console.error("[KYC approve] Full update failed — falling back to status-only update:", e);
-      return await persistSubmissionStatus({ status: "approved" });
+      updatedSubmission = await persistSubmissionStatus({ status: "approved", updatedAt: new Date() });
     }
+    await this.syncAccountKycStateFromLatestSubmission(submission.userId);
+    return updatedSubmission;
   }
 
   async rejectKycSubmission(id: string, reviewerId: string, note?: string): Promise<KycSubmission | undefined> {
     const submission = await this.getKycSubmissionById(id);
     if (!submission) return undefined;
-
-    const updatedUser = await this.updateUser(submission.userId, { kycStatus: "rejected" });
-    if (!updatedUser || updatedUser.kycStatus !== "rejected") {
-      throw new Error("KYC_STATE_NOT_PERSISTED");
-    }
 
     // Try full update. Fall back to status-only if columns don't exist yet.
     const persistSubmissionStatus = async (updates: Record<string, unknown>) => {
@@ -3208,8 +3202,9 @@ export class DatabaseStorage implements IStorage {
       }
       return updated;
     };
+    let updatedSubmission: KycSubmission;
     try {
-      return await persistSubmissionStatus({
+      updatedSubmission = await persistSubmissionStatus({
         status: "rejected",
         reviewerId,
         reviewNote: note,
@@ -3218,8 +3213,10 @@ export class DatabaseStorage implements IStorage {
       });
     } catch (e) {
       console.error("[KYC reject] Full update failed — falling back to status-only update:", e);
-      return await persistSubmissionStatus({ status: "rejected" });
+      updatedSubmission = await persistSubmissionStatus({ status: "rejected", updatedAt: new Date() });
     }
+    await this.syncAccountKycStateFromLatestSubmission(submission.userId);
+    return updatedSubmission;
   }
 
   // ── Multi-currency wallets ──────────────────────────────────────────────────

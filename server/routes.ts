@@ -1,6 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage, normalizePhone } from "./storage";
+import { userKycStateFromSubmissionStatus } from "./kycStatusPolicy";
 import { appPath } from "./appPaths";
 import { audit, AUDIT } from "./auditLogger";
 import { setFailedCooldown, getFailedCooldown } from "./failedCooldown";
@@ -4620,21 +4621,16 @@ export async function registerRoutes(
       // The latest submission is authoritative for the dashboard badge.
       try {
         const latestKyc = await storage.getKycSubmissionByUserId(req.userId!);
-        const expectedStatus =
-          latestKyc?.status === "pending" ? "pending"
-            : latestKyc?.status === "approved" ? "verified"
-              : latestKyc?.status === "rejected" ? "rejected"
-                : null;
-        const expectedIsVerified = expectedStatus === "verified";
+        const expectedKycState = userKycStateFromSubmissionStatus(latestKyc?.status);
         if (
-          expectedStatus &&
-          (user.kycStatus !== expectedStatus || user.isVerified !== expectedIsVerified)
+          expectedKycState &&
+          (
+            user.kycStatus !== expectedKycState.kycStatus ||
+            Boolean(user.isVerified) !== expectedKycState.isVerified
+          )
         ) {
-          const syncedUser = await storage.updateUser(req.userId!, {
-            kycStatus: expectedStatus,
-            isVerified: expectedIsVerified,
-          });
-          user = syncedUser || { ...user, kycStatus: expectedStatus };
+          const syncedUser = await storage.updateUser(req.userId!, expectedKycState);
+          user = syncedUser || { ...user, ...expectedKycState };
         }
       } catch (statusError) {
         console.error("[KYC] Dashboard status reconciliation failed:", statusError);
