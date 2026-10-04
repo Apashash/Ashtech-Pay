@@ -7337,7 +7337,20 @@ export async function registerRoutes(
   });
 
   // Withdraw money
-  app.post("/api/withdrawals", requireAuth, withdrawalLimiter, otpConfirmLimiter, async (req, res) => {
+  app.post(
+    "/api/withdrawals",
+    requireAuth,
+    withdrawalLimiter,
+    async (req, res, next) => {
+      try {
+        // Do not apply the OTP-specific quota when withdrawal email OTP is disabled.
+        if (!(await isOtpEmailEnabled())) return next();
+        return otpConfirmLimiter(req, res, next);
+      } catch (error) {
+        return next(error);
+      }
+    },
+    async (req, res) => {
     let payoutLockUntil: number | null = null;
     try {
       const data = withdrawSchema.parse(req.body);
@@ -7920,7 +7933,8 @@ export async function registerRoutes(
       console.error("Withdrawal error:", error);
       res.status(500).json({ message: "Erreur serveur" });
     }
-  });
+    }
+  );
 
   // Fee calculation endpoint
   app.post("/api/fees/calculate", requireAuth, async (req, res) => {
