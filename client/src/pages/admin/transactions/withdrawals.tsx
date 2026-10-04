@@ -1,4 +1,5 @@
 import { getAdminPath } from "@/lib/adminPath";
+import { getWithdrawalProviderReference } from "@shared/withdrawalProviderReference";
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
@@ -315,21 +316,21 @@ export default function AdminWithdrawals() {
                     <TableRow key={tx.id} data-testid={`withdrawal-row-${tx.id}`}>
                       <TableCell className="font-mono text-sm">{tx.reference}</TableCell>
                       <TableCell className="max-w-[190px]">
-                        {tx.externalReference ? (
+                        {getWithdrawalProviderReference(tx) ? (
                           <div className="flex items-center gap-1">
                             <code
                               className="min-w-0 break-all font-mono text-xs"
-                              title={tx.externalReference}
+                              title={getWithdrawalProviderReference(tx) || undefined}
                               data-testid={`withdrawal-provider-reference-${tx.id}`}
                             >
-                              {tx.externalReference}
+                              {getWithdrawalProviderReference(tx)}
                             </code>
                             <Button
                               size="icon"
                               variant="ghost"
                               className="h-7 w-7 shrink-0"
                               aria-label="Copier la référence fournisseur"
-                              onClick={() => copyReference(tx.externalReference!)}
+                              onClick={() => copyReference(getWithdrawalProviderReference(tx)!)}
                             >
                               <Copy className="w-3.5 h-3.5" />
                             </Button>
@@ -470,7 +471,7 @@ export default function AdminWithdrawals() {
                     </div>
                   )}
 
-                  {tx.externalReference && (
+                  {getWithdrawalProviderReference(tx) && (
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-2 text-muted-foreground">
                         <Link2 className="w-4 h-4" />
@@ -481,14 +482,14 @@ export default function AdminWithdrawals() {
                           className="max-w-[260px] break-all text-right font-mono text-xs"
                           data-testid="withdrawal-provider-reference-detail"
                         >
-                          {tx.externalReference}
+                          {getWithdrawalProviderReference(tx)}
                         </code>
                         <Button
                           size="icon"
                           variant="ghost"
                           className="h-7 w-7 shrink-0"
                           aria-label="Copier la référence fournisseur"
-                          onClick={() => copyReference(tx.externalReference!)}
+                          onClick={() => copyReference(getWithdrawalProviderReference(tx)!)}
                         >
                           <Copy className="w-3.5 h-3.5" />
                         </Button>

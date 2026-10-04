@@ -556,6 +556,8 @@ export async function initiateAfribaPayout(params: AfribaPayoutParams): Promise<
     if (!res.ok || data.error) {
       return {
         success: false,
+        transaction_id: data.data?.transaction_id,
+        order_id: data.data?.order_id,
         message: data.error?.message || data.message || data.data?.message || "Erreur payout AfribaPay",
         providerCode: typeof data.error === "string" ? data.error : (typeof data.code === "string" ? data.code : undefined),
         providerStatus: res.status,
@@ -568,6 +570,8 @@ export async function initiateAfribaPayout(params: AfribaPayoutParams): Promise<
     if (["FAILED", "ERROR", "REJECTED", "CANCELLED", "EXPIRED", "NOT_FOUND", "NOT FOUND"].includes(payoutStatus)) {
       return {
         success: false,
+        transaction_id: d?.transaction_id,
+        order_id: d?.order_id,
         message: d.message || "Échec payout AfribaPay",
         status: payoutStatus,
         providerCode: typeof d.code === "string" ? d.code : undefined,

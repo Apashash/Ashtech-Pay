@@ -508,6 +508,7 @@ export async function initiatePixPayPayout(params: PixPayoutParams): Promise<Pix
     if (data.statut_code !== 200 || !data.data) {
       return {
         success: false,
+        transactionId: data.data?.transaction_id,
         status: "FAILED",
         message: data.message || "Échec de l'envoi Mobile Money",
         providerStatus: data.statut_code ?? res.status,
@@ -521,6 +522,7 @@ export async function initiatePixPayPayout(params: PixPayoutParams): Promise<Pix
     if (["FAILED", "CANCELLED", "FAILURE", "CANCEL", "REJECTED", "EXPIRED", "NOT_FOUND", "NOT FOUND"].includes(state)) {
       return {
         success: false,
+        transactionId: d.transaction_id,
         message: d.response || data.message || "Payout rejeté",
         status: state,
         providerStatus: res.status,

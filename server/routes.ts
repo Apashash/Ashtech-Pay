@@ -2361,6 +2361,9 @@ async function markPayoutRetrySafeAfterBalanceRejection(
   const rejectedAttempt = {
     provider,
     reference: attemptReference || transaction.externalReference || null,
+    providerReference: typeof metadata.providerReference === "string"
+      ? metadata.providerReference
+      : null,
     providerCode: String(failure.providerCode || "").slice(0, 80) || null,
     rejectedAt: new Date().toISOString(),
   };
@@ -2377,6 +2380,66 @@ async function markPayoutRetrySafeAfterBalanceRejection(
     },
   } as any);
   return true;
+}
+
+function getPayoutProviderReference(result: unknown): string | null {
+  if (!result || typeof result !== "object") return null;
+  const record = result as Record<string, any>;
+  const raw = record.raw as Record<string, any> | undefined;
+  const rawData = raw?.data?.data ?? raw?.data ?? raw;
+  const candidates = [
+    record.providerReference,
+    record.transaction_id,
+    record.transactionId,
+    record.id,
+    rawData?.transaction_id,
+    rawData?.transactionId,
+    rawData?.payoutId,
+    rawData?.id,
+  ];
+  return candidates.find(
+    (value): value is string => typeof value === "string" && value.trim().length > 0,
+  ) ?? null;
+}
+
+async function persistPayoutProviderReference(
+  transactionId: string,
+  result: unknown,
+): Promise<string | null> {
+  const providerReference = getPayoutProviderReference(result);
+  if (!providerReference) return null;
+
+  try {
+    const transaction = await storage.getTransactionById(transactionId);
+    if (!transaction) return providerReference;
+
+    const rawMetadata = (transaction as any).metadata;
+    let metadata: Record<string, any> = {};
+    if (rawMetadata && typeof rawMetadata === "object" && !Array.isArray(rawMetadata)) {
+      metadata = rawMetadata as Record<string, any>;
+    } else if (typeof rawMetadata === "string") {
+      try {
+        const parsed = JSON.parse(rawMetadata);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          metadata = parsed as Record<string, any>;
+        }
+      } catch {
+        // Preserve the payout state even if legacy metadata cannot be parsed.
+      }
+    }
+
+    if (metadata.providerReference !== providerReference) {
+      await storage.updateTransaction(transactionId, {
+        metadata: { ...metadata, providerReference },
+      } as any);
+    }
+  } catch (error) {
+    // Reference persistence must not cause an already-submitted payout to be
+    // treated as rejected or safe to submit again.
+    console.error(`[Payout] Failed to persist provider reference for ${transactionId}:`, error);
+  }
+
+  return providerReference;
 }
 
 function payoutProviderDisplayName(provider: string): string {
@@ -7562,6 +7625,7 @@ export async function registerRoutes(
       const withdrawalRef = generateTransactionReference("withdrawal");
       const pawaPayPayoutId = withdrawalProvider === "pawapay" ? createPawaPayId() : undefined;
       let pawaPayInitiationAmbiguous = false;
+      let withdrawalProviderReference: string | null = null;
       const transaction = await storage.createTransaction({
         userId,
         type: "withdrawal",
@@ -7700,7 +7764,7 @@ export async function registerRoutes(
           });
           payoutResult = {
             success: result.success,
-            transaction_id: pawaPayPayoutId,
+            transaction_id: result.id || pawaPayPayoutId,
             message: result.providerMessage,
             status: result.status,
             providerCode: result.providerCode,
@@ -7708,6 +7772,8 @@ export async function registerRoutes(
             raw: result.raw,
           };
         }
+
+        withdrawalProviderReference = await persistPayoutProviderReference(transaction.id, payoutResult);
 
         if (payoutResult.success) {
           console.log(`[Withdrawal] Payout submitted OK: ${withdrawalRef} (ext: ${payoutResult.transaction_id})`);
@@ -7905,7 +7971,8 @@ export async function registerRoutes(
           totalDebited: totalAmount,
         },
       });
-      res.json({ 
+      res.json({
+        providerReference: withdrawalProviderReference,
         transaction: withdrawalProvider === "pawapay" && pawaPayPayoutId
           ? {
               ...transaction,
@@ -15928,6 +15995,7 @@ export async function registerRoutes(
               provider: priorAttemptProvider || "unknown",
               reference: tx.externalReference || tx.reference || null,
               externalReference: tx.externalReference || null,
+              providerReference: transactionMetadata.providerReference || null,
               result: transactionMetadata.payoutRetrySafe === true
                 ? "confirmed_no_payout"
                 : "previous_result_uncertain",
@@ -15942,6 +16010,7 @@ export async function registerRoutes(
         pendingPayoutProvider: provider,
         payoutRetrySafe: false,
         payoutRetryProvider: provider,
+        providerReference: null,
         payoutAttemptHistory,
       };
 
@@ -16053,7 +16122,7 @@ export async function registerRoutes(
         });
         payoutResult = {
           success: result.success,
-          transaction_id: pawaPayRetryId,
+          transaction_id: result.id || pawaPayRetryId,
           message: result.providerMessage,
           status: result.status,
           providerStatus: result.providerStatus,
@@ -16143,6 +16212,8 @@ export async function registerRoutes(
 
       }
 
+      const retryProviderReference = await persistPayoutProviderReference(txId, payoutResult);
+
       if (payoutResult.success) {
         // Provider accepted — mark this BEFORE any DB write so the catch block
         // knows not to revert to pending_manual if a subsequent step throws.
@@ -16165,6 +16236,7 @@ export async function registerRoutes(
                 ? `Le paiement a déjà été confirmé par ${provider}.`
                 : `Le fournisseur a déjà retourné le statut ${currentTransaction.status}.`,
               reference: pollerRef,
+              providerReference: retryProviderReference,
               status: currentTransaction.status,
             });
           }
@@ -16218,6 +16290,7 @@ export async function registerRoutes(
               ? `Le fournisseur a rejeté le paiement; le montant a été recrédité.`
               : `Payout soumis via ${provider} avec succès`,
           reference: pollerRef,
+          providerReference: retryProviderReference,
           status: latestTransaction?.status || "pending",
         });
       } else {
