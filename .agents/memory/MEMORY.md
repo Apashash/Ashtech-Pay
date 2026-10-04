@@ -42,7 +42,7 @@
 - [Mobile password autofill](mobile-password-autofill.md) — mark email as the login username and registration pseudo as nickname so mobile managers do not autofill the pseudo.
 - [Auth country detection](auth-country-detection.md) — login and registration select the active country from server-side IP geolocation, while manual selection always wins.
 - [AfribaPay country operators](afribapay-country-operators.md) — BJ/CI/NE require country-specific operator catalogs and exact AfribaPay codes across deposit, withdrawal, and transfer.
-- [Payout no auto-cancel](payout-no-auto-cancel.md) — ambiguous lookups, including HTTP 404 and NOT_FOUND, stay pending; only explicit terminal rejection can refund a debited payout.
+- [Payout no auto-cancel](payout-no-auto-cancel.md) — ambiguous payouts stay pending; after explicit insufficient balance, allow admin retry only via the same provider and settle from its final status.
 - [Admin route cloaking](admin-route-cloaking.md) — unauthenticated and non-admin requests to admin API/panel paths must look like branded 404s before auth/CSRF/PIN layers.
 - [Admin Telegram notification boundary](admin-telegram-notifications.md) — emit successful admin alerts at login only, never from per-request authorization middleware.
 - [Merchant webhook delivery](merchant-webhook-delivery.md) — all merchant events must use one persisted, HMAC-signed, idempotent queue with retry and cross-worker claims.

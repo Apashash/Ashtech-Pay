@@ -17,15 +17,32 @@ Only a successful provider initiation/status may continue through automatic
 polling and settlement. An internal wallet balance check that fails before a
 transaction is created remains an immediate user-facing rejection.
 
-Automatic payout paths must keep a persisted provider attempt ID immutable,
-never switch providers or create a replacement attempt, and settle only on a
-definitive provider result.
+Keep a persisted provider attempt ID immutable while its request may have been
+accepted or its outcome is ambiguous; never poll a different provider or replace
+that attempt in those cases. A new same-provider attempt is allowed only after
+an explicit provider response proves the previous request was rejected without
+creating a payout, such as a documented insufficient-balance response.
 
 User requirement (2026-10-04): admins may manually change a pending payout's
 status even when the provider has not replied or an external reference exists.
 Manual completion must not submit another payout. Manual failure/cancellation
 must immediately refund the original wallet, even though a late provider payout
 could cause a double payment. Keep the provider reference in the audit record.
+
+User requirement (2026-10-04): payout initiation uses the provider configured
+for that payout. An explicit insufficient provider balance stays pending_manual
+without refund; after the admin replenishes that provider, the admin can resubmit
+through the same provider. A definitive provider confirmation then updates the
+transaction automatically. The manual "confirm" action is separate and does not
+call the provider.
+
+**Why:** the user specified this as the intended workflow for payouts across
+configured providers.
+
+**How to apply:** preserve the configured provider on the pending transaction,
+allow a same-provider retry after an explicit no-payout balance rejection, and
+settle through provider callback/polling rather than treating an admin status
+override as a provider execution.
 
 For providers whose callback and poller can race, the terminal transaction
 claim and corresponding wallet credit/refund must commit in one database
