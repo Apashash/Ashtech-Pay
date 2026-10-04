@@ -1,4 +1,5 @@
 import { getAdminPath } from "@/lib/adminPath";
+import { getTransactionProviderReference } from "@shared/transactionProviderReference";
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
@@ -41,7 +42,8 @@ import {
   CreditCard,
   FileText,
   Globe,
-  Coins
+  Coins,
+  Link2,
 } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -219,7 +221,8 @@ export default function AdminTransfers() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Référence</TableHead>
+                  <TableHead>Réf. interne</TableHead>
+                  <TableHead>Réf. fournisseur</TableHead>
                   <TableHead>Expéditeur</TableHead>
                   <TableHead>Destinataire</TableHead>
                   <TableHead>Montant Net</TableHead>
@@ -233,11 +236,11 @@ export default function AdminTransfers() {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8">Chargement...</TableCell>
+                    <TableCell colSpan={10} className="text-center py-8">Chargement...</TableCell>
                   </TableRow>
                 ) : filteredTransactions.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                       Aucun envoi trouvé
                     </TableCell>
                   </TableRow>
@@ -245,6 +248,30 @@ export default function AdminTransfers() {
                   filteredTransactions.map((tx) => (
                     <TableRow key={tx.id} data-testid={`transfer-row-${tx.id}`}>
                       <TableCell className="font-mono text-sm">{tx.reference}</TableCell>
+                      <TableCell className="max-w-[190px]">
+                        {getTransactionProviderReference(tx) ? (
+                          <div className="flex items-center gap-1">
+                            <code
+                              className="min-w-0 break-all font-mono text-xs"
+                              title={getTransactionProviderReference(tx) || undefined}
+                              data-testid={`transfer-provider-reference-${tx.id}`}
+                            >
+                              {getTransactionProviderReference(tx)}
+                            </code>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7 shrink-0"
+                              aria-label="Copier la référence fournisseur"
+                              onClick={() => copyReference(getTransactionProviderReference(tx)!)}
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <div>
                           <p className="font-medium">{tx.user?.fullName || "N/A"}</p>
@@ -363,6 +390,29 @@ export default function AdminTransfers() {
                         <code className="text-sm font-mono bg-muted px-2 py-1 rounded">{tx.reference}</code>
                         <Button size="icon" variant="ghost" onClick={() => copyReference(tx.reference!)}>
                           <Copy className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {getTransactionProviderReference(tx) && (
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Link2 className="w-4 h-4" />
+                        <span className="text-sm">Référence fournisseur</span>
+                      </div>
+                      <div className="flex min-w-0 items-center gap-2">
+                        <code className="max-w-[260px] break-all text-right font-mono text-xs">
+                          {getTransactionProviderReference(tx)}
+                        </code>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 shrink-0"
+                          aria-label="Copier la référence fournisseur"
+                          onClick={() => copyReference(getTransactionProviderReference(tx)!)}
+                        >
+                          <Copy className="w-3.5 h-3.5" />
                         </Button>
                       </div>
                     </div>

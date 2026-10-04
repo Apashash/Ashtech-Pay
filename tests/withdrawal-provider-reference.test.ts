@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getWithdrawalProviderReference } from "../shared/withdrawalProviderReference";
+import { getTransactionProviderReference } from "../shared/transactionProviderReference";
 
 test("shows the provider-returned reference instead of the internal lookup reference", () => {
   assert.equal(
-    getWithdrawalProviderReference({
+    getTransactionProviderReference({
       reference: "ASHPAY-WIT-ORDER1",
       externalReference: "ASHPAY-WIT-ORDER1",
       metadata: {
@@ -18,7 +18,7 @@ test("shows the provider-returned reference instead of the internal lookup refer
 
 test("does not label a legacy AfribaPay order_id as a provider reference", () => {
   assert.equal(
-    getWithdrawalProviderReference({
+    getTransactionProviderReference({
       reference: "ASHPAY-WIT-ORDER1",
       externalReference: "ASHPAY-WIT-ORDER1",
       metadata: { paymentProvider: "afribapay" },
@@ -29,7 +29,7 @@ test("does not label a legacy AfribaPay order_id as a provider reference", () =>
 
 test("hides internal retry references when no provider reference was returned", () => {
   assert.equal(
-    getWithdrawalProviderReference({
+    getTransactionProviderReference({
       reference: "ASHPAY-WIT-ORDER1",
       externalReference: "ASHPAY-WIT-ORDER1-RABC123",
       metadata: { paymentProvider: "pixpay" },
@@ -40,7 +40,7 @@ test("hides internal retry references when no provider reference was returned", 
 
 test("keeps provider IDs in externalReference for PixPay and PawaPay", () => {
   assert.equal(
-    getWithdrawalProviderReference({
+    getTransactionProviderReference({
       reference: "ASHPAY-WIT-ORDER1",
       externalReference: "PIX_837192",
       metadata: { paymentProvider: "pixpay" },
@@ -48,7 +48,7 @@ test("keeps provider IDs in externalReference for PixPay and PawaPay", () => {
     "PIX_837192",
   );
   assert.equal(
-    getWithdrawalProviderReference({
+    getTransactionProviderReference({
       reference: "ASHPAY-WIT-ORDER2",
       externalReference: "f63f1b38-9862-4e53-9c1d-dbb1d7918122",
       metadata: { paymentProvider: "pawapay" },
@@ -59,11 +59,25 @@ test("keeps provider IDs in externalReference for PixPay and PawaPay", () => {
 
 test("reads provider reference metadata returned as serialized JSON", () => {
   assert.equal(
-    getWithdrawalProviderReference({
+    getTransactionProviderReference({
       reference: "ASHPAY-WIT-ORDER1",
       externalReference: "ASHPAY-WIT-ORDER1",
       metadata: '{"paymentProvider":"afribapay","providerReference":"AFRIBA-TXN-92841"}',
     }),
     "AFRIBA-TXN-92841",
+  );
+});
+
+test("shows a saved provider transaction ID for an outgoing transfer", () => {
+  assert.equal(
+    getTransactionProviderReference({
+      reference: "ASHPAY-TRF-ORDER1",
+      externalReference: "ASHPAY-TRF-ORDER1",
+      metadata: {
+        paymentProvider: "afribapay",
+        providerReference: "AFRIBA-TRANSFER-92841",
+      },
+    }),
+    "AFRIBA-TRANSFER-92841",
   );
 });

@@ -1,4 +1,5 @@
 import { getAdminPath } from "@/lib/adminPath";
+import { getTransactionProviderReference } from "@shared/transactionProviderReference";
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
@@ -144,6 +145,11 @@ export default function AdminTransactionDetail() {
     queryKey: [`/api/admin/transactions/${id}/details`],
     enabled: !!id,
   });
+  const providerOrExternalReference = tx
+    ? tx.type === "withdrawal" || tx.type === "transfer_out"
+      ? getTransactionProviderReference(tx)
+      : tx.externalReference
+    : null;
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ status, reason, forceComplete }: { status: string; reason?: string; forceComplete?: boolean }) => {
@@ -324,14 +330,14 @@ export default function AdminTransactionDetail() {
                 }
               />
             )}
-            {tx.externalReference && (
+            {providerOrExternalReference && (
               <InfoRow
                 icon={<Link2 className="w-4 h-4" />}
                 label={tx.type === "withdrawal" || tx.type === "transfer_out" ? "Réf. fournisseur" : "Réf. externe"}
                 value={
                   <div className="flex items-center gap-1 justify-end">
-                    <code className="text-xs font-mono bg-muted px-2 py-1 rounded break-all">{tx.externalReference}</code>
-                    <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={() => copyToClipboard(tx.externalReference!)} data-testid="button-copy-ext-ref">
+                    <code className="text-xs font-mono bg-muted px-2 py-1 rounded break-all">{providerOrExternalReference}</code>
+                    <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={() => copyToClipboard(providerOrExternalReference)} data-testid="button-copy-ext-ref">
                       <Copy className="w-3 h-3" />
                     </Button>
                   </div>

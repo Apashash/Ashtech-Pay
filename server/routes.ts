@@ -2382,7 +2382,7 @@ async function markPayoutRetrySafeAfterBalanceRejection(
   return true;
 }
 
-function getPayoutProviderReference(result: unknown): string | null {
+function getProviderTransactionReference(result: unknown): string | null {
   if (!result || typeof result !== "object") return null;
   const record = result as Record<string, any>;
   const raw = record.raw as Record<string, any> | undefined;
@@ -2402,11 +2402,11 @@ function getPayoutProviderReference(result: unknown): string | null {
   ) ?? null;
 }
 
-async function persistPayoutProviderReference(
+async function persistProviderTransactionReference(
   transactionId: string,
   result: unknown,
 ): Promise<string | null> {
-  const providerReference = getPayoutProviderReference(result);
+  const providerReference = getProviderTransactionReference(result);
   if (!providerReference) return null;
 
   try {
@@ -6378,7 +6378,7 @@ export async function registerRoutes(
           });
           payoutResult = {
             success: pawaResult.success,
-            transaction_id: payoutId,
+            transaction_id: pawaResult.id || payoutId,
             message: pawaResult.providerMessage,
             status: pawaResult.status,
             providerStatus: pawaResult.providerStatus,
@@ -6386,6 +6386,8 @@ export async function registerRoutes(
             raw: pawaResult.raw,
           };
         }
+
+        await persistProviderTransactionReference(transaction.id, payoutResult);
 
         if (payoutResult.success) {
           console.log(`[Transfer] Payout submitted OK: ${reference} (ext: ${payoutResult.transaction_id})`);
@@ -7773,7 +7775,7 @@ export async function registerRoutes(
           };
         }
 
-        withdrawalProviderReference = await persistPayoutProviderReference(transaction.id, payoutResult);
+        withdrawalProviderReference = await persistProviderTransactionReference(transaction.id, payoutResult);
 
         if (payoutResult.success) {
           console.log(`[Withdrawal] Payout submitted OK: ${withdrawalRef} (ext: ${payoutResult.transaction_id})`);
@@ -16212,7 +16214,7 @@ export async function registerRoutes(
 
       }
 
-      const retryProviderReference = await persistPayoutProviderReference(txId, payoutResult);
+      const retryProviderReference = await persistProviderTransactionReference(txId, payoutResult);
 
       if (payoutResult.success) {
         // Provider accepted — mark this BEFORE any DB write so the catch block
