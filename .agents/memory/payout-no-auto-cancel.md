@@ -67,7 +67,8 @@ Crypto/IziChange payouts do not use this alternate-provider path.
 User display requirement (2026-10-04): keep the payout card concise; show only
 the latest reference instead of the repeated retry history, and default the
 provider selector to the original provider when it is available while allowing
-the admin to change it.
+the admin to change it. Do not show an inline helper sentence beneath the
+manual "Confirmer" action.
 
 **Why:** the user accepted this risk after being told an earlier provider attempt
 could still complete after a new submission.

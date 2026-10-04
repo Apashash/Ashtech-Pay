@@ -8,6 +8,7 @@
 - [Clean 404 for scanner probe paths](clean-404-scanner-probes.md) — probe/honeypot paths must return a real branded HTML 404 page, not bare status/text, or scanners flag it as an anomaly.
 - [Plesk .htaccess bypasses Node security](plesk-htaccess-bypasses-node-security.md) — production (Plesk/Apache) SPA fallback in client/public/.htaccess can 200 on /.env, /wp-admin etc. before Node ever sees the request; must patch both layers and rebuild to verify.
 - [Plesk dependency sync](plesk-dependency-sync.md) — verify the deployed root and actual pnpm cwd/version/allowlist before changing packages when Plesk install errors persist.
+- [Plesk dist commits](plesk-dist-build-commit.md) — when payout UI changes are requested, rebuild dist and commit the generated assets with their source changes.
 - [Plesk Nginx upload limit](plesk-nginx-upload-limit.md) — Plesk/Nginx can reject multipart uploads above ~2 MB with 413 before Node; compress KYC images client-side or raise the proxy limit.
 - [Plesk npm registry](plesk-npm-registry.md) — package-lock may contain Replit firewall URLs; project .npmrc must force the public registry host for installs outside Replit.
 - [Admin path injection](admin-path-injection.md) — .htaccess must use passthrough (not static index.html) so Node.js injects window.__ADMIN_PATH__; server/index.ts now loads .env manually at startup because Passenger may not pass Plesk env vars to process.env.

@@ -14,7 +14,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Clock, RefreshCw, Loader2, User, Phone, Banknote,
-  ArrowUpRight, Send, AlertTriangle, CheckCircle2, XCircle,
+  ArrowUpRight, Send, CheckCircle2, XCircle,
   BadgeCheck, ChevronDown, ChevronUp, Copy,
 } from "lucide-react";
 import { format } from "date-fns";
@@ -459,12 +459,6 @@ export default function AdminPendingPayoutsPage() {
                           </Button>
                         </div>
 
-                        <div className="mt-2 flex items-center gap-1">
-                          <AlertTriangle className="w-3 h-3 text-amber-500 flex-shrink-0" />
-                          <p className="text-xs text-amber-600 dark:text-amber-400">
-                            "Confirmer" marque comme effectué sans appeler de provider — utilisez si vous avez payé manuellement.
-                          </p>
-                        </div>
                       </div>
                     )}
                   </Card>
