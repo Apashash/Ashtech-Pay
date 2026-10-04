@@ -785,7 +785,7 @@ export default function AdminUserDetail() {
                                 <div>
                                   <p className="text-sm font-medium">{getTxLabel(tx.type)}</p>
                                   {tx.description && (
-                                    <p className="text-xs text-muted-foreground truncate max-w-[160px]">{tx.description}</p>
+                                    <p className="max-w-[40vw] whitespace-normal break-words text-xs text-muted-foreground sm:max-w-[320px]">{tx.description}</p>
                                   )}
                                 </div>
                               </TableCell>
@@ -1129,7 +1129,7 @@ export default function AdminUserDetail() {
               {txDetail.description && (
                 <div className="space-y-1">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Description</p>
-                  <p className="text-sm">{txDetail.description}</p>
+                  <p className="whitespace-normal break-words text-sm">{txDetail.description}</p>
                 </div>
               )}
 
@@ -1181,17 +1181,17 @@ export default function AdminUserDetail() {
               {txDetail.recipient && (
                 <div className="space-y-2 border rounded-lg p-3">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Destinataire</p>
-                  <div className="flex justify-between">
+                  <div className="flex items-start justify-between gap-2">
                     <span className="text-muted-foreground">Nom</span>
-                    <span className="font-medium">{txDetail.recipient.fullName}</span>
+                    <span className="min-w-0 max-w-[65%] whitespace-normal break-words text-right font-medium">{txDetail.recipient.fullName}</span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex items-start justify-between gap-2">
                     <span className="text-muted-foreground">Email</span>
-                    <span className="text-xs">{txDetail.recipient.email}</span>
+                    <span className="min-w-0 max-w-[65%] whitespace-normal break-all text-right text-xs">{txDetail.recipient.email}</span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex items-start justify-between gap-2">
                     <span className="text-muted-foreground">@username</span>
-                    <span>@{txDetail.recipient.username}</span>
+                    <span className="min-w-0 max-w-[65%] whitespace-normal break-all text-right">@{txDetail.recipient.username}</span>
                   </div>
                 </div>
               )}
@@ -1200,13 +1200,13 @@ export default function AdminUserDetail() {
               {txDetail.paymentLink && (
                 <div className="space-y-2 border rounded-lg p-3">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Lien de paiement</p>
-                  <div className="flex justify-between">
+                  <div className="flex items-start justify-between gap-2">
                     <span className="text-muted-foreground">Titre</span>
-                    <span className="font-medium">{txDetail.paymentLink.title}</span>
+                    <span className="min-w-0 max-w-[65%] whitespace-normal break-words text-right font-medium">{txDetail.paymentLink.title}</span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex items-start justify-between gap-2">
                     <span className="text-muted-foreground">Slug</span>
-                    <span className="font-mono text-xs">{txDetail.paymentLink.slug}</span>
+                    <span className="min-w-0 max-w-[65%] whitespace-normal break-all text-right font-mono text-xs">{txDetail.paymentLink.slug}</span>
                   </div>
                 </div>
               )}

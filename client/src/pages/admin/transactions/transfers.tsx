@@ -247,8 +247,10 @@ export default function AdminTransfers() {
                 ) : (
                   filteredTransactions.map((tx) => (
                     <TableRow key={tx.id} data-testid={`transfer-row-${tx.id}`}>
-                      <TableCell className="font-mono text-sm">{tx.reference}</TableCell>
-                      <TableCell className="max-w-[190px]">
+                      <TableCell className="max-w-[170px] whitespace-normal break-all font-mono text-xs">
+                        {tx.reference}
+                      </TableCell>
+                      <TableCell className="max-w-[190px] whitespace-normal">
                         {getTransactionProviderReference(tx) ? (
                           <div className="flex items-center gap-1">
                             <code
@@ -272,16 +274,16 @@ export default function AdminTransfers() {
                           <span className="text-muted-foreground">—</span>
                         )}
                       </TableCell>
-                      <TableCell>
-                        <div>
-                          <p className="font-medium">{tx.user?.fullName || "N/A"}</p>
-                          <p className="text-xs text-muted-foreground">{tx.user?.email}</p>
+                      <TableCell className="max-w-[200px] whitespace-normal">
+                        <div className="min-w-0">
+                          <p className="whitespace-normal break-words font-medium">{tx.user?.fullName || "N/A"}</p>
+                          <p className="whitespace-normal break-words text-xs text-muted-foreground">{tx.user?.email}</p>
                         </div>
                       </TableCell>
-                      <TableCell>
-                        <div>
-                          <p className="font-medium">{tx.recipientName || "Interne"}</p>
-                          <p className="text-xs text-muted-foreground">{tx.recipientPhone || tx.recipientCountry}</p>
+                      <TableCell className="max-w-[200px] whitespace-normal">
+                        <div className="min-w-0">
+                          <p className="whitespace-normal break-words font-medium">{tx.recipientName || "Interne"}</p>
+                          <p className="whitespace-normal break-all text-xs text-muted-foreground">{tx.recipientPhone || tx.recipientCountry}</p>
                         </div>
                       </TableCell>
                       <TableCell className="font-bold text-blue-500">
