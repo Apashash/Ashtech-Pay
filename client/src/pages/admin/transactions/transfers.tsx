@@ -383,14 +383,14 @@ export default function AdminTransfers() {
 
                 <div className="space-y-3">
                   {tx.reference && (
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-2 text-muted-foreground">
                         <FileText className="w-4 h-4" />
                         <span className="text-sm">Référence</span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <code className="text-sm font-mono bg-muted px-2 py-1 rounded">{tx.reference}</code>
-                        <Button size="icon" variant="ghost" onClick={() => copyReference(tx.reference!)}>
+                      <div className="flex min-w-0 items-start gap-2">
+                        <code className="max-w-[60vw] whitespace-normal break-all rounded bg-muted px-2 py-1 text-right font-mono text-xs sm:max-w-[260px]">{tx.reference}</code>
+                        <Button size="icon" variant="ghost" className="shrink-0" onClick={() => copyReference(tx.reference!)}>
                           <Copy className="w-4 h-4" />
                         </Button>
                       </div>
@@ -398,13 +398,13 @@ export default function AdminTransfers() {
                   )}
 
                   {getTransactionProviderReference(tx) && (
-                    <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-2 text-muted-foreground">
                         <Link2 className="w-4 h-4" />
                         <span className="text-sm">Référence fournisseur</span>
                       </div>
                       <div className="flex min-w-0 items-center gap-2">
-                        <code className="max-w-[260px] break-all text-right font-mono text-xs">
+                        <code className="max-w-[60vw] whitespace-normal break-all text-right font-mono text-xs sm:max-w-[260px]">
                           {getTransactionProviderReference(tx)}
                         </code>
                         <Button
@@ -421,22 +421,22 @@ export default function AdminTransfers() {
                   )}
 
                   {tx.paymentMethod && (
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-2 text-muted-foreground">
                         <CreditCard className="w-4 h-4" />
                         <span className="text-sm">Méthode</span>
                       </div>
-                      <span className="text-sm font-medium">{paymentMethodLabels[tx.paymentMethod] || tx.paymentMethod}</span>
+                      <span className="min-w-0 max-w-[65%] whitespace-normal break-words text-right text-sm font-medium">{paymentMethodLabels[tx.paymentMethod] || tx.paymentMethod}</span>
                     </div>
                   )}
 
                   {tx.createdAt && (
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-2 text-muted-foreground">
                         <Clock className="w-4 h-4" />
                         <span className="text-sm">Date</span>
                       </div>
-                      <span className="text-sm font-medium">
+                      <span className="min-w-0 max-w-[65%] whitespace-normal break-words text-right text-sm font-medium">
                         {format(new Date(tx.createdAt), "d MMMM yyyy à HH:mm", { locale: fr })}
                       </span>
                     </div>
@@ -512,29 +512,29 @@ export default function AdminTransfers() {
                     <Separator />
                     <div className="space-y-3">
                       <p className="text-sm font-semibold text-muted-foreground">Destinataire</p>
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-start justify-between gap-3">
                         <div className="flex items-center gap-2 text-muted-foreground">
                           <UserIcon className="w-4 h-4" />
                           <span className="text-sm">Nom</span>
                         </div>
-                        <span className="text-sm font-medium">{tx.recipientName || txDetails?.recipient?.fullName}</span>
+                        <span className="min-w-0 max-w-[65%] whitespace-normal break-words text-right text-sm font-medium">{tx.recipientName || txDetails?.recipient?.fullName}</span>
                       </div>
                       {tx.recipientPhone && (
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-start justify-between gap-3">
                           <div className="flex items-center gap-2 text-muted-foreground">
                             <Phone className="w-4 h-4" />
                             <span className="text-sm">Téléphone</span>
                           </div>
-                          <span className="text-sm font-medium">{tx.recipientPhone}</span>
+                          <span className="min-w-0 max-w-[65%] whitespace-normal break-all text-right text-sm font-medium">{tx.recipientPhone}</span>
                         </div>
                       )}
                       {tx.recipientCountry && (
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-start justify-between gap-3">
                           <div className="flex items-center gap-2 text-muted-foreground">
                             <MapPin className="w-4 h-4" />
                             <span className="text-sm">Pays</span>
                           </div>
-                          <span className="text-sm font-medium">{tx.recipientCountry}</span>
+                          <span className="min-w-0 max-w-[65%] whitespace-normal break-words text-right text-sm font-medium">{tx.recipientCountry}</span>
                         </div>
                       )}
                     </div>
