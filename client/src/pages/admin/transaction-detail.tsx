@@ -327,7 +327,7 @@ export default function AdminTransactionDetail() {
             {tx.externalReference && (
               <InfoRow
                 icon={<Link2 className="w-4 h-4" />}
-                label="Réf. externe"
+                label={tx.type === "withdrawal" || tx.type === "transfer_out" ? "Réf. fournisseur" : "Réf. externe"}
                 value={
                   <div className="flex items-center gap-1 justify-end">
                     <code className="text-xs font-mono bg-muted px-2 py-1 rounded break-all">{tx.externalReference}</code>

@@ -41,7 +41,8 @@ import {
   CreditCard,
   FileText,
   Globe,
-  Coins
+  Coins,
+  Link2
 } from "lucide-react";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -286,6 +287,7 @@ export default function AdminWithdrawals() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Référence</TableHead>
+                  <TableHead>Réf. fournisseur</TableHead>
                   <TableHead>Utilisateur</TableHead>
                   <TableHead>Réseau de paiement</TableHead>
                   <TableHead>Adresse de paiement</TableHead>
@@ -300,11 +302,11 @@ export default function AdminWithdrawals() {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center py-8">Chargement...</TableCell>
+                    <TableCell colSpan={11} className="text-center py-8">Chargement...</TableCell>
                   </TableRow>
                 ) : filteredTransactions.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
                       Aucun retrait trouvé
                     </TableCell>
                   </TableRow>
@@ -312,6 +314,30 @@ export default function AdminWithdrawals() {
                   filteredTransactions.map((tx) => (
                     <TableRow key={tx.id} data-testid={`withdrawal-row-${tx.id}`}>
                       <TableCell className="font-mono text-sm">{tx.reference}</TableCell>
+                      <TableCell className="max-w-[190px]">
+                        {tx.externalReference ? (
+                          <div className="flex items-center gap-1">
+                            <code
+                              className="min-w-0 break-all font-mono text-xs"
+                              title={tx.externalReference}
+                              data-testid={`withdrawal-provider-reference-${tx.id}`}
+                            >
+                              {tx.externalReference}
+                            </code>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7 shrink-0"
+                              aria-label="Copier la référence fournisseur"
+                              onClick={() => copyReference(tx.externalReference!)}
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <div>
                           <p className="font-medium">{tx.user?.fullName || "N/A"}</p>
@@ -439,6 +465,32 @@ export default function AdminWithdrawals() {
                         <code className="text-sm font-mono bg-muted px-2 py-1 rounded">{tx.reference}</code>
                         <Button size="icon" variant="ghost" onClick={() => copyReference(tx.reference!)}>
                           <Copy className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {tx.externalReference && (
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Link2 className="w-4 h-4" />
+                        <span className="text-sm">Référence fournisseur</span>
+                      </div>
+                      <div className="flex min-w-0 items-center gap-2">
+                        <code
+                          className="max-w-[260px] break-all text-right font-mono text-xs"
+                          data-testid="withdrawal-provider-reference-detail"
+                        >
+                          {tx.externalReference}
+                        </code>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 shrink-0"
+                          aria-label="Copier la référence fournisseur"
+                          onClick={() => copyReference(tx.externalReference!)}
+                        >
+                          <Copy className="w-3.5 h-3.5" />
                         </Button>
                       </div>
                     </div>
