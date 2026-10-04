@@ -221,11 +221,13 @@ export default function AdminPendingPayoutsPage() {
               {payouts.map((payout) => {
                 const isExpanded = expandedId === payout.id;
                 const isBusy = loadingId === payout.id;
-                const isIziChange = payout.metadata?.paymentProvider === "izichange" || payout.originalProvider === "izichange";
+                const metadataProvider = String(payout.metadata?.paymentProvider || "").trim().toLowerCase();
+                const normalizedOriginalProvider = String(payout.originalProvider || metadataProvider).trim().toLowerCase();
+                const isIziChange = metadataProvider === "izichange" || normalizedOriginalProvider === "izichange";
                 const retryAllowed =
                   payout.metadata?.payoutRetrySafe === true &&
-                  payout.metadata?.payoutRetryProvider === payout.originalProvider;
-                const providerInfo = PROVIDER_LABELS[payout.originalProvider || ""] || {
+                  String(payout.metadata?.payoutRetryProvider || "").trim().toLowerCase() === normalizedOriginalProvider;
+                const providerInfo = PROVIDER_LABELS[normalizedOriginalProvider] || {
                   label: "Fournisseur non identifié",
                   color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
                 };
@@ -234,11 +236,21 @@ export default function AdminPendingPayoutsPage() {
                   ? []
                   : payout.availableRetryProviders ||
                     (payout.recipientCountryCode ? getAvailablePayoutProviders(payout.recipientCountryCode) : []);
+                const preferredRetryProvider = availableRetryProviders.includes(normalizedOriginalProvider as PayoutProvider)
+                  ? normalizedOriginalProvider as PayoutProvider
+                  : availableRetryProviders[0];
                 const selectedRetryProvider =
                   availableRetryProviders.find(provider => provider === retryProviderByTx[payout.id]) ||
-                  (availableRetryProviders.includes(payout.originalProvider as PayoutProvider)
-                    ? payout.originalProvider as PayoutProvider
-                    : availableRetryProviders[0]);
+                  preferredRetryProvider;
+                const attemptHistory = Array.isArray(payout.metadata?.payoutAttemptHistory)
+                  ? payout.metadata.payoutAttemptHistory
+                  : [];
+                const latestAttempt = attemptHistory[attemptHistory.length - 1];
+                const latestReference =
+                  payout.externalReference ||
+                  latestAttempt?.externalReference ||
+                  latestAttempt?.reference ||
+                  null;
 
                 return (
                   <Card
@@ -357,13 +369,9 @@ export default function AdminPendingPayoutsPage() {
                           </div>
                         ) : !isCryptoPayout && availableRetryProviders.length > 0 && selectedRetryProvider ? (
                           <div className="mb-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/20 dark:text-amber-200">
-                            <p className="font-semibold">Relance manuelle disponible pour {payout.recipientCountryCode}.</p>
-                            <p className="mt-1">
-                              La tentative précédente peut encore aboutir. Une nouvelle soumission peut donc payer le bénéficiaire deux fois; vérifiez son statut si possible.
-                            </p>
-                            {payout.externalReference && (
-                              <p className="mt-1 break-all font-mono">
-                                Référence précédente : {payout.externalReference}
+                            {latestReference && (
+                              <p className="mb-2 break-all font-mono">
+                                Dernière référence : {latestReference}
                               </p>
                             )}
                             <div className="mt-3 flex flex-col sm:flex-row gap-2">
@@ -401,13 +409,6 @@ export default function AdminPendingPayoutsPage() {
                                 Relancer via {PAYOUT_PROVIDER_LABELS[selectedRetryProvider]}
                               </Button>
                             </div>
-                            {Array.isArray(payout.metadata?.payoutAttemptHistory) &&
-                              payout.metadata.payoutAttemptHistory.slice(-3).map((attempt: any, index: number) => (
-                                <p key={`${attempt.recordedAt || attempt.reference || "attempt"}-${index}`} className="mt-2 break-all">
-                                  Tentative précédente ({PROVIDER_LABELS[attempt.provider]?.label || attempt.provider || "fournisseur inconnu"}) :
-                                  {" "}{attempt.externalReference || attempt.reference || "référence non enregistrée"}
-                                </p>
-                              ))}
                           </div>
                         ) : isIziChange ? (
                           <div className="mb-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/20 dark:text-amber-300">
