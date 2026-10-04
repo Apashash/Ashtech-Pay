@@ -6,7 +6,19 @@ import {
   providerStatusPollIntervalMs,
   recoveredStatusPollLastCheckedAt,
 } from "../server/providerStatusPolicy.ts";
-import { resolvePayoutStatusLookupReference } from "../server/providerStatusReferences.ts";
+import {
+  normalizePayoutStatusProvider,
+  resolvePayoutStatusLookupReference,
+} from "../server/providerStatusReferences.ts";
+
+test("admin reconciliation recognizes only supported payout providers", () => {
+  assert.equal(normalizePayoutStatusProvider(" AfribaPay "), "afribapay");
+  assert.equal(normalizePayoutStatusProvider("PIXPay"), "pixpay");
+  assert.equal(normalizePayoutStatusProvider("pawapay"), "pawapay");
+  assert.equal(normalizePayoutStatusProvider("izichange"), "izichange");
+  assert.equal(normalizePayoutStatusProvider("manual"), null);
+  assert.equal(normalizePayoutStatusProvider(null), null);
+});
 
 test("payout status lookup uses the current provider reference without unsafe fallbacks", () => {
   assert.equal(resolvePayoutStatusLookupReference("afribapay", {

@@ -23,6 +23,11 @@ restarts, and manual retries must reconcile the same attempt; they must never
 switch providers, generate a replacement ID, force-complete, or refund an
 unresolved attempt.
 
+An admin validation or rejection click for an existing payout attempt should
+query that same provider reference and settle only a definitive provider result.
+If the provider still reports pending or cannot be reached, keep the payout
+open and let the normal poller continue.
+
 For providers whose callback and poller can race, the terminal transaction
 claim and corresponding wallet credit/refund must commit in one database
 transaction.
@@ -48,8 +53,9 @@ confirmed terminal transaction statuses as failed+refunded. HTTP 404, `NOT_FOUND
 generic `ERROR`, timeouts, and ambiguous responses remain pending/pending_manual
 unless provider documentation confirms that exact response is terminal. Persist
 the provider ID before submission, reuse it for every reconciliation, block
-manual terminal changes while unresolved, and settle status plus wallet mutation
-atomically.
+manual terminal changes while unresolved, provide an admin action that checks
+the existing attempt rather than force-completing it, and settle status plus
+wallet mutation atomically.
 
 Administrative reopening of a rejected withdrawal or transfer must also debit
 the previously refunded total from the original wallet in the same database

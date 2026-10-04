@@ -1,5 +1,14 @@
 export type PayoutStatusProvider = "afribapay" | "pixpay" | "pawapay" | "izichange";
 
+export function normalizePayoutStatusProvider(value: unknown): PayoutStatusProvider | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  return normalized === "afribapay" || normalized === "pixpay" ||
+    normalized === "pawapay" || normalized === "izichange"
+    ? normalized
+    : null;
+}
+
 /**
  * Resolve a provider status lookup ID from the current persisted transaction.
  * PawaPay and IziChange require their provider IDs and must never fall back to

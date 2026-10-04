@@ -101,7 +101,13 @@ import { assertPawaPayProviderActive, classifyPawaPayControlledTransaction, crea
 import { addPendingPayment, removePendingPayment, expireCryptoPaymentIfNeeded } from "./paymentPoller";
 import { processPawaPayDepositCallback } from "./paymentPoller";
 import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserWallet, sameCfaFamily, getConversionPairKey, maybeAutoConvert, getConversionMinimumXaf, minimumConversionAmountInCurrency, minimumConversionErrorMessage } from "./walletHelper";
-import { addPendingPayout, removePendingPayout, processIziPayPayoutCallback, processPayout } from "./payoutPoller";
+import {
+  addPendingPayout,
+  reconcilePayoutAttemptForAdmin,
+  removePendingPayout,
+  processIziPayPayoutCallback,
+  processPayout,
+} from "./payoutPoller";
 import { processPendingConversions } from "./conversionPoller";
 import { processPawaPayPayoutCallback } from "./payoutPoller";
 import {
@@ -6125,9 +6131,13 @@ export async function registerRoutes(
         totalAmount: totalAmount.toFixed(2),
         paymentMethod: operator.type,
         reference,
-        ...(transferProvider === "pawapay" ? { metadata: {
-          paymentProvider: "pawapay", pawaCountry: pawaPayCountry(country.code), walletCurrency,
-        } } : {}),
+         metadata: {
+           paymentProvider: transferProvider,
+           walletCurrency,
+           ...(transferProvider === "pawapay"
+             ? { pawaCountry: pawaPayCountry(country.code) }
+             : {}),
+         },
       });
 
       console.log(`[Transfer] Created transfer ${reference} for ${creditedAmount} net to ${recipientName} — calling payment provider immediately`);
@@ -7453,7 +7463,15 @@ export async function registerRoutes(
         recipientCountry: withdrawalCountryCode,
         operatorId: data.operatorId ? String(data.operatorId) : undefined,
         ...(pawaPayPayoutId ? { externalReference: pawaPayPayoutId } : {}),
-        ...(pawaPayPayoutId ? { metadata: { paymentProvider: "pawapay", pawaCountry: pawaPayCountry(withdrawalCountryCode), walletCurrency: withdrawalCurrency } } : {}),
+         ...(withdrawalProvider ? {
+           metadata: {
+             paymentProvider: withdrawalProvider,
+             walletCurrency: withdrawalCurrency,
+             ...(pawaPayPayoutId
+               ? { pawaCountry: pawaPayCountry(withdrawalCountryCode) }
+               : {}),
+           },
+         } : {}),
       });
 
       console.log(`[Withdrawal] Created withdrawal ${withdrawalRef} for ${creditedAmount} — calling payout gateway`);
@@ -13610,22 +13628,67 @@ export async function registerRoutes(
       const payoutTransaction = existingTx.type === "withdrawal" || existingTx.type === "transfer_out";
       if (
         payoutTransaction &&
+        ["pending", "pending_manual", "processing"].includes(existingTx.status) &&
+        existingTx.externalReference &&
+        ["completed", "failed", "cancelled"].includes(status)
+      ) {
+        const reconciliation = await reconcilePayoutAttemptForAdmin(id);
+        if (!reconciliation.supported) {
+          return res.status(409).json({
+            message: reconciliation.message || "Impossible de rapprocher cette tentative fournisseur.",
+            currentStatus: reconciliation.transactionStatus,
+          });
+        }
+
+        const transactionLabel = existingTx.type === "withdrawal" ? "retrait" : "envoi";
+        let message: string;
+        if (reconciliation.providerStatus === "pending") {
+          message = `Le fournisseur n'a pas encore confirmé le résultat du ${transactionLabel}. La transaction reste en attente; aucune validation manuelle ni aucun remboursement n'a été effectué.`;
+        } else if (reconciliation.transactionStatus !== reconciliation.providerStatus) {
+          message = `Le fournisseur confirme le statut « ${reconciliation.providerStatus} », mais le statut enregistré est « ${reconciliation.transactionStatus} ». Rechargez la transaction.`;
+        } else if (reconciliation.providerStatus === "completed") {
+          message = `Le fournisseur confirme la réussite; le ${transactionLabel} est validé.`;
+        } else {
+          message = `Le fournisseur confirme l'échec; le ${transactionLabel} a été rejeté et le remboursement a été traité.`;
+        }
+
+        await storage.createAdminLog({
+          adminId: req.userId!,
+          action: "reconcile_payout_status",
+          targetType: "transaction",
+          targetId: id,
+          details: JSON.stringify({
+            provider: reconciliation.provider,
+            providerStatus: reconciliation.providerStatus,
+            from: existingTx.status,
+            to: reconciliation.transactionStatus,
+            requestedStatus: status,
+          }),
+          ipAddress: req.ip || null,
+        }).catch((logError: any) => {
+          console.error("[Admin] Payout reconciliation log failed:", logError?.message || logError);
+        });
+
+        const response = {
+          message,
+          status: reconciliation.transactionStatus,
+          providerStatus: reconciliation.providerStatus,
+        };
+        if (
+          reconciliation.providerStatus === "pending" ||
+          ["pending", "pending_manual", "processing"].includes(reconciliation.transactionStatus)
+        ) {
+          return res.status(202).json(response);
+        }
+        return res.json(response);
+      }
+      if (
+        payoutTransaction &&
         existingTx.status === "processing" &&
         ["completed", "failed", "cancelled"].includes(status)
       ) {
         return res.status(409).json({
           message: "Le paiement est déjà en cours de traitement; attendez le résultat du fournisseur.",
-          currentStatus: existingTx.status,
-        });
-      }
-      if (
-        payoutTransaction &&
-        ["pending", "pending_manual", "processing"].includes(existingTx.status) &&
-        existingTx.externalReference &&
-        ["completed", "failed", "cancelled"].includes(status)
-      ) {
-        return res.status(409).json({
-          message: "Une tentative fournisseur existe déjà. Rapprochez son résultat avant de modifier le statut ou de rembourser.",
           currentStatus: existingTx.status,
         });
       }

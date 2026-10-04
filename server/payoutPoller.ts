@@ -7,7 +7,11 @@ import { getIziPayoutIdForPolling } from "./cryptoPayout";
 import { sendWithdrawalApprovedEmail } from "./email";
 import { notifyWithdrawalAutoValidated, notifyWithdrawalFailed } from "./telegram";
 import { setFailedCooldown } from "./failedCooldown";
-import { resolvePayoutStatusLookupReference } from "./providerStatusReferences";
+import {
+  normalizePayoutStatusProvider,
+  resolvePayoutStatusLookupReference,
+  type PayoutStatusProvider,
+} from "./providerStatusReferences";
 import {
   isProviderStatusPollDue,
   recoveredStatusPollLastCheckedAt,
@@ -362,6 +366,192 @@ async function checkProviderStatus(
   } catch (err: any) {
     console.error(`[PayoutPoller] checkProviderStatus error for ${payout.reference}:`, err?.message);
     return { status: "pending" };
+  }
+}
+
+export interface AdminPayoutReconciliationResult {
+  supported: boolean;
+  provider?: PayoutStatusProvider;
+  providerStatus: "completed" | "failed" | "pending" | "unsupported";
+  transactionStatus: string;
+  message?: string;
+}
+
+/**
+ * Check an existing payout attempt and apply only a definitive provider result.
+ * Admin status buttons must never force-complete or refund an unresolved payout.
+ */
+export async function reconcilePayoutAttemptForAdmin(
+  transactionId: string,
+): Promise<AdminPayoutReconciliationResult> {
+  const transaction = await storage.getTransactionById(transactionId);
+  if (!transaction) {
+    return {
+      supported: false,
+      providerStatus: "unsupported",
+      transactionStatus: "not_found",
+      message: "Transaction non trouvée.",
+    };
+  }
+  if (
+    (transaction.type !== "withdrawal" && transaction.type !== "transfer_out") ||
+    !["pending", "pending_manual", "processing"].includes(transaction.status)
+  ) {
+    return {
+      supported: false,
+      providerStatus: "unsupported",
+      transactionStatus: transaction.status,
+      message: "Seuls les retraits et envois en attente peuvent être rapprochés.",
+    };
+  }
+
+  const metadata = ((transaction as any).metadata || {}) as Record<string, any>;
+  const operator = transaction.operatorId
+    ? await storage.getOperator(transaction.operatorId).catch(() => null)
+    : null;
+  let provider: PayoutStatusProvider | null =
+    transaction.externalReference && isPawaPayUuidV4(transaction.externalReference)
+      ? "pawapay"
+      : null;
+  if (!provider) {
+    for (const candidate of [
+      metadata.pendingPayoutProvider,
+      metadata.paymentProvider,
+      (operator as any)?.paymentProvider,
+      (operator as any)?.depositPaymentProvider,
+    ]) {
+      provider = normalizePayoutStatusProvider(candidate);
+      if (provider) break;
+    }
+  }
+  if (!provider) {
+    return {
+      supported: false,
+      providerStatus: "unsupported",
+      transactionStatus: transaction.status,
+      message: "Le fournisseur de cette tentative n'est pas identifié. Aucune modification n'a été effectuée.",
+    };
+  }
+
+  let countryCode = typeof transaction.recipientCountry === "string"
+    ? transaction.recipientCountry.trim().toUpperCase()
+    : "";
+  if (!/^[A-Z]{2}$/.test(countryCode) && operator?.countryId) {
+    const operatorCountry = await storage.getCountry(operator.countryId).catch(() => null);
+    countryCode = operatorCountry?.code?.toUpperCase() || "";
+  }
+  if (!/^[A-Z]{2}$/.test(countryCode) && transaction.recipientCountry) {
+    const countries = await storage.getAllCountries().catch(() => []);
+    const recipientCountry = transaction.recipientCountry.trim().toLowerCase();
+    const country = countries.find((candidate) =>
+      candidate.name?.trim().toLowerCase() === recipientCountry ||
+      candidate.code?.trim().toLowerCase() === recipientCountry
+    );
+    countryCode = country?.code?.toUpperCase() || "";
+  }
+  if (provider === "pixpay" && !/^[A-Z]{2}$/.test(countryCode)) {
+    return {
+      supported: false,
+      provider,
+      providerStatus: "unsupported",
+      transactionStatus: transaction.status,
+      message: "Le pays de la tentative PixPay n'a pas pu être identifié. Aucune modification n'a été effectuée.",
+    };
+  }
+  if (!/^[A-Z]{2}$/.test(countryCode)) countryCode = "CM";
+
+  const iziPayoutId = provider === "izichange"
+    ? getIziPayoutIdForPolling(transaction.externalReference, metadata)
+    : undefined;
+  const lookupReference = resolvePayoutStatusLookupReference(
+    provider,
+    transaction,
+    iziPayoutId,
+  );
+  if (
+    !lookupReference ||
+    (provider === "pawapay" && !isPawaPayUuidV4(lookupReference)) ||
+    (provider === "izichange" && !iziPayoutId)
+  ) {
+    return {
+      supported: false,
+      provider,
+      providerStatus: "unsupported",
+      transactionStatus: transaction.status,
+      message: "L'identifiant fournisseur est manquant ou invalide. Aucune nouvelle tentative n'a été créée.",
+    };
+  }
+
+  const payout: PendingPayout = {
+    transactionId: transaction.id,
+    reference: provider === "izichange"
+      ? transaction.reference || lookupReference
+      : lookupReference,
+    userId: transaction.userId,
+    amount: transaction.amount || "0",
+    totalDebited: transaction.totalAmount || transaction.amount || "0",
+    attempts: 0,
+    provider,
+    externalReference: provider === "izichange"
+      ? iziPayoutId
+      : transaction.externalReference || undefined,
+    countryCode,
+    txType: transaction.type,
+    txCurrency: transaction.currency || "XAF",
+    walletCurrency: metadata.walletCurrency || transaction.currency || "XAF",
+  };
+
+  if (pendingPayoutStatusChecks.has(transaction.id)) {
+    return {
+      supported: true,
+      provider,
+      providerStatus: "pending",
+      transactionStatus: transaction.status,
+      message: "Un rapprochement fournisseur est déjà en cours.",
+    };
+  }
+
+  pendingPayoutStatusChecks.add(transaction.id);
+  try {
+    const result = await checkProviderStatus(payout, lookupReference);
+    const providerStatus: AdminPayoutReconciliationResult["providerStatus"] =
+      result.status === "completed" || result.status === "success"
+        ? "completed"
+        : ["failed", "refunded", "cancelled"].includes(result.status)
+          ? "failed"
+          : "pending";
+
+    if (providerStatus === "completed") {
+      await processPayout(payout, "success");
+    } else if (providerStatus === "failed") {
+      await processPayout(payout, result.status);
+    }
+
+    const latest = await storage.getTransactionById(transaction.id);
+    if (latest && ["pending", "pending_manual", "processing"].includes(latest.status)) {
+      addPendingPayout({
+        transactionId: payout.transactionId,
+        reference: payout.reference,
+        userId: payout.userId,
+        amount: payout.amount,
+        totalDebited: payout.totalDebited,
+        provider: payout.provider,
+        externalReference: payout.externalReference,
+        countryCode: payout.countryCode,
+        txType: payout.txType,
+        txCurrency: payout.txCurrency,
+        walletCurrency: payout.walletCurrency,
+      });
+    }
+
+    return {
+      supported: true,
+      provider,
+      providerStatus,
+      transactionStatus: latest?.status || transaction.status,
+    };
+  } finally {
+    pendingPayoutStatusChecks.delete(transaction.id);
   }
 }
 
