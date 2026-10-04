@@ -23,6 +23,20 @@ that attempt in those cases. A new same-provider attempt is allowed only after
 an explicit provider response proves the previous request was rejected without
 creating a payout, such as a documented insufficient-balance response.
 
+For a confirmed no-payout rejection, retain the rejected provider reference in
+the transaction and attempt history. The poller must skip safe-to-retry records;
+on the next retry, persist the new reference and clear the retry marker together
+before sending the provider request. If a process stops before that point, keep
+the transaction available for the same-provider admin retry.
+
+**Why:** deleting the old reference loses audit and callback context, while a
+retry marker without a durable transition to the new attempt makes crash
+recovery unable to distinguish an unsent retry from an in-flight payout.
+
+**How to apply:** preserve the rejected reference while `payoutRetrySafe` is
+true; update the provider reference and set the marker false atomically before
+the outbound call, then poll only that new reference if the result is ambiguous.
+
 User requirement (2026-10-04): admins may manually change a pending payout's
 status even when the provider has not replied or an external reference exists.
 Manual completion must not submit another payout. Manual failure/cancellation

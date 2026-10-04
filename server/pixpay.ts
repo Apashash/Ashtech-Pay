@@ -486,6 +486,7 @@ export interface PixPayoutResult {
   status?: string;
   message?: string;
   providerStatus?: number;
+  httpStatus?: number;
   raw?: any;
 }
 
@@ -507,8 +508,10 @@ export async function initiatePixPayPayout(params: PixPayoutParams): Promise<Pix
     if (data.statut_code !== 200 || !data.data) {
       return {
         success: false,
+        status: "FAILED",
         message: data.message || "Échec de l'envoi Mobile Money",
         providerStatus: data.statut_code ?? res.status,
+        httpStatus: res.status,
         raw: data,
       };
     }
@@ -521,6 +524,7 @@ export async function initiatePixPayPayout(params: PixPayoutParams): Promise<Pix
         message: d.response || data.message || "Payout rejeté",
         status: state,
         providerStatus: res.status,
+        httpStatus: res.status,
         raw: data,
       };
     }
@@ -531,6 +535,7 @@ export async function initiatePixPayPayout(params: PixPayoutParams): Promise<Pix
       status: d.state || "PENDING1",
       message: data.message,
       providerStatus: res.status,
+      httpStatus: res.status,
       raw: data,
     };
   } catch (err: any) {

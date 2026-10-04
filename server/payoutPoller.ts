@@ -8,6 +8,7 @@ import { sendWithdrawalApprovedEmail } from "./email";
 import { notifyWithdrawalAutoValidated, notifyWithdrawalFailed } from "./telegram";
 import { setFailedCooldown } from "./failedCooldown";
 import {
+  canRetryPayoutWithProvider,
   isPixPayManualPayoutProcessable,
   normalizePayoutStatusProvider,
   resolvePayoutStatusLookupReference,
@@ -77,14 +78,24 @@ export async function recoverPendingPayouts() {
       const payoutStartedAt = t.createdAt ? new Date(t.createdAt).getTime() : Date.now();
       const operator = t.operatorId ? await storage.getOperator(t.operatorId).catch(() => null) : null;
       const metadata = ((t as any).metadata || {}) as Record<string, any>;
-      const configuredProvider = (
-        metadata.pendingPayoutProvider || metadata.paymentProvider || (operator as any)?.paymentProvider
-      ) as PayoutStatusProvider | undefined;
-      const provider = metadata.paymentProvider === "izichange"
-        ? "izichange"
-        : t.externalReference && isPawaPayUuidV4(t.externalReference) ? "pawapay" : configuredProvider;
+      const configuredProvider = normalizePayoutStatusProvider(
+        metadata.paymentProvider ||
+        metadata.pendingPayoutProvider ||
+        (operator as any)?.paymentProvider,
+      );
+      // Trust the transaction's recorded provider first. UUID-looking
+      // references are a PawaPay fallback only for legacy rows without one.
+      const provider = configuredProvider ||
+        (t.externalReference && isPawaPayUuidV4(t.externalReference) ? "pawapay" : undefined);
       if (provider !== "afribapay" && provider !== "pixpay" && provider !== "pawapay" && provider !== "izichange") {
         console.warn(`[PayoutPoller] Skipping pending payout ${internalRef}: no supported provider`);
+        continue;
+      }
+      if (canRetryPayoutWithProvider(metadata, provider)) {
+        if (t.status === "pending" || t.status === "processing") {
+          await storage.claimTransactionStatus(t.id, "pending_manual", [t.status]);
+        }
+        console.log(`[PayoutPoller] ${internalRef} has a confirmed safe-to-retry rejection; awaiting same-provider admin retry`);
         continue;
       }
       if (provider === "pawapay" && !isPawaPayUuidV4((t as any).externalReference)) {

@@ -7,12 +7,93 @@ import {
   recoveredStatusPollLastCheckedAt,
 } from "../server/providerStatusPolicy.ts";
 import {
+  canRetryPayoutWithProvider,
+  isExplicitInsufficientPayoutBalance,
   isPixPayManualPayoutProcessable,
   isPixPayPayoutProvider,
   normalizePayoutStatusProvider,
   resolvePayoutStatusLookupReference,
   shouldUseManualPayoutStatusOverride,
 } from "../server/providerStatusReferences.ts";
+
+test("provider retry is allowed only for an explicit insufficient-balance rejection", () => {
+  for (const provider of ["afribapay", "pixpay", "pawapay"] as const) {
+    assert.equal(isExplicitInsufficientPayoutBalance(provider, {
+      success: false,
+      providerStatus: 422,
+      providerCode: "INSUFFICIENT_BALANCE",
+    }), true);
+    assert.equal(isExplicitInsufficientPayoutBalance(provider, {
+      success: false,
+      providerStatus: 200,
+      status: "failed",
+      message: "provider wallet balance too low",
+      raw: { status: "FAILED" },
+    }), true);
+    assert.equal(isExplicitInsufficientPayoutBalance(provider, {
+      success: false,
+      providerStatus: 503,
+      message: "insufficient provider balance",
+      raw: { message: "insufficient provider balance" },
+    }), false);
+    assert.equal(isExplicitInsufficientPayoutBalance(provider, {
+      success: false,
+      providerStatus: 404,
+      message: "insufficient provider balance",
+      raw: { message: "insufficient provider balance" },
+    }), false);
+    assert.equal(isExplicitInsufficientPayoutBalance(provider, {
+      success: false,
+      providerStatus: 200,
+      status: "NOT_FOUND",
+      message: "insufficient provider balance",
+      raw: { status: "NOT_FOUND" },
+    }), false);
+    assert.equal(isExplicitInsufficientPayoutBalance(provider, {
+      success: false,
+      providerStatus: 200,
+      status: "ERROR",
+      message: "insufficient provider balance",
+      raw: { success: false, error: { code: "ERROR" } },
+    }), false);
+    assert.equal(isExplicitInsufficientPayoutBalance(provider, {
+      success: false,
+      message: "insufficient provider balance",
+    }), false);
+  }
+  assert.equal(isExplicitInsufficientPayoutBalance("pixpay", {
+    success: false,
+    providerStatus: 1001,
+    httpStatus: 200,
+    message: "insufficient provider balance",
+    raw: { statut_code: 1001, message: "insufficient provider balance" },
+  }), true);
+  assert.equal(isExplicitInsufficientPayoutBalance("pixpay", {
+    success: false,
+    providerStatus: 1001,
+    httpStatus: 503,
+    message: "insufficient provider balance",
+    raw: { statut_code: 1001, message: "insufficient provider balance" },
+  }), false);
+
+  assert.equal(isExplicitInsufficientPayoutBalance("izichange", {
+    success: false,
+    providerStatus: 402,
+    providerCode: "INSUFFICIENT_BALANCE",
+  }), true);
+  assert.equal(isExplicitInsufficientPayoutBalance("izichange", {
+    success: false,
+    providerStatus: 500,
+    providerCode: "INSUFFICIENT_BALANCE",
+  }), false);
+});
+
+test("safe payout retry is restricted to the provider that rejected for low balance", () => {
+  const metadata = { payoutRetrySafe: true, payoutRetryProvider: "pawapay" };
+  assert.equal(canRetryPayoutWithProvider(metadata, "pawapay"), true);
+  assert.equal(canRetryPayoutWithProvider(metadata, "pixpay"), false);
+  assert.equal(canRetryPayoutWithProvider({ ...metadata, payoutRetrySafe: false }, "pawapay"), false);
+});
 
 test("admin reconciliation recognizes only supported payout providers", () => {
   assert.equal(normalizePayoutStatusProvider(" AfribaPay "), "afribapay");

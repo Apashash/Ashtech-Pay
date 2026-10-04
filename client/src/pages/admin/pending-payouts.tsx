@@ -48,7 +48,7 @@ const PROVIDER_LABELS: Record<string, { label: string; color: string }> = {
   izichange: { label: "IziChange", color: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400" },
 };
 
-type Action = { txId: string; type: "execute" | "confirm" | "refund"; provider?: "afribapay" | "pixpay" };
+type Action = { txId: string; type: "execute" | "confirm" | "refund" };
 
 export default function AdminPendingPayoutsPage() {
   const { toast } = useToast();
@@ -66,8 +66,8 @@ export default function AdminPendingPayoutsPage() {
   });
 
   const executeMutation = useMutation({
-    mutationFn: async ({ txId, provider }: { txId: string; provider: string }) => {
-      const res = await apiRequest("POST", `/api/admin/pending-payouts/${txId}/execute`, { provider });
+    mutationFn: async ({ txId }: { txId: string }) => {
+      const res = await apiRequest("POST", `/api/admin/pending-payouts/${txId}/execute`, {});
       const data = await res.json();
       if (!res.ok) {
         const err = new Error(data.message || "Erreur") as Error & { pendingManual?: boolean };
@@ -93,6 +93,8 @@ export default function AdminPendingPayoutsPage() {
       setLoadingId(null);
     },
     onError: (error: Error & { pendingManual?: boolean }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/pending-payouts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/transactions"] });
       if (error.pendingManual) {
         // Not a real failure — the transaction stays pending_manual for retry,
         // exactly like the standard withdrawal/transfer flow does.
@@ -151,8 +153,8 @@ export default function AdminPendingPayoutsPage() {
   const handleConfirm = () => {
     if (!confirmAction) return;
     setLoadingId(confirmAction.txId);
-    if (confirmAction.type === "execute" && confirmAction.provider) {
-      executeMutation.mutate({ txId: confirmAction.txId, provider: confirmAction.provider });
+    if (confirmAction.type === "execute") {
+      executeMutation.mutate({ txId: confirmAction.txId });
     } else if (confirmAction.type === "confirm") {
       confirmMutation.mutate(confirmAction.txId);
     } else if (confirmAction.type === "refund") {
@@ -166,7 +168,7 @@ export default function AdminPendingPayoutsPage() {
       ? "Rembourser immédiatement et annuler ? Le fournisseur peut encore payer ensuite, ce qui peut provoquer un double paiement."
       : confirmAction?.type === "confirm"
         ? "Marquer comme effectué sans relancer le fournisseur ? Son résultat réel peut encore différer."
-        : `Soumettre via ${confirmAction?.provider ? PROVIDER_LABELS[confirmAction.provider]?.label : ""} ?`;
+        : `Resoumettre via ${confirmAction ? PROVIDER_LABELS[payouts.find(p => p.id === confirmAction.txId)?.originalProvider || ""]?.label || "le fournisseur configuré" : "le fournisseur configuré"} ? Le fournisseur avait explicitement refusé la tentative pour solde insuffisant; aucun changement de fournisseur ne sera possible.`;
 
   return (
     <AdminLayout>
@@ -209,6 +211,9 @@ export default function AdminPendingPayoutsPage() {
                 const isExpanded = expandedId === payout.id;
                 const isBusy = loadingId === payout.id;
                 const isIziChange = payout.metadata?.paymentProvider === "izichange" || payout.originalProvider === "izichange";
+                const retryAllowed =
+                  payout.metadata?.payoutRetrySafe === true &&
+                  payout.metadata?.payoutRetryProvider === payout.originalProvider;
                 const providerInfo = PROVIDER_LABELS[payout.originalProvider || ""] || {
                   label: "Fournisseur non identifié",
                   color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
@@ -308,7 +313,28 @@ export default function AdminPendingPayoutsPage() {
                           </div>
                         </div>
 
-                        {isIziChange ? (
+                        {retryAllowed ? (
+                          <div className="mb-3 rounded-md border border-green-300 bg-green-50 p-3 text-xs text-green-800 dark:border-green-800 dark:bg-green-950/20 dark:text-green-300">
+                            <p className="font-semibold">Refus explicite pour solde fournisseur insuffisant.</p>
+                            <p className="mt-1">Après recharge, relancez uniquement via {providerInfo.label}. Le résultat sera confirmé par le fournisseur et non par ce bouton.</p>
+                            {payout.metadata?.payoutLastRejectedAttempt?.reference && (
+                              <p className="mt-1 font-mono break-all">
+                                Tentative refusée : {String(payout.metadata.payoutLastRejectedAttempt.reference)}
+                              </p>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={isBusy}
+                              onClick={() => setConfirmAction({ txId: payout.id, type: "execute" })}
+                              className={`mt-2 gap-1.5 text-xs ${providerInfo.color} border-current/20`}
+                              data-testid={`btn-execute-${payout.originalProvider}-${payout.id}`}
+                            >
+                              {isBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Banknote className="w-3 h-3" />}
+                              Relancer via {providerInfo.label}
+                            </Button>
+                          </div>
+                        ) : isIziChange ? (
                           <div className="mb-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/20 dark:text-amber-300">
                             <p className="font-semibold">Vérification IziChange requise — ne pas renvoyer ce paiement.</p>
                             {payout.metadata?.iziInitiationError && (
@@ -323,28 +349,14 @@ export default function AdminPendingPayoutsPage() {
                         ) : payout.externalReference ? (
                           <div className="mb-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/20 dark:text-amber-300">
                             <p className="font-semibold">Référence fournisseur déjà enregistrée.</p>
-                            <p className="mt-1">Aucune nouvelle soumission ne sera lancée. Utilisez la confirmation ou le remboursement manuel ci-dessous.</p>
+                            <p className="mt-1">Le résultat de cette tentative doit être vérifié. Aucune nouvelle soumission n'est autorisée tant que le fournisseur n'a pas explicitement refusé le paiement pour solde insuffisant.</p>
                             <p className="mt-1 font-mono break-all">{payout.externalReference}</p>
                           </div>
                         ) : (
                           <div className="mb-3">
-                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Exécuter via :</p>
-                            <div className="grid grid-cols-2 gap-2">
-                              {(["afribapay", "pixpay"] as const).map((p) => (
-                                <Button
-                                  key={p}
-                                  size="sm"
-                                  variant="outline"
-                                  disabled={isBusy}
-                                  onClick={() => setConfirmAction({ txId: payout.id, type: "execute", provider: p })}
-                                  className={`gap-1.5 text-xs ${PROVIDER_LABELS[p].color} border-current/20`}
-                                  data-testid={`btn-execute-${p}-${payout.id}`}
-                                >
-                                  {isBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Banknote className="w-3 h-3" />}
-                                  {PROVIDER_LABELS[p].label}
-                                </Button>
-                              ))}
-                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              Nouvelle soumission désactivée : aucune réponse explicite confirmant un refus pour solde insuffisant n'est enregistrée.
+                            </p>
                           </div>
                         )}
 

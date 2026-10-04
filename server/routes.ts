@@ -102,8 +102,12 @@ import { addPendingPayment, removePendingPayment, expireCryptoPaymentIfNeeded } 
 import { processPawaPayDepositCallback } from "./paymentPoller";
 import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserWallet, sameCfaFamily, getConversionPairKey, maybeAutoConvert, getConversionMinimumXaf, minimumConversionAmountInCurrency, minimumConversionErrorMessage } from "./walletHelper";
 import {
+  canRetryPayoutWithProvider,
+  isExplicitInsufficientPayoutBalance,
   isPixPayPayoutProvider,
+  normalizePayoutStatusProvider,
   shouldUseManualPayoutStatusOverride,
+  type PayoutStatusProvider,
 } from "./providerStatusReferences";
 import {
   addPendingPayout,
@@ -2294,6 +2298,9 @@ function isDefinitivePayoutRejection(result: {
   providerCode?: string | null;
   providerStatus?: number | string | null;
 }): boolean {
+  const messageAndCode = `${String(result.message || "")} ${String(result.providerCode || "")}`.toLowerCase();
+  if (/insuff|low[_ -]?(balance|funds)|balance[_ -]?(low|insuff)|no[_ -]?(balance|funds)|not[_ -]?enough[_ -]?(funds|balance)|solde.{0,40}(trop bas|faible)/.test(messageAndCode)) return false;
+
   const status = String(result.status || "").trim().toLowerCase();
   if (["failed", "refunded", "cancelled", "canceled", "rejected", "not_found", "not found"].includes(status)) return true;
 
@@ -2325,6 +2332,60 @@ function isDefinitivePayoutRejection(result: {
     message.includes("transaction inconnue") ||
     message.includes("payout inconnue")
   );
+}
+
+async function markPayoutRetrySafeAfterBalanceRejection(
+  transactionId: string,
+  provider: PayoutStatusProvider,
+  attemptReference: string | undefined,
+  failure: {
+    providerCode?: unknown;
+    message?: unknown;
+  },
+  extraMetadata: Record<string, unknown> = {},
+): Promise<boolean> {
+  const claimed = await storage.claimTransactionStatus(
+    transactionId,
+    "pending_manual",
+    ["pending", "processing"],
+  );
+  if (!claimed) return false;
+
+  const transaction = await storage.getTransactionById(transactionId);
+  if (!transaction || transaction.status !== "pending_manual") return false;
+  const metadata = ((transaction as any).metadata || {}) as Record<string, any>;
+  const history = Array.isArray(metadata.payoutAttemptHistory)
+    ? metadata.payoutAttemptHistory
+    : [];
+  const rejectedAttempt = {
+    provider,
+    reference: attemptReference || transaction.externalReference || null,
+    providerCode: String(failure.providerCode || "").slice(0, 80) || null,
+    rejectedAt: new Date().toISOString(),
+  };
+
+  await storage.updateTransaction(transactionId, {
+    metadata: {
+      ...metadata,
+      ...extraMetadata,
+      pendingPayoutProvider: provider,
+      payoutRetrySafe: true,
+      payoutRetryProvider: provider,
+      payoutLastRejectedAttempt: rejectedAttempt,
+      payoutAttemptHistory: [...history, rejectedAttempt].slice(-10),
+    },
+  } as any);
+  return true;
+}
+
+function payoutProviderDisplayName(provider: string): string {
+  switch (provider) {
+    case "afribapay": return "AfribaPay";
+    case "pixpay": return "PixPay";
+    case "pawapay": return "PawaPay";
+    case "izichange": return "IziChange";
+    default: return provider;
+  }
 }
 
 function createProviderFailure(
@@ -6160,6 +6221,9 @@ export async function registerRoutes(
           message?: string;
           status?: string;
           providerStatus?: number;
+          httpStatus?: number;
+          providerCode?: string;
+          raw?: unknown;
         } = {
           success: false,
           message: "Aucun fournisseur de paiement configuré",
@@ -6228,6 +6292,7 @@ export async function registerRoutes(
             message: pixpayResult.message,
             status: pixpayResult.status,
             providerStatus: pixpayResult.providerStatus,
+            raw: pixpayResult.raw,
           };
 
         } else if (transferProvider === "pawapay") {
@@ -6252,6 +6317,9 @@ export async function registerRoutes(
             transaction_id: payoutId,
             message: pawaResult.providerMessage,
             status: pawaResult.status,
+            providerStatus: pawaResult.providerStatus,
+            providerCode: pawaResult.providerCode,
+            raw: pawaResult.raw,
           };
         }
 
@@ -6322,7 +6390,20 @@ export async function registerRoutes(
           // remain manual. The amount stays reserved until an administrator
           // resolves the provider outcome.
           console.error(`[Transfer] Provider error — pending manual review for ${reference} (${transferProvider}): ${payoutResult.message}`);
-          await storage.updateTransactionStatus(transaction.id, "pending_manual");
+          const retrySafe = isExplicitInsufficientPayoutBalance(transferProvider, {
+            ...payoutResult,
+            success: false,
+          });
+          if (retrySafe) {
+            await markPayoutRetrySafeAfterBalanceRejection(
+              transaction.id,
+              transferProvider,
+              payoutResult.transaction_id || reference,
+              payoutResult,
+            );
+          } else {
+            await storage.claimTransactionStatus(transaction.id, "pending_manual", ["pending", "processing"]);
+          }
           transaction.status = "pending_manual";
           await storage.createUserNotification({
             userId: senderId,
@@ -6352,7 +6433,24 @@ export async function registerRoutes(
         }
       } catch (payoutErr: any) {
         console.error(`[Transfer] Payout error for ${reference}:`, payoutErr.message);
-        await storage.updateTransactionStatus(transaction.id, "pending_manual");
+        const explicitBalanceRejection = isExplicitInsufficientPayoutBalance(transferProvider, {
+          success: false,
+          message: payoutErr?.message,
+          providerCode: payoutErr?.providerCode || payoutErr?.code,
+          providerStatus: payoutErr?.providerStatus ?? payoutErr?.status ?? payoutErr?.statusCode,
+          httpStatus: payoutErr?.httpStatus,
+          raw: payoutErr?.raw,
+        });
+        if (explicitBalanceRejection) {
+          await markPayoutRetrySafeAfterBalanceRejection(
+            transaction.id,
+            transferProvider,
+            (await storage.getTransactionById(transaction.id).catch(() => null))?.externalReference || reference,
+            { providerCode: payoutErr?.providerCode || payoutErr?.code, message: payoutErr?.message },
+          );
+        } else {
+          await storage.claimTransactionStatus(transaction.id, "pending_manual", ["pending", "processing"]);
+        }
         transaction.status = "pending_manual";
         await storage.createUserNotification({
           userId: senderId,
@@ -7494,6 +7592,8 @@ export async function registerRoutes(
         status?: string;
         providerCode?: string;
         providerStatus?: number;
+        httpStatus?: number;
+        raw?: unknown;
       } = {
         success: false,
         message: "Aucun fournisseur de paiement configuré",
@@ -7566,7 +7666,9 @@ export async function registerRoutes(
             success: pixpayResult.success,
             transaction_id: pixpayResult.transactionId,
             message: pixpayResult.message,
+            status: pixpayResult.status,
             providerStatus: pixpayResult.providerStatus,
+            raw: pixpayResult.raw,
           };
 
         } else if (paymentProvider === "pawapay") {
@@ -7589,6 +7691,7 @@ export async function registerRoutes(
             status: result.status,
             providerCode: result.providerCode,
             providerStatus: result.providerStatus,
+            raw: result.raw,
           };
         }
 
@@ -7644,7 +7747,21 @@ export async function registerRoutes(
           // remain manual. The amount stays reserved until an administrator
           // resolves the provider outcome.
           console.error(`[Withdrawal] Provider error — pending manual review for ${withdrawalRef} (${paymentProvider}): ${payoutResult.message}`);
-          await storage.updateTransactionStatus(transaction.id, "pending_manual");
+          const retrySafe = isExplicitInsufficientPayoutBalance(paymentProvider, {
+            ...payoutResult,
+            success: false,
+          });
+          if (retrySafe) {
+            const markedSafe = await markPayoutRetrySafeAfterBalanceRejection(
+              transaction.id,
+              paymentProvider,
+              payoutResult.transaction_id || withdrawalRef,
+              payoutResult,
+            );
+            if (markedSafe && paymentProvider === "pawapay") pawaPayInitiationAmbiguous = true;
+          } else {
+            await storage.claimTransactionStatus(transaction.id, "pending_manual", ["pending", "processing"]);
+          }
           transaction.status = "pending_manual";
           await storage.createUserNotification({
             userId,
@@ -7673,9 +7790,53 @@ export async function registerRoutes(
         }
       } catch (payoutErr: any) {
         console.error(`[Withdrawal] Payout error for ${withdrawalRef}:`, payoutErr.message);
-        if (withdrawalProvider === "pawapay" && pawaPayPayoutId) {
+        const explicitBalanceRejection = isExplicitInsufficientPayoutBalance(withdrawalProvider, {
+          success: false,
+          message: payoutErr?.message,
+          providerCode: payoutErr?.providerCode || payoutErr?.code,
+          providerStatus: payoutErr?.providerStatus ?? payoutErr?.status ?? payoutErr?.statusCode,
+          httpStatus: payoutErr?.httpStatus,
+          raw: payoutErr?.raw,
+        });
+        if (explicitBalanceRejection) {
+          await markPayoutRetrySafeAfterBalanceRejection(
+            transaction.id,
+            withdrawalProvider,
+            (await storage.getTransactionById(transaction.id).catch(() => null))?.externalReference ||
+              pawaPayPayoutId ||
+              withdrawalRef,
+            { providerCode: payoutErr?.providerCode || payoutErr?.code, message: payoutErr?.message },
+          );
+          pawaPayInitiationAmbiguous = withdrawalProvider === "pawapay";
+          transaction.status = "pending_manual";
+          await storage.createUserNotification({
+            userId,
+            type: "withdrawal_pending",
+            title: "Retrait en attente",
+            message: `Votre retrait de ${amount.toLocaleString()} ${withdrawalCurrency} est en attente de vérification par l'équipe Ashtech Pay.`,
+            transactionId: transaction.id,
+            isRead: false,
+          });
+          notifyWithdrawalPendingManual({
+            userName: user.fullName || user.username,
+            userEmail: user.email || "",
+            userPhone: user.phone || undefined,
+            amount: creditedAmount,
+            grossAmount: totalAmount,
+            currency: withdrawalCurrency,
+            phone: data.accountDetails,
+            operator: (withdrawalOperator as any)?.name || undefined,
+            reference: withdrawalRef,
+            provider: withdrawalProvider,
+            walletCurrency: withdrawalCurrency,
+            senderCountry: user.country || "",
+            recipientCountry: withdrawalCountryCode || "",
+            recipientName: user.fullName || user.username,
+          }).catch(() => {});
+        } else if (withdrawalProvider === "pawapay" && pawaPayPayoutId) {
           pawaPayInitiationAmbiguous = true;
-          await storage.updateTransactionStatus(transaction.id, "pending_manual");
+          await storage.claimTransactionStatus(transaction.id, "pending_manual", ["pending", "processing"]);
+          transaction.status = "pending_manual";
           addPendingPayout({
             transactionId: transaction.id,
             reference: pawaPayPayoutId,
@@ -7707,7 +7868,7 @@ export async function registerRoutes(
             recipientName: user.fullName || user.username,
           }).catch(() => {});
         } else {
-          await storage.updateTransactionStatus(transaction.id, "pending_manual");
+          await storage.claimTransactionStatus(transaction.id, "pending_manual", ["pending", "processing"]);
           transaction.status = "pending_manual";
           await storage.createUserNotification({
             userId,
@@ -7732,7 +7893,12 @@ export async function registerRoutes(
       });
       res.json({ 
         transaction: withdrawalProvider === "pawapay" && pawaPayPayoutId
-          ? { ...transaction, status: pawaPayInitiationAmbiguous ? "pending_manual" : "processing" }
+          ? {
+              ...transaction,
+              status: pawaPayInitiationAmbiguous
+                ? "pending_manual"
+                : transaction.status === "pending" ? "processing" : transaction.status,
+            }
           : transaction,
         feeDetails: {
           requestedAmount: amount,
@@ -9786,21 +9952,59 @@ export async function registerRoutes(
           });
         }
 
-        const initiationError = String(
-          providerError?.code ||
-          providerError?.cause?.code ||
-          providerError?.message ||
-          "unknown",
-        ).slice(0, 120);
-        await storage.updateTransaction(transaction.id, {
-          status: "pending_manual",
-          metadata: { ...metadata, iziRetrySafe: false, iziInitiationError: initiationError },
-        } as any);
+        const explicitBalanceRejection = isExplicitInsufficientPayoutBalance("izichange", {
+          success: false,
+          message: providerError?.message,
+          providerCode: providerError?.providerCode || providerError?.code,
+          providerStatus: providerError?.providerStatus ?? providerError?.status ?? providerError?.statusCode,
+          raw: providerError?.raw,
+        });
+        if (explicitBalanceRejection) {
+          await markPayoutRetrySafeAfterBalanceRejection(
+            transaction.id,
+            "izichange",
+            undefined,
+            {
+              providerCode: providerError?.providerCode || providerError?.code,
+              message: providerError?.message,
+            },
+            { iziRetrySafe: true, iziInitiationError: "INSUFFICIENT_PROVIDER_BALANCE" },
+          );
+        } else {
+          const markedManual = await storage.claimTransactionStatus(
+            transaction.id,
+            "pending_manual",
+            ["pending", "processing"],
+          );
+          if (markedManual) {
+            const initiationError = String(
+              providerError?.code ||
+              providerError?.cause?.code ||
+              providerError?.message ||
+              "unknown",
+            ).slice(0, 120);
+            await storage.updateTransaction(transaction.id, {
+              metadata: { ...metadata, iziRetrySafe: false, iziInitiationError: initiationError },
+            } as any);
+          }
+        }
+
+        const initiationError = explicitBalanceRejection
+          ? "INSUFFICIENT_PROVIDER_BALANCE"
+          : String(
+              providerError?.code ||
+              providerError?.cause?.code ||
+              providerError?.message ||
+              "unknown",
+            ).slice(0, 120);
         console.error(`[crypto/payout] IziChange initiation unresolved ref=${reference}; manual review required:`, initiationError);
         return res.status(202).json({
           reference,
           status: "pending_manual",
-          message: "Votre demande doit être vérifiée avant tout nouvel envoi. Le solde reste réservé jusqu'à sa résolution.",
+          retrySafe: explicitBalanceRejection,
+          message: explicitBalanceRejection
+            ? "IziChange a explicitement refusé le payout pour solde insuffisant. Après recharge, un administrateur pourra le relancer via IziChange."
+            : "Votre demande doit être vérifiée avant tout nouvel envoi. Le solde reste réservé jusqu'à sa résolution.",
           amount: calculation.payoutAmount,
           fee: calculation.ashtechFee,
           totalDebited: calculation.totalDebit,
@@ -15558,8 +15762,8 @@ export async function registerRoutes(
           userFullName: (user as any)?.fullName || (user as any)?.username || "Inconnu",
           userEmail: (user as any)?.email || "",
           operatorName: (operator as any)?.name || null,
-          originalProvider: metadata.pendingPayoutProvider ||
-            metadata.paymentProvider ||
+          originalProvider: metadata.paymentProvider ||
+            metadata.pendingPayoutProvider ||
             (operator as any)?.paymentProvider ||
             (operator as any)?.depositPaymentProvider ||
             null,
@@ -15589,24 +15793,39 @@ export async function registerRoutes(
     //                    Never revert to pending_manual when this is true.
     let lockAcquired = false;
     let providerSubmitted = false;
-    let requestedProvider: "afribapay" | "pixpay" | "pawapay" | undefined;
+    let requestedProvider: PayoutStatusProvider | undefined;
 
     try {
-      const { provider } = req.body as { provider: "afribapay" | "pixpay" | "pawapay" };
-      if (!provider || !["afribapay","pixpay","pawapay"].includes(provider)) {
-        return res.status(400).json({ message: "Fournisseur invalide" });
-      }
-      requestedProvider = provider;
-
+      const requestedProviderInput = normalizePayoutStatusProvider(req.body?.provider);
       const tx = await storage.getTransactionById(txId);
       if (!tx) return res.status(404).json({ message: "Transaction non trouvée" });
       if (!["withdrawal","transfer_out"].includes(tx.type)) {
         return res.status(400).json({ message: "Type de transaction non supporté" });
       }
-      if (tx.externalReference) {
+      const transactionMetadata = ((tx as any).metadata || {}) as Record<string, any>;
+      const operator = tx.operatorId ? await storage.getOperator(tx.operatorId).catch(() => null) : null;
+      const provider = normalizePayoutStatusProvider(
+        transactionMetadata.paymentProvider ||
+        transactionMetadata.pendingPayoutProvider ||
+        (operator as any)?.paymentProvider,
+      );
+      if (!provider) {
+        return res.status(400).json({ message: "Le fournisseur configuré pour ce payout n'est pas identifié." });
+      }
+      if (req.body?.provider && !requestedProviderInput) {
+        return res.status(400).json({ message: "Fournisseur invalide" });
+      }
+      if (requestedProviderInput && requestedProviderInput !== provider) {
         return res.status(409).json({
-          message: "Une tentative fournisseur existe déjà. Confirmez ou remboursez son statut; une nouvelle soumission est interdite.",
-          externalReference: tx.externalReference,
+          message: `Cette transaction doit être relancée via ${provider}; le fournisseur ne peut pas être changé.`,
+        });
+      }
+      requestedProvider = provider;
+
+      if (!canRetryPayoutWithProvider(transactionMetadata, provider)) {
+        return res.status(409).json({
+          message: "Aucun refus explicite pour solde fournisseur insuffisant n'autorise une nouvelle soumission. Vérifiez d'abord le résultat de la tentative précédente.",
+          externalReference: tx.externalReference || undefined,
         });
       }
 
@@ -15628,6 +15847,12 @@ export async function registerRoutes(
         return res.status(409).json({ message: "Transaction déjà en cours d'exécution ou statut incorrect" });
       }
       lockAcquired = true; // status is now "processing" — catch must revert on pre-submit errors
+      const retryMetadata = {
+        ...transactionMetadata,
+        pendingPayoutProvider: provider,
+        payoutRetrySafe: false,
+        payoutRetryProvider: provider,
+      };
 
       // From here the transaction is in "processing" — no other request can enter.
       // Pre-submit error paths revert to "pending_manual" so the admin can retry.
@@ -15635,11 +15860,10 @@ export async function registerRoutes(
 
       const txUser = await storage.getUser(tx.userId);
       if (!txUser) {
-        await storage.updateTransactionStatus(txId, "pending_manual");
+        await storage.claimTransactionStatus(txId, "pending_manual", ["processing"]);
         return res.status(404).json({ message: "Utilisateur non trouvé" });
       }
 
-      const operator = tx.operatorId ? await storage.getOperator(tx.operatorId).catch(() => null) : null;
       // recipientCountry may be a code ("CM") for withdrawals or a name ("Cameroun") for transfers.
       // If longer than 2 chars, resolve the code from the operator's country.
       let countryCode = (tx.recipientCountry || "CM").toUpperCase();
@@ -15653,42 +15877,83 @@ export async function registerRoutes(
       const recipientName = tx.recipientName || txUser.fullName || txUser.username || "Client";
       const txRef = tx.reference || "";
 
-      let payoutResult: { success: boolean; transaction_id?: string; transactionId?: string; message?: string } = {
+      let payoutResult: {
+        success: boolean;
+        transaction_id?: string;
+        transactionId?: string;
+        message?: string;
+        status?: string;
+        providerStatus?: number;
+        httpStatus?: number;
+        providerCode?: string;
+        raw?: unknown;
+      } = {
         success: false,
         message: "Fournisseur de paiement non supporté",
       };
       // pollerRef = the reference the poller uses to check status with the provider.
       let pollerRef = txRef;
 
-      if (provider === "pawapay") {
-        if (tx.externalReference && isPawaPayUuidV4(tx.externalReference)) {
-          const existingId = tx.externalReference;
-          let status: "pending" | "completed" | "failed" = "pending";
-          try { status = (await getPawaPayPayout(existingId)).status; } catch { status = "pending"; }
-          if (status === "completed" || status === "failed") {
-            await processPawaPayPayoutCallback(tx, status === "completed" ? "success" : "failed");
-            return res.status(409).json({ message: status === "completed" ? "Paiement déjà traité." : "Paiement précédemment rejeté; créez une nouvelle transaction." });
-          }
-          await storage.updateTransactionStatus(txId, "processing");
-          addPendingPayout({
-            transactionId: txId, reference: existingId, externalReference: existingId, userId: tx.userId,
-            amount: tx.amount, totalDebited: totalAmount.toFixed(2), provider: "pawapay", countryCode,
-            txType: tx.type, txCurrency: tx.currency || "XAF",
-          });
-          providerSubmitted = true;
-          return res.status(202).json({ message: "Paiement en cours de rapprochement.", reference: existingId });
+      if (provider === "izichange") {
+        const savedRequest = transactionMetadata.iziPayoutRequest;
+        if (!savedRequest || typeof savedRequest !== "object" ||
+            typeof savedRequest.assetCode !== "string" ||
+            typeof savedRequest.amount !== "string" ||
+            typeof savedRequest.destinationAddress !== "string") {
+          throw new Error("IziChange payout request is missing; manual review is required");
         }
+        const retryKey = `${txRef}-retry-${crypto.randomUUID()}`;
+        const iziRetryMetadata = {
+          ...retryMetadata,
+          paymentProvider: "izichange",
+          pendingPayoutProvider: "izichange",
+          iziRetrySafe: false,
+          iziRetryAttemptKey: retryKey,
+        };
+        await storage.updateTransaction(txId, {
+          externalReference: null,
+          metadata: iziRetryMetadata,
+        } as any);
+        const result = await createIziPayout({
+          assetCode: savedRequest.assetCode,
+          amount: savedRequest.amount,
+          destinationAddress: savedRequest.destinationAddress,
+          ...(typeof savedRequest.destinationMemo === "string" && savedRequest.destinationMemo
+            ? { destinationMemo: savedRequest.destinationMemo }
+            : {}),
+          merchantReference: txRef,
+          idempotencyKey: retryKey,
+          feeBearer: "merchant",
+        });
+        // IziChange returned an authoritative payout ID; keep the transaction
+        // in processing if the following persistence/readback fails.
+        providerSubmitted = true;
+        await storage.updateTransaction(txId, {
+          externalReference: result.id,
+          metadata: { ...iziRetryMetadata, iziPayoutId: result.id },
+        } as any);
+        payoutResult = {
+          success: true,
+          transaction_id: result.id,
+          status: result.status,
+          message: "IziChange a accepté le payout.",
+        };
+        pollerRef = txRef;
+      } else if (provider === "pawapay") {
         await assertPawaPayProviderActive(resolvePawaPayProviderCode(operator, operator?.name || "", countryCode), "PAYOUT", pawaPayCountry(countryCode));
         const pawaPayRetryId = createPawaPayId();
-        await storage.updateTransactionMetadata(txId, {
-          ...((tx.metadata || {}) as Record<string, unknown>),
-          paymentProvider: "pawapay", pawaCountry: pawaPayCountry(countryCode),
-          pendingPayoutProvider: "pawapay",
-          walletCurrency: (tx.metadata as any)?.walletCurrency || tx.currency || "XAF",
-        });
-        // Store the recovery key before the request. If the network outcome is
-        // ambiguous, the processing transaction is recoverable by this UUID.
-        await storage.updateTransactionExternalReference(txId, pawaPayRetryId);
+        // Replace the explicitly rejected provider reference and store the new
+        // recovery UUID atomically before submitting the retry.
+        await storage.updateTransaction(txId, {
+          externalReference: pawaPayRetryId,
+          metadata: {
+            ...retryMetadata,
+            paymentProvider: "pawapay",
+            pawaCountry: pawaPayCountry(countryCode),
+            pendingPayoutProvider: "pawapay",
+            walletCurrency: transactionMetadata.walletCurrency || tx.currency || "XAF",
+          },
+        } as any);
         const result = await createPawaPayPayout({
           payoutId: pawaPayRetryId,
           country: pawaPayCountry(countryCode),
@@ -15701,7 +15966,15 @@ export async function registerRoutes(
           clientReferenceId: txRef,
           customerMessage: PAWAPAY_CUSTOMER_MESSAGE,
         });
-        payoutResult = { success: result.success, transaction_id: pawaPayRetryId, message: result.providerMessage };
+        payoutResult = {
+          success: result.success,
+          transaction_id: pawaPayRetryId,
+          message: result.providerMessage,
+          status: result.status,
+          providerStatus: result.providerStatus,
+          providerCode: result.providerCode,
+          raw: result.raw,
+        };
         if (result.success) pollerRef = pawaPayRetryId;
       } else if (provider === "afribapay") {
         const operatorName = (operator?.name || "").toUpperCase();
@@ -15723,11 +15996,13 @@ export async function registerRoutes(
         // If the server crashes after a successful provider call but before
         // updateTransactionStatus, recoverPendingPayouts() finds "processing"
         // + externalReference and polls the provider instead of re-executing.
-        await storage.updateTransactionMetadata(txId, {
-          ...((tx.metadata || {}) as Record<string, unknown>),
-          pendingPayoutProvider: "afribapay",
-        });
-        await storage.updateTransactionExternalReference(txId, afribaAdminRetryRef);
+        await storage.updateTransaction(txId, {
+          externalReference: afribaAdminRetryRef,
+          metadata: {
+            ...retryMetadata,
+            pendingPayoutProvider: "afribapay",
+          },
+        } as any);
 
         const result = await initiateAfribaPayout({
           operator: afribapayOperatorCode,
@@ -15748,18 +16023,20 @@ export async function registerRoutes(
       } else if (provider === "pixpay") {
         const serviceId = getPixPayServiceId(operator?.name || "", countryCode, "cash_in");
         if (!serviceId) {
-          await storage.updateTransactionStatus(txId, "pending_manual");
+          await storage.claimTransactionStatus(txId, "pending_manual", ["processing"]);
           return res.status(400).json({ message: `PixPay non supporté pour cet opérateur (${operator?.name}) dans ${countryCode}` });
         }
         const pixpayIpnUrl = buildWebhookUrl("/api/pixpay/webhook");
         const pixpayAdminRetryRef = `${txRef}-R${Date.now().toString(36)}`;
 
         // ── Solution 3: persist ref BEFORE calling provider ─────────────────
-        await storage.updateTransactionMetadata(txId, {
-          ...((tx.metadata || {}) as Record<string, unknown>),
-          pendingPayoutProvider: "pixpay",
-        });
-        await storage.updateTransactionExternalReference(txId, pixpayAdminRetryRef);
+        await storage.updateTransaction(txId, {
+          externalReference: pixpayAdminRetryRef,
+          metadata: {
+            ...retryMetadata,
+            pendingPayoutProvider: "pixpay",
+          },
+        } as any);
 
         const result = await initiatePixPayPayout({
           serviceId: String(serviceId),
@@ -15815,11 +16092,26 @@ export async function registerRoutes(
           amount:        tx.amount,
           totalDebited:  totalAmount.toFixed(2),
           provider,
-          ...(provider === "pawapay" ? { externalReference: pollerRef } : {}),
+          ...(["pawapay", "izichange"].includes(provider)
+            ? { externalReference: payoutResult.transaction_id || pollerRef }
+            : {}),
           countryCode,
           txType:        tx.type,
           txCurrency:    tx.currency || "XAF",
         });
+        if (
+          provider === "izichange" &&
+          ["confirmed", "failed", "refunded", "cancelled"].includes(String(payoutResult.status || "").toLowerCase())
+        ) {
+          const latestTransaction = await storage.getTransactionById(txId);
+          if (latestTransaction) {
+            await processIziPayPayoutCallback(
+              latestTransaction,
+              String(payoutResult.status).toLowerCase() === "confirmed" ? "success" : "failed",
+              payoutResult.transaction_id,
+            );
+          }
+        }
         // Bookkeeping is non-fatal: a failure here must not roll back the
         // transaction to pending_manual (the payment is already dispatched).
         storage.createAdminLog({
@@ -15831,7 +16123,16 @@ export async function registerRoutes(
           ipAddress: req.ip || null,
         }).catch((e: any) => console.error("[Admin] AdminLog error (non-fatal):", e.message));
         console.log(`[Admin] Executed pending_manual payout ${txRef} via ${provider} → poller ref: ${pollerRef}`);
-        res.json({ message: `Payout soumis via ${provider} avec succès`, reference: pollerRef });
+        const latestTransaction = await storage.getTransactionById(txId);
+        res.json({
+          message: latestTransaction?.status === "completed"
+            ? `Le paiement a été confirmé par ${provider}.`
+            : latestTransaction?.status === "failed"
+              ? `Le fournisseur a rejeté le paiement; le montant a été recrédité.`
+              : `Payout soumis via ${provider} avec succès`,
+          reference: pollerRef,
+          status: latestTransaction?.status || "pending",
+        });
       } else {
         // Insufficient balance / whitelist errors are NOT definitive failures:
         // revert to pending_manual so the admin can retry after topping up.
@@ -15843,7 +16144,29 @@ export async function registerRoutes(
           errMsg.includes("solde") ||
           errMsg.includes("balance");
 
-        await storage.updateTransactionStatus(txId, "pending_manual");
+        const retrySafe = !!requestedProvider && isExplicitInsufficientPayoutBalance(requestedProvider, {
+          success: false,
+          message: payoutResult.message,
+          providerMessage: payoutResult.message,
+          providerCode: payoutResult.providerCode,
+          providerStatus: payoutResult.providerStatus,
+          httpStatus: payoutResult.httpStatus,
+          status: payoutResult.status,
+          raw: payoutResult.raw,
+        });
+        if (retrySafe && requestedProvider) {
+          await markPayoutRetrySafeAfterBalanceRejection(
+            txId,
+            requestedProvider,
+            payoutResult.transaction_id || pollerRef,
+            payoutResult,
+            requestedProvider === "izichange"
+              ? { iziRetrySafe: true, iziInitiationError: "INSUFFICIENT_PROVIDER_BALANCE" }
+              : {},
+          );
+        } else {
+          await storage.claimTransactionStatus(txId, "pending_manual", ["processing"]);
+        }
         await storage.createAdminLog({
           adminId: req.userId!,
           action: "execute_pending_payout_retry_failed",
@@ -15853,11 +16176,18 @@ export async function registerRoutes(
           ipAddress: req.ip || null,
         });
 
-        if (requiresManualReview) {
+        if (retrySafe) {
+          const providerLabel = payoutProviderDisplayName(requestedProvider || provider);
+          console.log(`[Admin] Explicit insufficient balance via ${provider} for ${txRef}; retry enabled on same provider only`);
+          res.status(409).json({
+            pendingManual: true,
+            message: `Solde ${providerLabel} insuffisant. Rechargez le compte fournisseur puis relancez cette transaction via ${providerLabel} uniquement.`,
+          });
+        } else if (requiresManualReview) {
           console.log(`[Admin] Execute pending_manual — still insufficient via ${provider} for ${txRef}: ${payoutResult.message}`);
           res.status(409).json({
             pendingManual: true,
-            message: `Solde ${provider === "afribapay" ? "AfribaPay" : "PixPay"} toujours insuffisant. La transaction reste en attente — rechargez le wallet fournisseur puis réessayez (ou essayez l’autre fournisseur).`,
+            message: `Résultat de ${payoutProviderDisplayName(provider)} à vérifier. La transaction reste en attente; aucune nouvelle soumission ne sera autorisée sans refus explicite pour solde insuffisant.`,
           });
         } else {
           console.error(`[Admin] Execute pending_manual failed (${provider}): ${payoutResult.message}`);
@@ -15869,8 +16199,33 @@ export async function registerRoutes(
       // lockAcquired=true, providerSubmitted=false → pre-submit error, revert to pending_manual.
       // lockAcquired=true, providerSubmitted=true → money already dispatched; keep
       //   "processing" so recoverPendingPayouts() polls instead of re-executing.
+      const explicitBalanceRejection = !!requestedProvider && isExplicitInsufficientPayoutBalance(requestedProvider, {
+        success: false,
+        message: error?.message,
+        providerMessage: error?.message,
+        providerCode: error?.providerCode || error?.code,
+        providerStatus: error?.providerStatus ?? error?.status ?? error?.statusCode,
+        httpStatus: error?.httpStatus,
+        raw: error?.raw,
+      });
       if (lockAcquired && !providerSubmitted) {
-        await storage.updateTransactionStatus(txId, "pending_manual").catch(() => {});
+        if (explicitBalanceRejection && requestedProvider) {
+          const current = await storage.getTransactionById(txId).catch(() => null);
+          await markPayoutRetrySafeAfterBalanceRejection(
+            txId,
+            requestedProvider,
+            current?.externalReference || undefined,
+            {
+              providerCode: error?.providerCode || error?.code,
+              message: error?.message,
+            },
+            requestedProvider === "izichange"
+              ? { iziRetrySafe: true, iziInitiationError: "INSUFFICIENT_PROVIDER_BALANCE" }
+              : {},
+          ).catch(() => {});
+        } else {
+          await storage.claimTransactionStatus(txId, "pending_manual", ["processing"]).catch(() => {});
+        }
       } else if (providerSubmitted) {
         console.warn(`[Admin] Post-submit error (payout already dispatched, keeping processing): ${error.message}`);
       }
@@ -15899,14 +16254,10 @@ export async function registerRoutes(
         });
       }
       if (isProviderNetworkFailure && requestedProvider) {
-        const providerLabel = requestedProvider === "afribapay"
-          ? "AfribaPay"
-          : requestedProvider === "pixpay"
-            ? "PixPay"
-            : "PawaPay";
+        const providerLabel = payoutProviderDisplayName(requestedProvider);
         return res.status(503).json({
           error: "provider_unavailable",
-          message: `${providerLabel} est temporairement indisponible. La transaction reste en attente; réessayez plus tard.`,
+          message: `${providerLabel} est temporairement indisponible. Vérifiez le résultat de la tentative avant toute nouvelle soumission.`,
         });
       }
       return res.status(500).json({
