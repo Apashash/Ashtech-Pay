@@ -9,6 +9,21 @@ export function normalizePayoutStatusProvider(value: unknown): PayoutStatusProvi
     : null;
 }
 
+export function isPixPayPayoutProvider(metadata?: Record<string, unknown> | null): boolean {
+  return metadata?.paymentProvider === "pixpay" ||
+    metadata?.pendingPayoutProvider === "pixpay";
+}
+
+export function isPixPayManualPayoutProcessable(
+  provider: string,
+  currentStatus: string,
+  metadata?: Record<string, unknown> | null,
+): boolean {
+  return provider === "pixpay" &&
+    currentStatus === "pending_manual" &&
+    isPixPayPayoutProvider(metadata);
+}
+
 export function shouldUseManualPayoutStatusOverride(input: {
   transactionType: string;
   currentStatus: string;

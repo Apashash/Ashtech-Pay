@@ -82,7 +82,14 @@ export default function AdminPendingPayoutsPage() {
       queryClient.invalidateQueries({ queryKey: [`/api/admin/transactions/${variables.txId}/details`] });
       // Also refresh the withdrawals list so the pending row appears immediately
       // if the admin navigates there to watch the status update.
-      toast({ title: "Payout soumis", description: data.message });
+      toast({
+        title: data.status === "completed"
+          ? "Paiement confirmé"
+          : data.status === "failed" || data.status === "cancelled"
+            ? "Paiement rejeté"
+            : "Payout soumis",
+        description: data.message,
+      });
       setLoadingId(null);
     },
     onError: (error: Error & { pendingManual?: boolean }) => {

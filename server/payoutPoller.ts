@@ -8,6 +8,7 @@ import { sendWithdrawalApprovedEmail } from "./email";
 import { notifyWithdrawalAutoValidated, notifyWithdrawalFailed } from "./telegram";
 import { setFailedCooldown } from "./failedCooldown";
 import {
+  isPixPayManualPayoutProcessable,
   normalizePayoutStatusProvider,
   resolvePayoutStatusLookupReference,
   type PayoutStatusProvider,
@@ -77,8 +78,8 @@ export async function recoverPendingPayouts() {
       const operator = t.operatorId ? await storage.getOperator(t.operatorId).catch(() => null) : null;
       const metadata = ((t as any).metadata || {}) as Record<string, any>;
       const configuredProvider = (
-        metadata.pendingPayoutProvider || (operator as any)?.paymentProvider
-      ) as "afribapay" | "pixpay" | "pawapay" | undefined;
+        metadata.pendingPayoutProvider || metadata.paymentProvider || (operator as any)?.paymentProvider
+      ) as PayoutStatusProvider | undefined;
       const provider = metadata.paymentProvider === "izichange"
         ? "izichange"
         : t.externalReference && isPawaPayUuidV4(t.externalReference) ? "pawapay" : configuredProvider;
@@ -171,6 +172,7 @@ export async function processPayout(payout: PendingPayout, apiStatus: string) {
         `[PayoutPoller] Late provider status conflict for ${transaction.reference || transaction.id}: provider=${providerFinalStatus}, stored=${transaction.status}; keeping the stored status and wallet balance.`,
       );
     }
+    const transactionMetadata = ((transaction as any).metadata || {}) as Record<string, unknown>;
     const pawaManual = payout.provider === "pawapay" &&
       !!transaction?.externalReference &&
       isPawaPayUuidV4(transaction.externalReference) &&
@@ -180,13 +182,18 @@ export async function processPayout(payout: PendingPayout, apiStatus: string) {
       (transaction as any)?.metadata?.paymentProvider === "izichange";
     const afribaManual = payout.provider === "afribapay" &&
       transaction?.status === "pending_manual";
-    if (transaction.status !== "pending" && transaction.status !== "processing" && !pawaManual && !iziManual && !afribaManual) {
+    const pixpayManual = isPixPayManualPayoutProcessable(
+      payout.provider,
+      transaction.status,
+      transactionMetadata,
+    );
+    if (transaction.status !== "pending" && transaction.status !== "processing" && !pawaManual && !iziManual && !afribaManual && !pixpayManual) {
       removePendingPayout(payout.reference);
       return;
     }
 
     const currency = transaction.currency || "XAF";
-    const walletCurrency = payout.walletCurrency || ((transaction as any).metadata || {}).walletCurrency || currency;
+    const walletCurrency = payout.walletCurrency || String(transactionMetadata.walletCurrency || currency);
 
     if (apiStatus === "success") {
       const claimed = await storage.claimTransactionStatus(payout.transactionId, "completed", ["pending", "processing", "pending_manual"]);

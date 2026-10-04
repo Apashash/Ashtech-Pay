@@ -1625,6 +1625,12 @@ export class DatabaseStorage implements IStorage {
                 isMysqlDialect
                   ? sql`JSON_UNQUOTE(JSON_EXTRACT(${transactions.metadata}, '$.pendingPayoutProvider')) = 'afribapay'`
                   : sql`${transactions.metadata}->>'pendingPayoutProvider' = 'afribapay'`,
+                isMysqlDialect
+                  ? sql`JSON_UNQUOTE(JSON_EXTRACT(${transactions.metadata}, '$.paymentProvider')) = 'pixpay'`
+                  : sql`${transactions.metadata}->>'paymentProvider' = 'pixpay'`,
+                isMysqlDialect
+                  ? sql`JSON_UNQUOTE(JSON_EXTRACT(${transactions.metadata}, '$.pendingPayoutProvider')) = 'pixpay'`
+                  : sql`${transactions.metadata}->>'pendingPayoutProvider' = 'pixpay'`,
               ),
             ),
           )

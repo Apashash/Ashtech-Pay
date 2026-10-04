@@ -101,7 +101,10 @@ import { assertPawaPayProviderActive, classifyPawaPayControlledTransaction, crea
 import { addPendingPayment, removePendingPayment, expireCryptoPaymentIfNeeded } from "./paymentPoller";
 import { processPawaPayDepositCallback } from "./paymentPoller";
 import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserWallet, sameCfaFamily, getConversionPairKey, maybeAutoConvert, getConversionMinimumXaf, minimumConversionAmountInCurrency, minimumConversionErrorMessage } from "./walletHelper";
-import { shouldUseManualPayoutStatusOverride } from "./providerStatusReferences";
+import {
+  isPixPayPayoutProvider,
+  shouldUseManualPayoutStatusOverride,
+} from "./providerStatusReferences";
 import {
   addPendingPayout,
   removePendingPayout,
@@ -15780,7 +15783,31 @@ export async function registerRoutes(
         // Provider accepted — mark this BEFORE any DB write so the catch block
         // knows not to revert to pending_manual if a subsequent step throws.
         providerSubmitted = true;
-        await storage.updateTransactionStatus(txId, "pending");
+        const pendingTransaction = await storage.claimTransactionStatus(txId, "pending", ["processing"]);
+        if (!pendingTransaction) {
+          const currentTransaction = await storage.getTransactionById(txId);
+          if (currentTransaction && ["completed", "failed", "cancelled"].includes(currentTransaction.status)) {
+            storage.createAdminLog({
+              adminId: req.userId!,
+              action: "execute_pending_payout",
+              targetType: "transaction",
+              targetId: txId,
+              details: JSON.stringify({ provider, reference: pollerRef, status: currentTransaction.status }),
+              ipAddress: req.ip || null,
+            }).catch((e: any) => console.error("[Admin] AdminLog error (non-fatal):", e.message));
+            console.log(`[Admin] Provider callback settled pending_manual payout ${txRef} via ${provider}: ${currentTransaction.status}`);
+            return res.json({
+              message: currentTransaction.status === "completed"
+                ? `Le paiement a déjà été confirmé par ${provider}.`
+                : `Le fournisseur a déjà retourné le statut ${currentTransaction.status}.`,
+              reference: pollerRef,
+              status: currentTransaction.status,
+            });
+          }
+          if (currentTransaction?.status !== "pending") {
+            throw new Error("PAYOUT_STATUS_CHANGED_AFTER_SUBMISSION");
+          }
+        }
         addPendingPayout({
           transactionId: txId,
           reference:     pollerRef,
@@ -17604,190 +17631,160 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Missing identifier" });
       }
 
-      // Prefer lookup by our order reference stored in custom_data
-      const transaction = await storage.getTransactionByReference(ref);
+      // Prefer our internal order reference from custom_data, then the
+      // provider transaction/order IDs persisted for reconciliation.
+      const transaction = await storage.getTransactionByReference(ref)
+        || await storage.getTransactionByExternalReference(ref)
+        || (transactionId && transactionId !== ref
+          ? await storage.getTransactionByExternalReference(transactionId)
+          : undefined)
+        || (transactionId && transactionId !== ref
+          ? await storage.getTransactionByReference(transactionId)
+          : undefined);
       if (!transaction) {
         console.error("[PixPay Webhook] Transaction not found:", ref);
         return res.status(404).json({ message: "Transaction not found" });
-      }
-
-      if (transaction.status !== "pending") {
-        return res.json({ success: true });
       }
 
       const isPaymentLink = transaction.type === "payment_link";
       const isPayout = transaction.type === "withdrawal" || transaction.type === "transfer_out";
       const txCurrency = transaction.currency || "XAF";
 
+      if (isPayout) {
+        if (status === "pending") return res.json({ success: true });
+        const metadata = ((transaction as any).metadata || {}) as Record<string, any>;
+        if (!isPixPayPayoutProvider(metadata)) {
+          console.warn(`[PixPay Webhook] Ignoring payout callback for non-PixPay transaction ${transaction.id}`);
+          return res.json({ success: true });
+        }
+        if (!["pending", "processing", "pending_manual"].includes(transaction.status)) {
+          return res.json({ success: true, message: "already processed" });
+        }
+        const payoutReference = transaction.externalReference || transaction.reference || ref;
+        await processPayout({
+          transactionId: transaction.id,
+          reference: payoutReference,
+          externalReference: transaction.externalReference || transactionId || undefined,
+          userId: transaction.userId,
+          amount: String(transaction.amount),
+          totalDebited: String((transaction as any).totalAmount || transaction.amount),
+          attempts: 0,
+          provider: "pixpay",
+          countryCode: String(metadata.countryCode || transaction.recipientCountry || "CM"),
+          txType: transaction.type,
+          txCurrency,
+          walletCurrency: String(metadata.walletCurrency || txCurrency),
+        }, status === "completed" ? "success" : "failed");
+        forwardMerchantWebhook(transaction, status).catch(() => {});
+        return res.json({ success: true });
+      }
+
+      if (transaction.status !== "pending") {
+        return res.json({ success: true });
+      }
+
       if (status === "completed") {
         const claimedTransaction = await storage.claimTransactionStatus(transaction.id, "completed");
         if (!claimedTransaction) return res.json({ success: true, message: "already processed" });
 
-        if (isPayout) {
-          // Payout success: money already left user's account, just notify
-          removePendingPayout(ref);
-          await storage.createUserNotification({
-            userId: transaction.userId,
-            type: "withdrawal_confirmed",
-            title: transaction.type === "transfer_out" ? "Transfert confirmé" : "Retrait confirmé",
-            message: transaction.type === "transfer_out"
-              ? `Votre transfert de ${transaction.amount} ${txCurrency} a été envoyé avec succès.`
-              : `Votre retrait de ${transaction.amount} ${txCurrency} a été envoyé avec succès.`,
-            transactionId: transaction.id,
-          });
-          storage.getUser(transaction.userId).then(txUser => {
-            notifyWithdrawalAutoValidated({
-              userName: txUser?.fullName || txUser?.username || "Utilisateur",
-              userEmail: txUser?.email || "",
-              userPhone: txUser?.phone || undefined,
-              senderCountry: txUser?.country || undefined,
-              amount: transaction.amount,
-              grossAmount: (transaction as any).totalAmount || transaction.amount,
-              currency: txCurrency,
-              reference: transaction.reference || String(transaction.id),
-              provider: "PixPay",
-              recipientName: transaction.recipientName || undefined,
-              recipientPhone: transaction.recipientPhone || undefined,
-              recipientCountry: transaction.recipientCountry || undefined,
-            }).catch(() => {});
-          }).catch(() => {});
-          console.log(`[PixPay Webhook] ✓ Payout SUCCESS: ${transaction.id} (${transaction.type})`);
-          forwardMerchantWebhook(transaction, "completed").catch(() => {});
-        } else {
-          // Payin / deposit success: credit user's wallet
-          await creditUserWallet(transaction.userId, parseFloat(transaction.amount), txCurrency);
-          removePendingPayment(ref);
-          await storage.createUserNotification({
-            userId: transaction.userId,
-            type: isPaymentLink ? "payment_link_received" : "deposit_confirmed",
-            title: isPaymentLink ? "Paiement reçu" : "Dépôt confirmé",
-            message: isPaymentLink
-              ? `Vous avez reçu un paiement de ${transaction.amount} ${txCurrency} de ${transaction.payerName || "un client"}.`
-              : `Votre dépôt de ${transaction.amount} ${txCurrency} a été crédité sur votre compte.`,
-            transactionId: transaction.id,
-          });
-          if (transaction.paymentIntentId) {
-            await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "completed");
-          }
-          Promise.all([
-            storage.getUser(transaction.userId).catch(() => null),
-            transaction.operatorId ? storage.getOperator(transaction.operatorId).catch(() => null) : Promise.resolve(null),
-            transaction.paymentIntentId ? storage.getPaymentIntentById(transaction.paymentIntentId).catch(() => null) : Promise.resolve(null),
-            isPaymentLink && transaction.paymentLinkId ? storage.getPaymentLinkById(transaction.paymentLinkId).catch(() => null) : Promise.resolve(null),
-          ]).then(([txUser, txOp, txIntent, txLink]) => {
-            notifyDepositConfirmed({
-              userName: txUser?.fullName || txUser?.username || "Utilisateur",
-              userEmail: txUser?.email || "",
-              userPhone: txUser?.phone || undefined,
-              userCountry: txUser?.country || undefined,
-              amount: transaction.amount,
-              grossAmount: (transaction as any).totalAmount || transaction.amount,
-              currency: txCurrency,
-              reference: transaction.reference || String(transaction.id),
-              merchantReference: (transaction as any).metadata?.merchantReference || (transaction as any).metadata?.merchant_reference || undefined,
-              externalReference: transaction.externalReference || undefined,
-              provider: "PixPay",
-              country: undefined,
-              depositType: isPaymentLink ? "payment_link" : "deposit",
-              paymentMethod: transaction.paymentMethod || undefined,
-              phone: transaction.recipientPhone || undefined,
-              operator: (txOp as any)?.name || undefined,
-              source: (transaction as any).source || undefined,
-              ...(isPaymentLink && {
-                payerName: transaction.payerName || undefined,
-                payerEmail: transaction.payerEmail || undefined,
-                payerPhone: (txIntent as any)?.payerPhone || undefined,
-                beneficiaryUsername: txUser?.username || undefined,
-                beneficiaryPhone: txUser?.phone || undefined,
-                creditedCurrency: txCurrency,
-                linkTitle: (txLink as any)?.title || undefined,
-              }),
-            }).catch(() => {});
-          }).catch(() => {});
-          console.log(`[PixPay Webhook] ✓ Deposit SUCCESS: ${transaction.id} → ${transaction.amount} ${txCurrency}`);
-          forwardMerchantWebhook(transaction, "completed").catch(() => {});
+        // Payin / deposit success: credit user's wallet
+        await creditUserWallet(transaction.userId, parseFloat(transaction.amount), txCurrency);
+        removePendingPayment(ref);
+        await storage.createUserNotification({
+          userId: transaction.userId,
+          type: isPaymentLink ? "payment_link_received" : "deposit_confirmed",
+          title: isPaymentLink ? "Paiement reçu" : "Dépôt confirmé",
+          message: isPaymentLink
+            ? `Vous avez reçu un paiement de ${transaction.amount} ${txCurrency} de ${transaction.payerName || "un client"}.`
+            : `Votre dépôt de ${transaction.amount} ${txCurrency} a été crédité sur votre compte.`,
+          transactionId: transaction.id,
+        });
+        if (transaction.paymentIntentId) {
+          await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "completed");
         }
+        Promise.all([
+          storage.getUser(transaction.userId).catch(() => null),
+          transaction.operatorId ? storage.getOperator(transaction.operatorId).catch(() => null) : Promise.resolve(null),
+          transaction.paymentIntentId ? storage.getPaymentIntentById(transaction.paymentIntentId).catch(() => null) : Promise.resolve(null),
+          isPaymentLink && transaction.paymentLinkId ? storage.getPaymentLinkById(transaction.paymentLinkId).catch(() => null) : Promise.resolve(null),
+        ]).then(([txUser, txOp, txIntent, txLink]) => {
+          notifyDepositConfirmed({
+            userName: txUser?.fullName || txUser?.username || "Utilisateur",
+            userEmail: txUser?.email || "",
+            userPhone: txUser?.phone || undefined,
+            userCountry: txUser?.country || undefined,
+            amount: transaction.amount,
+            grossAmount: (transaction as any).totalAmount || transaction.amount,
+            currency: txCurrency,
+            reference: transaction.reference || String(transaction.id),
+            merchantReference: (transaction as any).metadata?.merchantReference || (transaction as any).metadata?.merchant_reference || undefined,
+            externalReference: transaction.externalReference || undefined,
+            provider: "PixPay",
+            country: undefined,
+            depositType: isPaymentLink ? "payment_link" : "deposit",
+            paymentMethod: transaction.paymentMethod || undefined,
+            phone: transaction.recipientPhone || undefined,
+            operator: (txOp as any)?.name || undefined,
+            source: (transaction as any).source || undefined,
+            ...(isPaymentLink && {
+              payerName: transaction.payerName || undefined,
+              payerEmail: transaction.payerEmail || undefined,
+              payerPhone: (txIntent as any)?.payerPhone || undefined,
+              beneficiaryUsername: txUser?.username || undefined,
+              beneficiaryPhone: txUser?.phone || undefined,
+              creditedCurrency: txCurrency,
+              linkTitle: (txLink as any)?.title || undefined,
+            }),
+          }).catch(() => {});
+        }).catch(() => {});
+        console.log(`[PixPay Webhook] ✓ Deposit SUCCESS: ${transaction.id} → ${transaction.amount} ${txCurrency}`);
+        forwardMerchantWebhook(transaction, "completed").catch(() => {});
 
       } else if (status === "failed") {
         const claimedTransaction = await storage.claimTransactionStatus(transaction.id, "failed");
         if (!claimedTransaction) return res.json({ success: true, message: "already processed" });
 
-        if (isPayout) {
-          // Payout failed: refund the full debited amount to the wallet that was originally debited
-          const refundAmount = parseFloat((transaction as any).totalAmount || transaction.amount);
-          await storage.refundToOriginalWallet(transaction.userId, transaction.type, txCurrency, refundAmount);
-          removePendingPayout(ref);
-          await storage.createUserNotification({
-            userId: transaction.userId,
-            type: "withdrawal_failed",
-            title: transaction.type === "transfer_out" ? "Transfert échoué" : "Retrait échoué",
-            message: transaction.type === "transfer_out"
-              ? `Votre transfert de ${transaction.amount} ${txCurrency} a échoué. Le montant a été recrédité sur votre compte.${providerMessage ? ` (${providerMessage})` : ""}`
-              : `Votre retrait de ${transaction.amount} ${txCurrency} a échoué. Le montant a été recrédité sur votre compte.${providerMessage ? ` (${providerMessage})` : ""}`,
-            transactionId: transaction.id,
-          });
-          storage.getUser(transaction.userId).then(txUser => {
-            notifyWithdrawalFailed({
-              userName: txUser?.fullName || txUser?.username || "Utilisateur",
-              userEmail: txUser?.email || "",
-              userPhone: txUser?.phone || undefined,
-              senderCountry: txUser?.country || undefined,
-              amount: transaction.amount,
-              grossAmount: (transaction as any).totalAmount || transaction.amount,
-              currency: txCurrency,
-              reference: transaction.reference || String(transaction.id),
-              reason: `${providerMessage || "Échec"} — ${transaction.type === "transfer_out" ? "transfert" : "retrait"} (PixPay)`,
-              provider: "PixPay",
-              recipientName: transaction.recipientName || undefined,
-              recipientPhone: transaction.recipientPhone || undefined,
-              recipientCountry: transaction.recipientCountry || undefined,
-            }).catch(() => {});
-          }).catch(() => {});
-          console.log(`[PixPay Webhook] ✗ Payout FAILED: ${transaction.id} — refunded ${refundAmount} ${txCurrency}`);
-          forwardMerchantWebhook(transaction, "failed").catch(() => {});
-        } else {
-          removePendingPayment(ref);
-          if (transaction.paymentIntentId) {
-            await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "failed");
-          }
-          await storage.createUserNotification({
-            userId: transaction.userId,
-            type: isPaymentLink ? "payment_link_failed" : "deposit_failed",
-            title: isPaymentLink ? "Paiement annulé" : "Dépôt annulé",
-            message: isPaymentLink
-              ? `Le paiement a été annulé ou a échoué.${providerMessage ? ` (${providerMessage})` : ""}`
-              : `Votre dépôt a été annulé.${providerMessage ? ` (${providerMessage})` : ""}`,
-            transactionId: transaction.id,
-          });
-          Promise.all([
-            storage.getUser(transaction.userId).catch(() => null),
-            transaction.operatorId ? storage.getOperator(transaction.operatorId).catch(() => null) : Promise.resolve(null),
-          ]).then(([txUser, txOp]) => {
-            notifyDepositFailed({
-              userName: txUser?.fullName || txUser?.username || "Utilisateur",
-              userEmail: txUser?.email || "",
-              userPhone: txUser?.phone || undefined,
-              userCountry: txUser?.country || undefined,
-              amount: transaction.totalAmount || transaction.amount,
-              currency: txCurrency,
-              reference: transaction.reference || String(transaction.id),
-              merchantReference: (transaction as any).metadata?.merchantReference || (transaction as any).metadata?.merchant_reference || undefined,
-              externalReference: transaction.externalReference || undefined,
-              reason: isPaymentLink
-                ? `Paiement lien échoué (PixPay)${providerMessage ? ` — ${providerMessage}` : ""}`
-                : `Dépôt annulé/échoué (PixPay)${providerMessage ? ` — ${providerMessage}` : ""}`,
-              provider: "PixPay",
-              country: undefined,
-              depositType: isPaymentLink ? "payment_link" : "deposit",
-              paymentMethod: transaction.paymentMethod || undefined,
-              phone: transaction.recipientPhone || undefined,
-              operator: (txOp as any)?.name || undefined,
-              source: (transaction as any).source || undefined,
-            }).catch(() => {});
-          }).catch(() => {});
-          console.log(`[PixPay Webhook] ✗ Deposit FAILED: ${transaction.id} — ${providerMessage}`);
-          forwardMerchantWebhook(transaction, "failed").catch(() => {});
+        removePendingPayment(ref);
+        if (transaction.paymentIntentId) {
+          await storage.updatePaymentIntentStatus(transaction.paymentIntentId, "failed");
         }
+        await storage.createUserNotification({
+          userId: transaction.userId,
+          type: isPaymentLink ? "payment_link_failed" : "deposit_failed",
+          title: isPaymentLink ? "Paiement annulé" : "Dépôt annulé",
+          message: isPaymentLink
+            ? `Le paiement a été annulé ou a échoué.${providerMessage ? ` (${providerMessage})` : ""}`
+            : `Votre dépôt a été annulé.${providerMessage ? ` (${providerMessage})` : ""}`,
+          transactionId: transaction.id,
+        });
+        Promise.all([
+          storage.getUser(transaction.userId).catch(() => null),
+          transaction.operatorId ? storage.getOperator(transaction.operatorId).catch(() => null) : Promise.resolve(null),
+        ]).then(([txUser, txOp]) => {
+          notifyDepositFailed({
+            userName: txUser?.fullName || txUser?.username || "Utilisateur",
+            userEmail: txUser?.email || "",
+            userPhone: txUser?.phone || undefined,
+            userCountry: txUser?.country || undefined,
+            amount: transaction.totalAmount || transaction.amount,
+            currency: txCurrency,
+            reference: transaction.reference || String(transaction.id),
+            merchantReference: (transaction as any).metadata?.merchantReference || (transaction as any).metadata?.merchant_reference || undefined,
+            externalReference: transaction.externalReference || undefined,
+            reason: isPaymentLink
+              ? `Paiement lien échoué (PixPay)${providerMessage ? ` — ${providerMessage}` : ""}`
+              : `Dépôt annulé/échoué (PixPay)${providerMessage ? ` — ${providerMessage}` : ""}`,
+            provider: "PixPay",
+            country: undefined,
+            depositType: isPaymentLink ? "payment_link" : "deposit",
+            paymentMethod: transaction.paymentMethod || undefined,
+            phone: transaction.recipientPhone || undefined,
+            operator: (txOp as any)?.name || undefined,
+            source: (transaction as any).source || undefined,
+          }).catch(() => {});
+        }).catch(() => {});
+        console.log(`[PixPay Webhook] ✗ Deposit FAILED: ${transaction.id} — ${providerMessage}`);
+        forwardMerchantWebhook(transaction, "failed").catch(() => {});
       }
 
       res.json({ success: true });

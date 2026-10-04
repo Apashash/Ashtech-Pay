@@ -7,6 +7,8 @@ import {
   recoveredStatusPollLastCheckedAt,
 } from "../server/providerStatusPolicy.ts";
 import {
+  isPixPayManualPayoutProcessable,
+  isPixPayPayoutProvider,
   normalizePayoutStatusProvider,
   resolvePayoutStatusLookupReference,
   shouldUseManualPayoutStatusOverride,
@@ -55,6 +57,24 @@ test("admin may override an unresolved payout, but ordinary pending approvals st
     currentStatus: "pending",
     requestedStatus: "pending",
     externalReference: "provider-attempt-123",
+  }), false);
+});
+
+test("PixPay manual payouts are processable only when the transaction records PixPay as provider", () => {
+  assert.equal(isPixPayPayoutProvider({ paymentProvider: "pixpay" }), true);
+  assert.equal(isPixPayPayoutProvider({ pendingPayoutProvider: "pixpay" }), true);
+  assert.equal(isPixPayPayoutProvider({ paymentProvider: "afribapay" }), false);
+  assert.equal(isPixPayManualPayoutProcessable("pixpay", "pending_manual", {
+    paymentProvider: "pixpay",
+  }), true);
+  assert.equal(isPixPayManualPayoutProcessable("pixpay", "pending_manual", {
+    pendingPayoutProvider: "pixpay",
+  }), true);
+  assert.equal(isPixPayManualPayoutProcessable("pixpay", "pending_manual", {
+    paymentProvider: "afribapay",
+  }), false);
+  assert.equal(isPixPayManualPayoutProcessable("pixpay", "pending", {
+    paymentProvider: "pixpay",
   }), false);
 });
 
