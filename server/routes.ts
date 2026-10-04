@@ -6575,19 +6575,63 @@ export async function registerRoutes(
   // Transfer between Ashtech Pay accounts (by email or username)
   app.post("/api/transfers/internal", requireAuth, transferLimiter, otpConfirmLimiter, async (req, res) => {
     try {
-      const { recipientIdentifier, amount, description, sourceCurrency } = req.body;
+      const { recipientIdentifier, amount, description, sourceCurrency, idempotencyKey: rawIdempotencyKey } = req.body;
       const senderId = req.userId!;
-      const amountNum = parseFloat(amount);
+      const parsedAmount = parseFloat(amount);
+      const idempotencyKey = typeof rawIdempotencyKey === "string" ? rawIdempotencyKey.toLowerCase() : "";
 
-      if (!recipientIdentifier || !recipientIdentifier.trim()) {
+      if (typeof recipientIdentifier !== "string" || !recipientIdentifier.trim()) {
         return res.status(400).json({ message: "Identifiant du destinataire requis" });
       }
-      if (!amountNum || amountNum <= 0) {
+      if (!Number.isFinite(parsedAmount) || parsedAmount <= 0 || parsedAmount > 9999999999999.99) {
         return res.status(400).json({ message: "Montant invalide" });
+      }
+      const amountNum = Number(parsedAmount.toFixed(2));
+      if (amountNum <= 0) return res.status(400).json({ message: "Montant invalide" });
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(idempotencyKey)) {
+        return res.status(400).json({
+          message: "Clé unique de transfert manquante ou invalide. Veuillez actualiser l'application.",
+          code: "IDEMPOTENCY_KEY_REQUIRED",
+        });
       }
 
       const sender = await storage.getUser(senderId);
       if (!sender) return res.status(404).json({ message: "Utilisateur non trouvé" });
+      const currency = (typeof sourceCurrency === "string" && sourceCurrency)
+        || sender.preferredCurrency
+        || "XAF";
+      const descriptionText = typeof description === "string" ? description.trim() : "";
+      const payloadHash = crypto.createHash("sha256").update(JSON.stringify({
+        recipientIdentifier: recipientIdentifier.trim().toLowerCase(),
+        amount: amountNum.toFixed(2),
+        currency,
+        description: descriptionText,
+      })).digest("hex");
+
+      const respondForExistingTransfer = (existing: Transaction): boolean => {
+        const existingPayloadHash = (existing.metadata as any)?.internalTransferPayloadHash;
+        if (existingPayloadHash !== payloadHash) {
+          res.status(409).json({
+            message: "Cette clé de transfert a déjà été utilisée pour une autre opération.",
+            code: "IDEMPOTENCY_KEY_REUSED",
+          });
+          return true;
+        }
+        res.json({
+          message: "Transfert réussi",
+          transaction: existing,
+          recipientName: existing.recipientName || "le destinataire",
+        });
+        return true;
+      };
+
+      // A retry after a committed transfer must replay success before OTP
+      // validation, because the original OTP has already been consumed.
+      const existingTransfer = await storage.getInternalTransferByKey(senderId, idempotencyKey);
+      if (existingTransfer) {
+        respondForExistingTransfer(existingTransfer);
+        return;
+      }
 
       // ── OTP verification (skipped when admin disabled email OTP) ──
       if (await isOtpEmailEnabled()) {
@@ -6647,9 +6691,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Vous ne pouvez pas vous envoyer de l'argent à vous-même" });
       }
 
-      const currency = sourceCurrency || sender.preferredCurrency || "XAF";
       const senderPrimary = sender.preferredCurrency || "XAF";
-      const recipientPrimary = recipient.preferredCurrency || "XAF";
 
       // Check balance before any debit
       if (currency === senderPrimary) {
@@ -6664,45 +6706,46 @@ export async function registerRoutes(
       }
 
       const transferRef = generateTransactionReference("transfer_out");
-
-      // Create transaction records BEFORE moving money
-      const transactionOut = await storage.createTransaction({
-        userId: senderId,
-        type: "transfer_out",
-        amount: amountNum.toFixed(2),
-        currency,
-        status: "completed",
-        description: description || `Transfert à ${recipient.fullName}`,
-        recipientId: recipient.id,
-        recipientName: recipient.fullName,
-        reference: transferRef,
-        feeAmount: "0.00",
-        totalAmount: amountNum.toFixed(2),
-      });
-
-      const transactionIn = await storage.createTransaction({
-        userId: recipient.id,
-        type: "transfer_in",
-        amount: amountNum.toFixed(2),
-        currency,
-        status: "completed",
-        description: `Reçu de ${sender.fullName}`,
-        recipientId: senderId,
-        reference: transferRef,
-        feeAmount: "0.00",
-        totalAmount: amountNum.toFixed(2),
-      });
-
-      // Move money only after both transactions are created
-      if (currency === senderPrimary) {
-        await storage.updateUserBalance(senderId, -amountNum);
-      } else {
-        await storage.upsertWallet(senderId, currency, -amountNum);
+      const payoutLockUntil = await acquirePayoutOperationLock(senderId);
+      if (!payoutLockUntil) {
+        return res.status(409).json({
+          message: "Une opération de retrait ou de transfert est déjà en cours. Attendez sa confirmation avant de recommencer.",
+          code: "PAYOUT_ALREADY_IN_PROGRESS",
+        });
       }
-      if (currency === recipientPrimary) {
-        await storage.updateUserBalance(recipient.id, amountNum);
-      } else {
-        await storage.upsertWallet(recipient.id, currency, amountNum);
+
+      let transactionOut: Transaction;
+      let transactionIn: Transaction;
+      try {
+        // Recheck after acquiring the shared lock. A request may have passed
+        // its first lookup while an identical request was committing.
+        const latestTransfer = await storage.getInternalTransferByKey(senderId, idempotencyKey);
+        if (latestTransfer) {
+          respondForExistingTransfer(latestTransfer);
+          return;
+        }
+
+        const created = await storage.createInternalTransferAtomic({
+          senderId,
+          recipientId: recipient.id,
+          senderName: sender.fullName,
+          recipientName: recipient.fullName,
+          amount: amountNum,
+          currency,
+          description: descriptionText || `Transfert à ${recipient.fullName}`,
+          reference: transferRef,
+          idempotencyKey,
+          payloadHash,
+        });
+        transactionOut = created.transactionOut;
+        transactionIn = created.transactionIn;
+      } catch (transferError: any) {
+        if (/^Solde insuffisant/.test(String(transferError?.message || ""))) {
+          return res.status(400).json({ message: transferError.message });
+        }
+        throw transferError;
+      } finally {
+        await releasePayoutOperationLock(senderId, payoutLockUntil);
       }
 
       await storage.createUserNotification({

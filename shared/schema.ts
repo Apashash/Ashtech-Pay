@@ -271,6 +271,7 @@ export const transactions = pgTable("transactions", {
   notifyUrl: text("notify_url"),   // Webhook URL for API-originated transactions
   source: text("source"),          // null | "api" — marks API-originated transactions
   merchantReference: varchar("merchant_reference", { length: 191 }),
+  internalTransferKey: varchar("internal_transfer_key", { length: 191 }),
   metadata: jsonb("metadata").$type<Record<string, any>>(),  // JSON: assetCode, address, memo, …
   createdAt: timestamp("created_at").defaultNow(),
   confirmedAt: timestamp("confirmed_at"),
@@ -282,6 +283,9 @@ export const transactions = pgTable("transactions", {
   txApiMerchantReferenceUniq: uniqueIndex("transactions_api_user_merchant_reference_unique")
     .on(t.userId, t.merchantReference)
     .where(sql`${t.source} = 'api' AND ${t.merchantReference} IS NOT NULL`),
+  txInternalTransferKeyUniq: uniqueIndex("transactions_internal_transfer_key_unique")
+    .on(t.userId, t.internalTransferKey)
+    .where(sql`${t.internalTransferKey} IS NOT NULL`),
   txStatusIdx: index("tx_status_idx").on(t.status),
   txCreatedAtIdx: index("tx_created_at_idx").on(t.createdAt),
   txStatusTypeIdx: index("tx_status_type_idx").on(t.status, t.type),
@@ -566,6 +570,7 @@ export const insertTransactionSchema = createInsertSchema(transactions).pick({
   notifyUrl: true,
   source: true,
   merchantReference: true,
+  internalTransferKey: true,
   externalReference: true,
   metadata: true,
   confirmedAt: true,

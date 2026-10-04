@@ -69,7 +69,7 @@ const STARTUP_PUBLIC_API_PATHS = new Set([
 // Bump this value whenever the idempotent migration block below gains a new
 // schema change. Completed versions are stored in platform_settings so a
 // normal Passenger restart does not repeat every ALTER TABLE/CREATE INDEX.
-const SCHEMA_MIGRATION_VERSION = "2026-09-28-api-idempotency-otp-v1";
+const SCHEMA_MIGRATION_VERSION = "2026-10-05-internal-transfer-idempotency-v1";
 
 // ── Gestionnaires d'erreurs globaux ──────────────────────────────────────────
 // unhandledRejection: log + continue — safe, these are async promise failures.
@@ -667,6 +667,7 @@ app.use((req, res, next) => {
     await db.execute(sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS notify_url TEXT`);
     await db.execute(sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS source TEXT`);
     await db.execute(sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS merchant_reference VARCHAR(191)`);
+    await db.execute(sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS internal_transfer_key VARCHAR(191)`);
     await db.execute(sql`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMP`);
     await db.execute(sql`
       CREATE UNIQUE INDEX IF NOT EXISTS transactions_pawapay_external_reference_unique
@@ -677,6 +678,11 @@ app.use((req, res, next) => {
       CREATE UNIQUE INDEX IF NOT EXISTS transactions_api_user_merchant_reference_unique
       ON transactions (user_id, merchant_reference)
       WHERE source = 'api' AND merchant_reference IS NOT NULL
+    `);
+    await db.execute(sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS transactions_internal_transfer_key_unique
+      ON transactions (user_id, internal_transfer_key)
+      WHERE internal_transfer_key IS NOT NULL
     `);
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS hosted_page_configs (

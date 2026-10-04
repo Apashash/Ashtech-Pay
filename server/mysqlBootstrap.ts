@@ -1,7 +1,7 @@
 import { pool } from "./db";
 
 const MYSQL_AUXILIARY_SCHEMA_NAME = "mysql-runtime-auxiliary";
-const MYSQL_AUXILIARY_SCHEMA_VERSION = "2026-09-28-api-idempotency-otp-v2";
+const MYSQL_AUXILIARY_SCHEMA_VERSION = "2026-10-05-internal-transfer-idempotency-v1";
 
 const KYC_DOCUMENTS_TABLE_SQL = `CREATE TABLE IF NOT EXISTS kyc_documents (
   id VARCHAR(191) NOT NULL PRIMARY KEY,
@@ -91,6 +91,7 @@ export async function ensureMysqlAuxiliarySchema(): Promise<void> {
     `ALTER TABLE api_otp_sessions ADD COLUMN IF NOT EXISTS claimed_until DATETIME(3) NULL`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS token_revoked_before BIGINT DEFAULT 0`,
     `ALTER TABLE transactions ADD COLUMN IF NOT EXISTS merchant_reference VARCHAR(191) NULL`,
+    `ALTER TABLE transactions ADD COLUMN IF NOT EXISTS internal_transfer_key VARCHAR(191) NULL`,
     `CREATE TABLE IF NOT EXISTS merchant_webhook_deliveries (
       id VARCHAR(191) NOT NULL PRIMARY KEY,
       merchant_id VARCHAR(191),
@@ -201,6 +202,18 @@ export async function ensureMysqlAuxiliarySchema(): Promise<void> {
       try {
         await pool.query(
           "ALTER TABLE transactions ADD UNIQUE KEY transactions_api_user_merchant_reference_unique (user_id, merchant_reference)",
+        );
+      } catch (error: any) {
+        const code = String(error?.code || "");
+        const message = String(error?.message || "");
+        if (code !== "ER_DUP_KEYNAME" && !/duplicate key name|already exists/i.test(message)) {
+          throw error;
+        }
+      }
+
+      try {
+        await pool.query(
+          "ALTER TABLE transactions ADD UNIQUE KEY transactions_internal_transfer_key_unique (user_id, internal_transfer_key)",
         );
       } catch (error: any) {
         const code = String(error?.code || "");

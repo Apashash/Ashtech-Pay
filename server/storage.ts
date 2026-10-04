@@ -146,9 +146,22 @@ export interface IStorage {
   getTransactionByReference(reference: string): Promise<Transaction | undefined>;
   getTransactionByExternalReference(externalReference: string): Promise<Transaction | undefined>;
   getTransactionByUserReference(userId: string, reference: string): Promise<Transaction | undefined>;
+  getInternalTransferByKey(userId: string, idempotencyKey: string): Promise<Transaction | undefined>;
   getApiTransactionByMerchantReference(userId: string, reference: string): Promise<Transaction | undefined>;
   getLastIncomingTransactionByCurrency(userId: string, currency: string): Promise<Transaction | undefined>;
   createTransaction(transaction: InsertTransaction): Promise<Transaction>;
+  createInternalTransferAtomic(params: {
+    senderId: string;
+    recipientId: string;
+    senderName: string;
+    recipientName: string;
+    amount: number;
+    currency: string;
+    description: string;
+    reference: string;
+    idempotencyKey: string;
+    payloadHash: string;
+  }): Promise<{ transactionOut: Transaction; transactionIn: Transaction }>;
   createCryptoPayoutAndDebit(transaction: InsertTransaction, debitAmount: number): Promise<Transaction>;
   updateTransactionStatus(id: string, status: string): Promise<Transaction | undefined>;
   claimTransactionStatus(id: string, status: string, allowedFrom?: string[]): Promise<Transaction | undefined>;
@@ -726,6 +739,19 @@ export class DatabaseStorage implements IStorage {
     return transaction || undefined;
   }
 
+  async getInternalTransferByKey(userId: string, idempotencyKey: string): Promise<Transaction | undefined> {
+    const [transaction] = await db
+      .select()
+      .from(transactions)
+      .where(and(
+        eq(transactions.userId, userId),
+        eq(transactions.internalTransferKey, idempotencyKey),
+        eq(transactions.type, "transfer_out"),
+      ))
+      .limit(1);
+    return transaction || undefined;
+  }
+
   async getApiTransactionByMerchantReference(userId: string, reference: string): Promise<Transaction | undefined> {
     const [transaction] = await db
       .select()
@@ -790,6 +816,179 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return transaction;
+  }
+
+  async createInternalTransferAtomic(params: {
+    senderId: string;
+    recipientId: string;
+    senderName: string;
+    recipientName: string;
+    amount: number;
+    currency: string;
+    description: string;
+    reference: string;
+    idempotencyKey: string;
+    payloadHash: string;
+  }): Promise<{ transactionOut: Transaction; transactionIn: Transaction }> {
+    if (!Number.isFinite(params.amount) || params.amount <= 0) {
+      throw new Error("INVALID_INTERNAL_TRANSFER_AMOUNT");
+    }
+    if (params.senderId === params.recipientId) {
+      throw new Error("INTERNAL_TRANSFER_SELF_SEND");
+    }
+
+    const amount = Number(params.amount.toFixed(2));
+    const amountText = amount.toFixed(2);
+    const transactionOutId = randomUUID();
+    const transactionInId = randomUUID();
+    const now = new Date();
+
+    const created = await db.transaction(async (trx) => {
+      const [sender] = await trx.select({
+        id: users.id,
+        preferredCurrency: users.preferredCurrency,
+      }).from(users).where(eq(users.id, params.senderId)).limit(1);
+      const [recipient] = await trx.select({
+        id: users.id,
+        preferredCurrency: users.preferredCurrency,
+      }).from(users).where(eq(users.id, params.recipientId)).limit(1);
+      if (!sender || !recipient) throw new Error("INTERNAL_TRANSFER_USER_NOT_FOUND");
+
+      await trx.insert(transactions).values({
+        id: transactionOutId,
+        userId: params.senderId,
+        type: "transfer_out",
+        amount: amountText,
+        currency: params.currency,
+        status: "completed",
+        description: params.description,
+        recipientId: params.recipientId,
+        recipientName: params.recipientName,
+        reference: params.reference,
+        feeAmount: "0.00",
+        totalAmount: amountText,
+        internalTransferKey: params.idempotencyKey,
+        metadata: { internalTransferPayloadHash: params.payloadHash },
+        createdAt: now,
+      });
+
+      await trx.insert(transactions).values({
+        id: transactionInId,
+        userId: params.recipientId,
+        type: "transfer_in",
+        amount: amountText,
+        currency: params.currency,
+        status: "completed",
+        description: `Reçu de ${params.senderName}`,
+        recipientId: params.senderId,
+        reference: params.reference,
+        feeAmount: "0.00",
+        totalAmount: amountText,
+        createdAt: now,
+      });
+
+      const senderPrimaryCurrency = sender.preferredCurrency || "XAF";
+      const recipientPrimaryCurrency = recipient.preferredCurrency || "XAF";
+      const mysqlAffectedRows = (result: any): number => {
+        const header = Array.isArray(result) ? result[0] : result;
+        return Number(header?.affectedRows ?? header?.rowCount ?? header?.changes ?? 0);
+      };
+
+      if (params.currency === senderPrimaryCurrency) {
+        const sufficientBalance = isMysqlDialect
+          ? sql`CAST(${users.balance} AS DECIMAL(30, 10)) >= ${amountText}`
+          : sql`${users.balance}::numeric >= ${amountText}::numeric`;
+        if (isMysqlDialect) {
+          const result = await trx.update(users)
+            .set({ balance: sql`CAST(${users.balance} AS DECIMAL(30, 10)) - ${amountText}` })
+            .where(and(eq(users.id, params.senderId), sufficientBalance));
+          if (mysqlAffectedRows(result) < 1) throw new Error("Solde insuffisant");
+        } else {
+          const [updated] = await trx.update(users)
+            .set({ balance: sql`${users.balance}::numeric - ${amountText}::numeric` })
+            .where(and(eq(users.id, params.senderId), sufficientBalance))
+            .returning({ id: users.id });
+          if (!updated) throw new Error("Solde insuffisant");
+        }
+      } else {
+        const sufficientBalance = isMysqlDialect
+          ? sql`CAST(${wallets.balance} AS DECIMAL(30, 10)) >= ${amountText}`
+          : sql`${wallets.balance}::numeric >= ${amountText}::numeric`;
+        if (isMysqlDialect) {
+          const result = await trx.update(wallets)
+            .set({ balance: sql`CAST(${wallets.balance} AS DECIMAL(30, 10)) - ${amountText}` })
+            .where(and(
+              eq(wallets.userId, params.senderId),
+              eq(wallets.currency, params.currency),
+              sufficientBalance,
+            ));
+          if (mysqlAffectedRows(result) < 1) throw new Error("Solde insuffisant dans ce portefeuille");
+        } else {
+          const [updated] = await trx.update(wallets)
+            .set({ balance: sql`${wallets.balance}::numeric - ${amountText}::numeric` })
+            .where(and(
+              eq(wallets.userId, params.senderId),
+              eq(wallets.currency, params.currency),
+              sufficientBalance,
+            ))
+            .returning({ id: wallets.id });
+          if (!updated) throw new Error("Solde insuffisant dans ce portefeuille");
+        }
+      }
+
+      if (params.currency === recipientPrimaryCurrency) {
+        if (isMysqlDialect) {
+          const result = await trx.update(users)
+            .set({ balance: sql`CAST(${users.balance} AS DECIMAL(30, 10)) + ${amountText}` })
+            .where(eq(users.id, params.recipientId));
+          if (mysqlAffectedRows(result) < 1) throw new Error("INTERNAL_TRANSFER_CREDIT_FAILED");
+        } else {
+          const [updated] = await trx.update(users)
+            .set({ balance: sql`${users.balance}::numeric + ${amountText}::numeric` })
+            .where(eq(users.id, params.recipientId))
+            .returning({ id: users.id });
+          if (!updated) throw new Error("INTERNAL_TRANSFER_CREDIT_FAILED");
+        }
+      } else if (isMysqlDialect) {
+        await (trx as any).insert(wallets).values({
+          id: randomUUID(),
+          userId: params.recipientId,
+          currency: params.currency,
+          balance: amountText,
+          updatedAt: now,
+        }).onDuplicateKeyUpdate({
+          set: {
+            balance: sql`CAST(${wallets.balance} AS DECIMAL(30, 10)) + ${amountText}`,
+            updatedAt: now,
+          },
+        });
+      } else {
+        await trx.insert(wallets).values({
+          id: randomUUID(),
+          userId: params.recipientId,
+          currency: params.currency,
+          balance: amountText,
+          updatedAt: now,
+        }).onConflictDoUpdate({
+          target: [wallets.userId, wallets.currency],
+          set: {
+            balance: sql`GREATEST(0, ${wallets.balance}::numeric + ${amountText}::numeric)`,
+            updatedAt: now,
+          },
+        });
+      }
+
+      const [transactionOut] = await trx.select().from(transactions)
+        .where(eq(transactions.id, transactionOutId)).limit(1);
+      const [transactionIn] = await trx.select().from(transactions)
+        .where(eq(transactions.id, transactionInId)).limit(1);
+      if (!transactionOut || !transactionIn) throw new Error("INTERNAL_TRANSFER_READBACK_FAILED");
+      return { transactionOut, transactionIn };
+    });
+
+    invalidateUserCache(params.senderId);
+    invalidateUserCache(params.recipientId);
+    return created;
   }
 
   async createCryptoPayoutAndDebit(

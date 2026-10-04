@@ -18,7 +18,7 @@ import { getOperatorDisplayName, getOperatorLogo } from "@/lib/operator-logos";
 import { getCountryFlagEmoji } from "@/lib/country-flags";
 import { z } from "zod";
 import { formatCurrency, formatWalletBalance } from "@/lib/currency";
-import { useMemo, useEffect, useState, useCallback } from "react";
+import { useMemo, useEffect, useState, useCallback, useRef } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useLocation } from "wouter";
 import { validateMobileMoneyPhone } from "@shared/mobile-money-phone";
@@ -28,6 +28,34 @@ const INTERNAL_KEY = "__ashtech_interne__";
 
 const OTP_LOCK_KEY = "atp_otp_lock";
 const OTP_LOCK_DURATION_MS = 15 * 60 * 1000;
+const INTERNAL_TRANSFER_ATTEMPT_KEY = "ashtech_internal_transfer_attempt";
+
+function getInternalTransferAttempt(fingerprint: string): { fingerprint: string; key: string } {
+  try {
+    const stored = sessionStorage.getItem(INTERNAL_TRANSFER_ATTEMPT_KEY);
+    if (stored) {
+      const attempt = JSON.parse(stored);
+      if (attempt?.fingerprint === fingerprint && typeof attempt.key === "string") return attempt;
+    }
+  } catch {
+    // The in-memory ref still keeps retries stable if browser storage is unavailable.
+  }
+  const attempt = { fingerprint, key: crypto.randomUUID() };
+  try {
+    sessionStorage.setItem(INTERNAL_TRANSFER_ATTEMPT_KEY, JSON.stringify(attempt));
+  } catch {
+    // Keep the stable key in component state for this page session.
+  }
+  return attempt;
+}
+
+function clearInternalTransferAttempt(): void {
+  try {
+    sessionStorage.removeItem(INTERNAL_TRANSFER_ATTEMPT_KEY);
+  } catch {
+    // Clearing browser storage is best-effort; the ref is cleared separately.
+  }
+}
 
 function getOtpLockRemaining(): number {
   try {
@@ -139,6 +167,7 @@ export default function SendMoneyPage() {
   const [isCryptoSend, setIsCryptoSend] = useState(false);
   const [internalIdentifier, setInternalIdentifier] = useState("");
   const [internalAmount, setInternalAmount] = useState("");
+  const internalTransferAttemptRef = useRef<{ fingerprint: string; key: string } | null>(null);
 
   useEffect(() => {
     if (primaryCurrency && selectedWallet === "XAF" && primaryCurrency !== "XAF") {
@@ -400,10 +429,19 @@ export default function SendMoneyPage() {
       if (!internalIdentifier.trim()) throw new Error("Veuillez entrer l'identifiant du destinataire");
       const amt = parseFloat(internalAmount);
       if (!amt || amt <= 0) throw new Error("Veuillez entrer un montant valide");
+      const fingerprint = JSON.stringify([
+        internalIdentifier.trim().toLowerCase(),
+        Number(amt.toFixed(2)),
+        selectedWallet,
+      ]);
+      if (internalTransferAttemptRef.current?.fingerprint !== fingerprint) {
+        internalTransferAttemptRef.current = getInternalTransferAttempt(fingerprint);
+      }
       const res = await apiRequest("POST", "/api/transfers/internal", {
         recipientIdentifier: internalIdentifier.trim(),
         amount: internalAmount,
         sourceCurrency: selectedWallet,
+        idempotencyKey: internalTransferAttemptRef.current.key,
         otpRef,
         otpCode,
       });
@@ -418,6 +456,8 @@ export default function SendMoneyPage() {
     },
     onSuccess: (data) => {
       clearOtpLock();
+      internalTransferAttemptRef.current = null;
+      clearInternalTransferAttempt();
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
       queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/wallets"] });

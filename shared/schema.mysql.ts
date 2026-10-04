@@ -60,15 +60,17 @@ export const users = mysqlTable("users", common([
 export const transactions = mysqlTable("transactions", common([
   "id","userId","type","amount","currency","status","description","recipientId","recipientName","recipientPhone",
   "recipientCountry","operatorId","feeAmount","ashtechFeeAmount","totalAmount","paymentMethod","reference",
-  "paymentLinkId","paymentIntentId","payerName","payerEmail","externalReference","notifyUrl","source","merchantReference","metadata",
+  "paymentLinkId","paymentIntentId","payerName","payerEmail","externalReference","notifyUrl","source","merchantReference","internalTransferKey","metadata",
   "createdAt","confirmedAt",
 ], {
   id: id(), amount: money("amount").notNull(), feeAmount: money("fee_amount"), ashtechFeeAmount: money("ashtech_fee_amount"),
   totalAmount: money("total_amount"), merchantReference: varchar("merchant_reference", { length: 191 }),
+  internalTransferKey: varchar("internal_transfer_key", { length: 191 }),
   metadata: js("metadata"), createdAt: dt("created_at"), confirmedAt: timestamp("confirmed_at"),
 }), (t) => ({
   userIdx: index("tx_user_id_idx").on(t.userId),
   apiMerchantReferenceUnique: uniqueIndex("transactions_api_user_merchant_reference_unique").on(t.userId, t.merchantReference),
+  internalTransferKeyUnique: uniqueIndex("transactions_internal_transfer_key_unique").on(t.userId, t.internalTransferKey),
   statusIdx: index("tx_status_idx").on(t.status),
   createdIdx: index("tx_created_at_idx").on(t.createdAt), statusTypeIdx: index("tx_status_type_idx").on(t.status, t.type),
   // Partial API/reference and UUID-only PawaPay indexes are enforced in storage.
