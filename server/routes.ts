@@ -101,9 +101,9 @@ import { assertPawaPayProviderActive, classifyPawaPayControlledTransaction, crea
 import { addPendingPayment, removePendingPayment, expireCryptoPaymentIfNeeded } from "./paymentPoller";
 import { processPawaPayDepositCallback } from "./paymentPoller";
 import { loadFxRates, convertFromXAF, convertToXAF, convertCurrency, creditUserWallet, sameCfaFamily, getConversionPairKey, maybeAutoConvert, getConversionMinimumXaf, minimumConversionAmountInCurrency, minimumConversionErrorMessage } from "./walletHelper";
+import { shouldUseManualPayoutStatusOverride } from "./providerStatusReferences";
 import {
   addPendingPayout,
-  reconcilePayoutAttemptForAdmin,
   removePendingPayout,
   processIziPayPayoutCallback,
   processPayout,
@@ -13616,7 +13616,9 @@ export async function registerRoutes(
   const updateAdminTransactionStatus = async (req: any, res: any) => {
     try {
       const { id } = req.params;
-      const { status, forceComplete, reason } = req.body;
+      const { status, reason } = req.body;
+        const auditReason = typeof reason === "string" ? reason.trim() : "";
+      let forceComplete = req.body?.forceComplete === true;
 
 
       // Get the current transaction to check previous status
@@ -13626,64 +13628,26 @@ export async function registerRoutes(
       }
 
       const payoutTransaction = existingTx.type === "withdrawal" || existingTx.type === "transfer_out";
-      if (
-        payoutTransaction &&
-        ["pending", "pending_manual", "processing"].includes(existingTx.status) &&
-        existingTx.externalReference &&
-        ["completed", "failed", "cancelled"].includes(status)
-      ) {
-        const reconciliation = await reconcilePayoutAttemptForAdmin(id);
-        if (!reconciliation.supported) {
-          return res.status(409).json({
-            message: reconciliation.message || "Impossible de rapprocher cette tentative fournisseur.",
-            currentStatus: reconciliation.transactionStatus,
-          });
-        }
-
-        const transactionLabel = existingTx.type === "withdrawal" ? "retrait" : "envoi";
-        let message: string;
-        if (reconciliation.providerStatus === "pending") {
-          message = `Le fournisseur n'a pas encore confirmé le résultat du ${transactionLabel}. La transaction reste en attente; aucune validation manuelle ni aucun remboursement n'a été effectué.`;
-        } else if (reconciliation.transactionStatus !== reconciliation.providerStatus) {
-          message = `Le fournisseur confirme le statut « ${reconciliation.providerStatus} », mais le statut enregistré est « ${reconciliation.transactionStatus} ». Rechargez la transaction.`;
-        } else if (reconciliation.providerStatus === "completed") {
-          message = `Le fournisseur confirme la réussite; le ${transactionLabel} est validé.`;
-        } else {
-          message = `Le fournisseur confirme l'échec; le ${transactionLabel} a été rejeté et le remboursement a été traité.`;
-        }
-
-        await storage.createAdminLog({
-          adminId: req.userId!,
-          action: "reconcile_payout_status",
-          targetType: "transaction",
-          targetId: id,
-          details: JSON.stringify({
-            provider: reconciliation.provider,
-            providerStatus: reconciliation.providerStatus,
-            from: existingTx.status,
-            to: reconciliation.transactionStatus,
-            requestedStatus: status,
-          }),
-          ipAddress: req.ip || null,
-        }).catch((logError: any) => {
-          console.error("[Admin] Payout reconciliation log failed:", logError?.message || logError);
-        });
-
-        const response = {
-          message,
-          status: reconciliation.transactionStatus,
-          providerStatus: reconciliation.providerStatus,
-        };
-        if (
-          reconciliation.providerStatus === "pending" ||
-          ["pending", "pending_manual", "processing"].includes(reconciliation.transactionStatus)
-        ) {
-          return res.status(202).json(response);
-        }
-        return res.json(response);
+      const manualPayoutStatusOverride = shouldUseManualPayoutStatusOverride({
+        transactionType: existingTx.type,
+        currentStatus: existingTx.status,
+        requestedStatus: status,
+        externalReference: existingTx.externalReference,
+        forceManual: forceComplete,
+      });
+      if (manualPayoutStatusOverride) {
+        // An explicit admin status change must not start a second payout.
+        // Failed/cancelled statuses use the normal atomic refund path below.
+        forceComplete = true;
+      }
+      if (manualPayoutStatusOverride) {
+        console.warn(
+          `[Admin] Manual payout status override requested for ${id} (provider reference retained: ${existingTx.externalReference || "none"})`,
+        );
       }
       if (
         payoutTransaction &&
+        !manualPayoutStatusOverride &&
         existingTx.status === "processing" &&
         ["completed", "failed", "cancelled"].includes(status)
       ) {
@@ -13700,14 +13664,17 @@ export async function registerRoutes(
         && status === "pending"
         && ["failed", "cancelled"].includes(existingTx.status);
       const pawaControl = classifyPawaPayControlledTransaction(existingTx.type, existingTx.externalReference);
-      // An admin rejection/cancellation of an incoming deposit is an explicit
-      // local decision. It must not be blocked by an unavailable or still-
-      // pending provider status check. Outgoing payouts keep provider control
-      // so a local rejection cannot hide an already-submitted payout.
+      // Incoming deposits remain provider-controlled. Outgoing payout admins
+      // may explicitly override an unresolved attempt via manualPayoutStatusOverride.
       const isIncomingDeposit = existingTx.type === "deposit" || existingTx.type === "payment_link";
       const isManualDepositRejection = isIncomingDeposit &&
         (status === "failed" || status === "cancelled");
-      if (pawaControl && !isManualDepositRejection && !isReopeningRejectedPayout) {
+      if (
+        pawaControl &&
+        !manualPayoutStatusOverride &&
+        !isManualDepositRejection &&
+        !isReopeningRejectedPayout
+      ) {
         const reconciled = pawaControl === "payout"
           ? await reconcilePawaPayPayoutAttempt(existingTx)
           : await reconcilePawaPayIncomingAttempt(existingTx);
@@ -13811,7 +13778,14 @@ export async function registerRoutes(
         completed:       ["pending", "failed", "cancelled"],
       };
 
-      const allowed = VALID_TRANSITIONS[existingTx.status] ?? [];
+      const allowed = [...(VALID_TRANSITIONS[existingTx.status] ?? [])];
+      if (
+        manualPayoutStatusOverride &&
+        existingTx.status === "processing" &&
+        status === "cancelled"
+      ) {
+        allowed.push("cancelled");
+      }
       if (!allowed.includes(status)) {
         return res.status(400).json({
           message: `Transition "${existingTx.status}" → "${status}" non autorisée. Transitions valides : ${allowed.join(", ") || "aucune"}.`,
@@ -13825,8 +13799,13 @@ export async function registerRoutes(
       const isNowCompleted = status === "completed";
       const startsProviderPayout = isNowCompleted && payoutTransaction && !forceComplete;
       const claimedStatus = startsProviderPayout ? "processing" : status;
+      const refundPayoutAtomically =
+        payoutTransaction &&
+        ["failed", "cancelled"].includes(status) &&
+        existingTx.status !== "completed";
       let providerPayoutSubmitted = false;
       let submittedPayoutReference: string | undefined;
+      let payoutRefundedAtomically = false;
 
       let transaction: Transaction | undefined;
       if (isReopeningRejectedPayout) {
@@ -13850,6 +13829,13 @@ export async function registerRoutes(
           }
           throw error;
         }
+      } else if (refundPayoutAtomically) {
+        transaction = await storage.claimPayoutFailedAndRefund(
+          id,
+          [existingTx.status],
+          status as "failed" | "cancelled",
+        );
+        payoutRefundedAtomically = !!transaction;
       } else {
         // Compare-and-set: do not overwrite a provider callback or another
         // admin action that changed the row after existingTx was read.
@@ -14079,6 +14065,8 @@ export async function registerRoutes(
           message:       `Votre ${transaction.type === "withdrawal" ? "retrait" : "transfert"} de ${transaction.amount} ${transaction.currency} a été validé manuellement.`,
           transactionId: transaction.id,
           isRead:        false,
+        }).catch((notificationError: any) => {
+          console.error("[Admin] Manual payout confirmation notification failed:", notificationError?.message || notificationError);
         });
       }
 
@@ -14093,7 +14081,6 @@ export async function registerRoutes(
         const refundAmount = transaction.totalAmount 
           ? parseFloat(transaction.totalAmount) 
           : parseFloat(transaction.amount);
-        await storage.refundToOriginalWallet(transaction.userId, transaction.type, transaction.currency || "XAF", refundAmount);
 
         if (transaction.type === "withdrawal") {
           await storage.createUserNotification({
@@ -14103,6 +14090,8 @@ export async function registerRoutes(
             message:       `Votre retrait de ${transaction.amount} ${transaction.currency || "XAF"} a été annulé. Le montant de ${refundAmount.toFixed(0)} ${transaction.currency || "XAF"} a été recrédité.`,
             transactionId: transaction.id,
             isRead:        false,
+          }).catch((notificationError: any) => {
+            console.error("[Admin] Payout refund notification failed:", notificationError?.message || notificationError);
           });
         }
       }
@@ -14143,8 +14132,13 @@ export async function registerRoutes(
             requestedStatus: status,
             balanceUpdated: wasNotCompleted && isNowCompleted,
             walletDebited: isReopeningRejectedPayout,
-            reason: reason.trim(),
+            reason: auditReason,
             forceComplete: !!forceComplete,
+            manualPayoutStatusOverride,
+            walletRefundedAtomically: payoutRefundedAtomically,
+            ...(manualPayoutStatusOverride
+              ? { providerReference: existingTx.externalReference }
+              : {}),
           }),
           ipAddress: req.ip || null,
         });
@@ -14157,6 +14151,15 @@ export async function registerRoutes(
           message: "Paiement soumis au fournisseur; confirmation en cours.",
           status: "processing",
           reference: submittedPayoutReference,
+        });
+      }
+      if (manualPayoutStatusOverride) {
+        return res.json({
+          ...transaction,
+          manualProviderOverride: true,
+          message: status === "completed"
+            ? "Statut marqué comme effectué par l'admin sans relancer le fournisseur. Son résultat réel peut encore différer."
+            : "Statut modifié et wallet remboursé immédiatement. Le fournisseur peut encore exécuter ce paiement; un double paiement reste possible.",
         });
       }
       res.json(transaction);
@@ -15597,12 +15600,11 @@ export async function registerRoutes(
       if (!["withdrawal","transfer_out"].includes(tx.type)) {
         return res.status(400).json({ message: "Type de transaction non supporté" });
       }
-      if (tx.externalReference && isPawaPayUuidV4(tx.externalReference)) {
-        const reconciled = await reconcilePawaPayPayoutAttempt(tx);
-        if (reconciled === "unresolved") {
-          return res.status(409).json({ message: "Un paiement mobile est déjà en cours de rapprochement; changement ou nouvelle soumission interdit." });
-        }
-        return res.status(409).json({ message: "La tentative existante a été rapprochée; aucune nouvelle soumission autorisée.", status: reconciled });
+      if (tx.externalReference) {
+        return res.status(409).json({
+          message: "Une tentative fournisseur existe déjà. Confirmez ou remboursez son statut; une nouvelle soumission est interdite.",
+          externalReference: tx.externalReference,
+        });
       }
 
       // ── Solution 2: atomic DB lock — pending_manual → processing ──────────
@@ -15897,24 +15899,6 @@ export async function registerRoutes(
       if (!tx || tx.status !== "pending_manual") {
         return res.status(404).json({ message: "Transaction non trouvée ou statut incorrect" });
       }
-      if (tx.externalReference && isPawaPayUuidV4(tx.externalReference)) {
-        const reconciled = await reconcilePawaPayPayoutAttempt(tx);
-        if (reconciled === "unresolved") {
-          return res.status(409).json({ message: "Paiement encore en cours de rapprochement; confirmation manuelle interdite." });
-        }
-        if (reconciled !== "completed") {
-          return res.status(409).json({
-            message: "Le fournisseur a rejeté le paiement; il ne peut pas être confirmé comme effectué.",
-            status: reconciled,
-          });
-        }
-        return res.json({ message: "Paiement confirmé par le fournisseur.", status: reconciled });
-      }
-      if (tx.externalReference) {
-        return res.status(409).json({
-          message: "Une tentative fournisseur existe déjà. Rapprochez son résultat avant toute confirmation manuelle.",
-        });
-      }
       const confirmed = await storage.claimTransactionStatus(tx.id, "completed", ["pending_manual"]);
       if (!confirmed || confirmed.status !== "completed") {
         return res.status(409).json({
@@ -15965,13 +15949,20 @@ export async function registerRoutes(
         action: "confirm_pending_payout",
         targetType: "transaction",
         targetId: tx.id,
-        details: JSON.stringify({ amount: tx.amount, currency: tx.currency }),
+        details: JSON.stringify({
+          amount: tx.amount,
+          currency: tx.currency,
+          manualPayoutStatusOverride: true,
+          ...(tx.externalReference ? { providerReference: tx.externalReference } : {}),
+        }),
         ipAddress: req.ip || null,
       }).catch((logError: any) => {
         console.error("Pending payout confirmation admin-log failed:", logError?.message || logError);
       });
       console.log(`[Admin] Manually confirmed pending_manual ${tx.reference} as completed`);
-      res.json({ message: "Transaction confirmée comme effectuée" });
+      res.json({
+        message: "Statut marqué comme effectué par l'admin sans relancer le fournisseur. Son résultat réel peut encore différer.",
+      });
     } catch (error: any) {
       console.error("Admin confirm pending-payout error:", error.message);
       res.status(500).json({ message: "Erreur serveur" });
@@ -15984,72 +15975,6 @@ export async function registerRoutes(
       const tx = await storage.getTransactionById(req.params.id);
       if (!tx || tx.status !== "pending_manual") {
         return res.status(404).json({ message: "Transaction non trouvée ou statut incorrect" });
-      }
-      if (tx.externalReference && isPawaPayUuidV4(tx.externalReference)) {
-        const reconciled = await reconcilePawaPayPayoutAttempt(tx);
-        if (reconciled === "unresolved") {
-          return res.status(409).json({ message: "Paiement encore en cours de rapprochement; remboursement manuel interdit." });
-        }
-        if (reconciled === "failed") {
-          return res.json({
-            message: "Le fournisseur a rejeté le paiement; le remboursement a été traité automatiquement.",
-            status: "failed",
-          });
-        }
-        return res.status(409).json({
-          message: "Le paiement est confirmé par le fournisseur; remboursement manuel interdit.",
-          status: reconciled,
-        });
-      }
-      let confirmedAfribaPayRejection = false;
-      if (tx.externalReference) {
-        const metadata = ((tx as any).metadata || {}) as Record<string, any>;
-        const operator = tx.operatorId ? await storage.getOperator(tx.operatorId).catch(() => null) : null;
-        const provider = metadata.pendingPayoutProvider ||
-          metadata.paymentProvider ||
-          (operator as any)?.paymentProvider;
-
-        if (provider !== "afribapay") {
-          return res.status(409).json({
-            message: "Une tentative fournisseur existe déjà. Rapprochez son résultat avant tout remboursement.",
-          });
-        }
-
-        const providerResult = await checkAfribaPayoutStatus(tx.externalReference, "order_id");
-        if (providerResult.status === "pending") {
-          return res.status(409).json({
-            message: "AfribaPay n’a pas encore confirmé l’échec du paiement. Aucun remboursement n’a été effectué.",
-            status: "pending",
-          });
-        }
-        if (providerResult.status === "completed") {
-          await processPayout({
-            transactionId: tx.id,
-            reference: tx.externalReference,
-            userId: tx.userId,
-            amount: tx.amount,
-            totalDebited: tx.totalAmount || tx.amount,
-            attempts: 0,
-            provider: "afribapay",
-            countryCode: (tx.recipientCountry || "CM").toUpperCase(),
-            txType: tx.type,
-            txCurrency: tx.currency || "XAF",
-            walletCurrency: metadata.walletCurrency || tx.currency || "XAF",
-          }, "success");
-          const reconciled = await storage.getTransactionById(tx.id).catch(() => null);
-          if (reconciled?.status !== "completed") {
-            return res.status(409).json({
-              message: "AfribaPay confirme la réussite, mais le rapprochement n’est pas terminé. Aucun remboursement n’a été fait.",
-              status: reconciled?.status || "pending",
-            });
-          }
-          return res.json({
-            message: "AfribaPay confirme que le paiement a été effectué. La transaction a été rapprochée; aucun remboursement n’a été fait.",
-            status: "completed",
-            refunded: false,
-          });
-        }
-        confirmedAfribaPayRejection = true;
       }
       const totalAmount = parseFloat(tx.totalAmount || tx.amount);
       const refunded = await storage.refundPendingManualPayout(tx.id);
@@ -16078,7 +16003,8 @@ export async function registerRoutes(
         details: JSON.stringify({
           totalAmount,
           currency: tx.currency,
-          ...(confirmedAfribaPayRejection ? { provider: "afribapay", providerStatus: "failed" } : {}),
+          manualPayoutStatusOverride: true,
+          ...(tx.externalReference ? { providerReference: tx.externalReference } : {}),
         }),
         ipAddress: req.ip || null,
       }).catch((logError: any) => {
@@ -16086,7 +16012,7 @@ export async function registerRoutes(
       });
       console.log(`[Admin] Refunded pending_manual ${tx.reference} — ${totalAmount} ${tx.currency} to user ${tx.userId}`);
       res.json({
-        message: "Transaction annulée et remboursée",
+        message: "Transaction annulée et remboursée immédiatement. Le fournisseur peut encore exécuter ce paiement; un double paiement reste possible.",
         status: "failed",
         refunded: true,
       });

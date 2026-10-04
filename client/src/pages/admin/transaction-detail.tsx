@@ -153,13 +153,17 @@ export default function AdminTransactionDetail() {
         ...(forceComplete ? { forceComplete: true } : {}),
       });
       const data = await response.json().catch(() => ({}));
-      return { status: response.status, message: data.message as string | undefined };
+      return {
+        status: response.status,
+        message: data.message as string | undefined,
+        manualProviderOverride: data.manualProviderOverride === true,
+      };
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: [`/api/admin/transactions/${id}/details`] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/transactions"] });
       toast({
-        title: result.status === 202 ? "Paiement en cours" : "Statut mis à jour",
+        title: result.status === 202 ? "Paiement en cours" : result.manualProviderOverride ? "Statut modifié manuellement" : "Statut mis à jour",
         description: result.message || (result.status === 202 ? "Le fournisseur doit encore confirmer le paiement." : undefined),
       });
       refetch();

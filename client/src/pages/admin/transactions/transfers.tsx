@@ -91,15 +91,21 @@ export default function AdminTransfers() {
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ id, status, reason }: { id: string; status: string; reason?: string }) => {
-      return apiRequest("PATCH", `/api/admin/transactions/${id}`, { status, reason: reason || "Action admin" });
+      const response = await apiRequest("PATCH", `/api/admin/transactions/${id}`, { status, reason: reason || "Action admin" });
+      const body = await response.clone().json().catch(() => ({}));
+      return {
+        status: response.status,
+        manualProviderOverride: body.manualProviderOverride === true,
+        message: typeof body.message === "string" ? body.message : undefined,
+      };
     },
     onSuccess: (response, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/transactions"] });
       queryClient.invalidateQueries({ queryKey: [`/api/admin/transactions/${variables.id}/details`] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/layout-stats"] });
       toast({
-        title: response.status === 202 ? "Transfert en cours" : "Statut mis à jour",
-        description: response.status === 202 ? "Le fournisseur doit encore confirmer le transfert." : undefined,
+        title: response.status === 202 ? "Transfert en cours" : response.manualProviderOverride ? "Statut modifié manuellement" : "Statut mis à jour",
+        description: response.message || (response.status === 202 ? "Le fournisseur doit encore confirmer le transfert." : undefined),
       });
       setSelectedTxId(null);
     },

@@ -152,6 +152,25 @@ export async function recoverPendingPayouts() {
 export async function processPayout(payout: PendingPayout, apiStatus: string) {
   try {
     const transaction = await storage.getTransactionById(payout.transactionId);
+    if (!transaction) {
+      removePendingPayout(payout.reference);
+      return;
+    }
+    const providerFinalStatus =
+      apiStatus === "success" || apiStatus === "completed"
+        ? "completed"
+        : ["failed", "refunded", "cancelled"].includes(apiStatus)
+          ? "failed"
+          : null;
+    if (
+      providerFinalStatus &&
+      ["completed", "failed", "cancelled"].includes(transaction.status) &&
+      providerFinalStatus !== transaction.status
+    ) {
+      console.error(
+        `[PayoutPoller] Late provider status conflict for ${transaction.reference || transaction.id}: provider=${providerFinalStatus}, stored=${transaction.status}; keeping the stored status and wallet balance.`,
+      );
+    }
     const pawaManual = payout.provider === "pawapay" &&
       !!transaction?.externalReference &&
       isPawaPayUuidV4(transaction.externalReference) &&
@@ -161,7 +180,7 @@ export async function processPayout(payout: PendingPayout, apiStatus: string) {
       (transaction as any)?.metadata?.paymentProvider === "izichange";
     const afribaManual = payout.provider === "afribapay" &&
       transaction?.status === "pending_manual";
-    if (!transaction || (transaction.status !== "pending" && transaction.status !== "processing" && !pawaManual && !iziManual && !afribaManual)) {
+    if (transaction.status !== "pending" && transaction.status !== "processing" && !pawaManual && !iziManual && !afribaManual) {
       removePendingPayout(payout.reference);
       return;
     }
@@ -379,7 +398,8 @@ export interface AdminPayoutReconciliationResult {
 
 /**
  * Check an existing payout attempt and apply only a definitive provider result.
- * Admin status buttons must never force-complete or refund an unresolved payout.
+ * Provider-authoritative reconciliation for flows that explicitly require it.
+ * Manual admin status overrides intentionally bypass this helper.
  */
 export async function reconcilePayoutAttemptForAdmin(
   transactionId: string,

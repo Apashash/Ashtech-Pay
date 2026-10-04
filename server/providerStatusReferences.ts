@@ -9,6 +9,21 @@ export function normalizePayoutStatusProvider(value: unknown): PayoutStatusProvi
     : null;
 }
 
+export function shouldUseManualPayoutStatusOverride(input: {
+  transactionType: string;
+  currentStatus: string;
+  requestedStatus: string;
+  externalReference?: string | null;
+  forceManual?: boolean;
+}): boolean {
+  return (
+    (input.transactionType === "withdrawal" || input.transactionType === "transfer_out") &&
+    ["pending", "pending_manual", "processing"].includes(input.currentStatus) &&
+    (input.forceManual === true || !!input.externalReference?.trim() || input.currentStatus === "processing") &&
+    ["completed", "failed", "cancelled"].includes(input.requestedStatus)
+  );
+}
+
 /**
  * Resolve a provider status lookup ID from the current persisted transaction.
  * PawaPay and IziChange require their provider IDs and must never fall back to

@@ -156,7 +156,11 @@ export interface IStorage {
   claimPawaIncomingAndCredit(id: string, allowedFrom?: string[]): Promise<Transaction | undefined>;
   claimPawaPayoutFailedAndRefund(id: string, allowedFrom?: string[]): Promise<Transaction | undefined>;
   claimIziPayPayoutFailedAndRefund(id: string, allowedFrom?: string[]): Promise<Transaction | undefined>;
-  claimPayoutFailedAndRefund(id: string, allowedFrom?: string[]): Promise<Transaction | undefined>;
+  claimPayoutFailedAndRefund(
+    id: string,
+    allowedFrom?: string[],
+    finalStatus?: "failed" | "cancelled",
+  ): Promise<Transaction | undefined>;
   updateTransactionMetadata(id: string, metadata: Record<string, unknown>): Promise<void>;
   updateTransaction(id: string, updates: Partial<InsertTransaction>): Promise<Transaction | undefined>;
   updateTransactionExternalReference(id: string, externalReference: string): Promise<Transaction | undefined>;
@@ -1106,6 +1110,7 @@ export class DatabaseStorage implements IStorage {
   async claimPayoutFailedAndRefund(
     id: string,
     allowedFrom: string[] = ["pending", "processing", "pending_manual"],
+    finalStatus: "failed" | "cancelled" = "failed",
   ): Promise<Transaction | undefined> {
     const refunded = await db.transaction(async (trx) => {
       const claimWhere = and(
@@ -1115,7 +1120,7 @@ export class DatabaseStorage implements IStorage {
       );
       let transaction: Transaction | undefined;
       if (isMysqlDialect) {
-        const result = await trx.update(transactions).set({ status: "failed" }).where(claimWhere);
+        const result = await trx.update(transactions).set({ status: finalStatus }).where(claimWhere);
         const header = Array.isArray(result) ? result[0] : result;
         const affectedRows = Number((header as any)?.affectedRows ?? (header as any)?.rowsAffected ?? (header as any)?.rowCount ?? (header as any)?.changes);
         if (!Number.isFinite(affectedRows)) throw new Error("PAYOUT_REFUND_CLAIM_UNCONFIRMED");
@@ -1123,7 +1128,7 @@ export class DatabaseStorage implements IStorage {
         [transaction] = await trx.select().from(transactions).where(eq(transactions.id, id)).limit(1);
       } else {
         [transaction] = await trx.update(transactions)
-          .set({ status: "failed" })
+          .set({ status: finalStatus })
           .where(claimWhere)
           .returning();
       }
@@ -1134,14 +1139,15 @@ export class DatabaseStorage implements IStorage {
         .where(eq(users.id, transaction.userId))
         .limit(1);
       if (!user) throw new Error("PAYOUT_REFUND_USER_NOT_FOUND");
+      const { sameCfaFamily } = await import("./walletHelper");
       const metadata = (transaction.metadata || {}) as Record<string, unknown>;
       const walletCurrency = typeof metadata.walletCurrency === "string"
         ? metadata.walletCurrency
-        : transaction.currency || "USDT";
+        : transaction.currency || "XAF";
       const amount = Number.parseFloat(transaction.totalAmount || transaction.amount);
       if (!Number.isFinite(amount) || amount <= 0) throw new Error("PAYOUT_REFUND_AMOUNT_INVALID");
 
-      if ((user.preferredCurrency || "XAF") === walletCurrency) {
+      if (sameCfaFamily(walletCurrency, user.preferredCurrency || "XAF")) {
         await trx.update(users)
           .set({ balance: sql`${users.balance} + ${amount.toFixed(2)}` })
           .where(eq(users.id, transaction.userId));

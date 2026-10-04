@@ -107,15 +107,21 @@ export default function AdminWithdrawals() {
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ id, status, forceComplete, reason }: { id: string; status: string; forceComplete?: boolean; reason?: string }) => {
-      return apiRequest("PATCH", `/api/admin/transactions/${id}`, { status, reason: reason || "Action admin", ...(forceComplete ? { forceComplete: true } : {}) });
+      const response = await apiRequest("PATCH", `/api/admin/transactions/${id}`, { status, reason: reason || "Action admin", ...(forceComplete ? { forceComplete: true } : {}) });
+      const body = await response.clone().json().catch(() => ({}));
+      return {
+        status: response.status,
+        manualProviderOverride: body.manualProviderOverride === true,
+        message: typeof body.message === "string" ? body.message : undefined,
+      };
     },
     onSuccess: (response, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/transactions"] });
       queryClient.invalidateQueries({ queryKey: [`/api/admin/transactions/${variables.id}/details`] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/layout-stats"] });
       toast({
-        title: response.status === 202 ? "Paiement en cours" : "Statut mis à jour",
-        description: response.status === 202 ? "Le fournisseur doit encore confirmer le retrait." : undefined,
+        title: response.status === 202 ? "Paiement en cours" : response.manualProviderOverride ? "Statut modifié manuellement" : "Statut mis à jour",
+        description: response.message || (response.status === 202 ? "Le fournisseur doit encore confirmer le retrait." : undefined),
       });
       setSelectedTxId(null);
     },

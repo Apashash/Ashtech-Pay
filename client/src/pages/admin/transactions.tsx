@@ -129,6 +129,8 @@ export default function AdminTransactions() {
           title: "Paiement en cours",
           description: message || "Le fournisseur traite encore ce paiement.",
         });
+      } else if (result.body.manualProviderOverride === true && message) {
+        toast({ title: "Statut modifié manuellement", description: message });
       } else if (typeof result.body.status === "string" && message) {
         toast({ title: "Statut du fournisseur confirmé", description: message });
       } else {

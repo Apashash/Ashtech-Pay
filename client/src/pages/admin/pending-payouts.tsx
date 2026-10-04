@@ -156,9 +156,9 @@ export default function AdminPendingPayoutsPage() {
 
   const confirmLabel =
     confirmAction?.type === "refund"
-      ? "Rembourser l'utilisateur et annuler cette transaction ?"
+      ? "Rembourser immédiatement et annuler ? Le fournisseur peut encore payer ensuite, ce qui peut provoquer un double paiement."
       : confirmAction?.type === "confirm"
-        ? "Marquer comme effectué sans passer par un fournisseur ? L'utilisateur sera notifié."
+        ? "Marquer comme effectué sans relancer le fournisseur ? Son résultat réel peut encore différer."
         : `Soumettre via ${confirmAction?.provider ? PROVIDER_LABELS[confirmAction.provider]?.label : ""} ?`;
 
   return (
@@ -312,6 +312,12 @@ export default function AdminPendingPayoutsPage() {
                                 ID IziChange : {String(payout.externalReference || payout.metadata?.iziPayoutId)}
                               </p>
                             )}
+                          </div>
+                        ) : payout.externalReference ? (
+                          <div className="mb-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/20 dark:text-amber-300">
+                            <p className="font-semibold">Référence fournisseur déjà enregistrée.</p>
+                            <p className="mt-1">Aucune nouvelle soumission ne sera lancée. Utilisez la confirmation ou le remboursement manuel ci-dessous.</p>
+                            <p className="mt-1 font-mono break-all">{payout.externalReference}</p>
                           </div>
                         ) : (
                           <div className="mb-3">

@@ -9,6 +9,7 @@ import {
 import {
   normalizePayoutStatusProvider,
   resolvePayoutStatusLookupReference,
+  shouldUseManualPayoutStatusOverride,
 } from "../server/providerStatusReferences.ts";
 
 test("admin reconciliation recognizes only supported payout providers", () => {
@@ -18,6 +19,43 @@ test("admin reconciliation recognizes only supported payout providers", () => {
   assert.equal(normalizePayoutStatusProvider("izichange"), "izichange");
   assert.equal(normalizePayoutStatusProvider("manual"), null);
   assert.equal(normalizePayoutStatusProvider(null), null);
+});
+
+test("admin may override an unresolved payout, but ordinary pending approvals still submit normally", () => {
+  assert.equal(shouldUseManualPayoutStatusOverride({
+    transactionType: "withdrawal",
+    currentStatus: "pending",
+    requestedStatus: "completed",
+    externalReference: "provider-attempt-123",
+  }), true);
+  assert.equal(shouldUseManualPayoutStatusOverride({
+    transactionType: "transfer_out",
+    currentStatus: "processing",
+    requestedStatus: "failed",
+  }), true);
+  assert.equal(shouldUseManualPayoutStatusOverride({
+    transactionType: "withdrawal",
+    currentStatus: "pending",
+    requestedStatus: "completed",
+  }), false);
+  assert.equal(shouldUseManualPayoutStatusOverride({
+    transactionType: "withdrawal",
+    currentStatus: "pending_manual",
+    requestedStatus: "completed",
+    forceManual: true,
+  }), true);
+  assert.equal(shouldUseManualPayoutStatusOverride({
+    transactionType: "deposit",
+    currentStatus: "pending",
+    requestedStatus: "failed",
+    externalReference: "provider-attempt-123",
+  }), false);
+  assert.equal(shouldUseManualPayoutStatusOverride({
+    transactionType: "withdrawal",
+    currentStatus: "pending",
+    requestedStatus: "pending",
+    externalReference: "provider-attempt-123",
+  }), false);
 });
 
 test("payout status lookup uses the current provider reference without unsafe fallbacks", () => {
