@@ -121,6 +121,7 @@ import {
   isTransactionCompletedStatus,
   isTransactionOpenStatus,
 } from "@shared/transaction-status";
+import { getAvailablePayoutProviders, isProviderAvailable } from "@shared/provider-countries";
 import { isPawaPayUuidV4, parsePawaPayCallback, verifyPawaPayCallbackSignature } from "./pawapay";
 import {
   getPawaPaySettingsView,
@@ -15749,6 +15750,25 @@ export async function registerRoutes(
   // (Solution 1) even has a chance to fire.
   const executingPayouts = new Set<string>();
 
+  const resolvePendingPayoutCountryCode = async (tx: any, operator: any): Promise<string | null> => {
+    const rawCountry = String(tx.recipientCountry || "").trim();
+    if (/^[A-Za-z]{2}$/.test(rawCountry)) return rawCountry.toUpperCase();
+
+    const countries = await storage.getAllCountries().catch(() => []);
+    const normalizedCountry = rawCountry.toLocaleLowerCase();
+    const matchedCountry = countries.find((country: any) =>
+      country.code?.trim().toLocaleLowerCase() === normalizedCountry ||
+      country.name?.trim().toLocaleLowerCase() === normalizedCountry
+    );
+    if (matchedCountry?.code) return String(matchedCountry.code).toUpperCase();
+
+    if (operator?.countryId) {
+      const operatorCountry = await storage.getCountry(operator.countryId).catch(() => null);
+      if (operatorCountry?.code) return String(operatorCountry.code).toUpperCase();
+    }
+    return null;
+  };
+
   // GET /api/admin/pending-payouts — list all pending_manual withdrawals & transfers
   app.get("/api/admin/pending-payouts", requireAuth, requireAdmin, async (_req, res) => {
     try {
@@ -15757,11 +15777,16 @@ export async function registerRoutes(
         const user = await storage.getUser(t.userId).catch(() => null);
         const operator = t.operatorId ? await storage.getOperator(t.operatorId).catch(() => null) : null;
         const metadata = ((t as any).metadata || {}) as Record<string, any>;
+        const recipientCountryCode = await resolvePendingPayoutCountryCode(t, operator);
         return {
           ...t,
           userFullName: (user as any)?.fullName || (user as any)?.username || "Inconnu",
           userEmail: (user as any)?.email || "",
           operatorName: (operator as any)?.name || null,
+          recipientCountryCode,
+          availableRetryProviders: recipientCountryCode
+            ? getAvailablePayoutProviders(recipientCountryCode)
+            : [],
           originalProvider: metadata.paymentProvider ||
             metadata.pendingPayoutProvider ||
             (operator as any)?.paymentProvider ||
@@ -15804,30 +15829,56 @@ export async function registerRoutes(
       }
       const transactionMetadata = ((tx as any).metadata || {}) as Record<string, any>;
       const operator = tx.operatorId ? await storage.getOperator(tx.operatorId).catch(() => null) : null;
-      const provider = normalizePayoutStatusProvider(
+      const originalProvider = normalizePayoutStatusProvider(
         transactionMetadata.paymentProvider ||
         transactionMetadata.pendingPayoutProvider ||
         (operator as any)?.paymentProvider,
       );
+      const provider = requestedProviderInput || originalProvider;
       if (!provider) {
         return res.status(400).json({ message: "Le fournisseur configuré pour ce payout n'est pas identifié." });
       }
       if (req.body?.provider && !requestedProviderInput) {
         return res.status(400).json({ message: "Fournisseur invalide" });
       }
-      if (requestedProviderInput && requestedProviderInput !== provider) {
+      const isCountryPaymentProvider =
+        provider === "afribapay" || provider === "pixpay" || provider === "pawapay";
+      const isCryptoPayout =
+        originalProvider === "izichange" ||
+        transactionMetadata.paymentProvider === "izichange" ||
+        !!transactionMetadata.iziPayoutRequest;
+      if (!isCountryPaymentProvider && provider !== originalProvider) {
         return res.status(409).json({
-          message: `Cette transaction doit être relancée via ${provider}; le fournisseur ne peut pas être changé.`,
+          message: `Cette transaction ne peut être relancée que via ${originalProvider || "son fournisseur d'origine"}.`,
         });
       }
-      requestedProvider = provider;
-
-      if (!canRetryPayoutWithProvider(transactionMetadata, provider)) {
+      if (isCountryPaymentProvider && isCryptoPayout) {
+        return res.status(409).json({
+          message: "Cette transaction est un retrait crypto et ne peut pas être renvoyée vers un fournisseur Mobile Money.",
+        });
+      }
+      const resolvedCountryCode = await resolvePendingPayoutCountryCode(tx, operator);
+      if (isCountryPaymentProvider && !resolvedCountryCode) {
+        return res.status(400).json({
+          message: "Le pays du bénéficiaire n'a pas pu être identifié. Aucune nouvelle soumission n'a été effectuée.",
+        });
+      }
+      if (
+        isCountryPaymentProvider &&
+        resolvedCountryCode &&
+        !isProviderAvailable(provider, resolvedCountryCode)
+      ) {
+        return res.status(400).json({
+          message: `${payoutProviderDisplayName(provider)} n'est pas disponible dans ${resolvedCountryCode}.`,
+        });
+      }
+      if (!isCountryPaymentProvider && !canRetryPayoutWithProvider(transactionMetadata, provider)) {
         return res.status(409).json({
           message: "Aucun refus explicite pour solde fournisseur insuffisant n'autorise une nouvelle soumission. Vérifiez d'abord le résultat de la tentative précédente.",
           externalReference: tx.externalReference || undefined,
         });
       }
+      requestedProvider = provider;
 
       // ── Solution 2: atomic DB lock — pending_manual → processing ──────────
       // A single SQL UPDATE with a WHERE on status ensures only one request
@@ -15847,11 +15898,37 @@ export async function registerRoutes(
         return res.status(409).json({ message: "Transaction déjà en cours d'exécution ou statut incorrect" });
       }
       lockAcquired = true; // status is now "processing" — catch must revert on pre-submit errors
+      const priorAttemptProvider = normalizePayoutStatusProvider(
+        transactionMetadata.pendingPayoutProvider ||
+        transactionMetadata.paymentProvider ||
+        originalProvider,
+      );
+      const priorAttempts = Array.isArray(transactionMetadata.payoutAttemptHistory)
+        ? transactionMetadata.payoutAttemptHistory
+        : [];
+      const hasPriorAttempt = !!priorAttemptProvider || !!tx.externalReference;
+      const payoutAttemptHistory = hasPriorAttempt
+        ? [
+            ...priorAttempts,
+            {
+              provider: priorAttemptProvider || "unknown",
+              reference: tx.externalReference || tx.reference || null,
+              externalReference: tx.externalReference || null,
+              result: transactionMetadata.payoutRetrySafe === true
+                ? "confirmed_no_payout"
+                : "previous_result_uncertain",
+              resubmittedVia: provider,
+              recordedAt: new Date().toISOString(),
+            },
+          ].slice(-50)
+        : priorAttempts.slice(-50);
       const retryMetadata = {
         ...transactionMetadata,
+        paymentProvider: provider,
         pendingPayoutProvider: provider,
         payoutRetrySafe: false,
         payoutRetryProvider: provider,
+        payoutAttemptHistory,
       };
 
       // From here the transaction is in "processing" — no other request can enter.
@@ -15864,13 +15941,7 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Utilisateur non trouvé" });
       }
 
-      // recipientCountry may be a code ("CM") for withdrawals or a name ("Cameroun") for transfers.
-      // If longer than 2 chars, resolve the code from the operator's country.
-      let countryCode = (tx.recipientCountry || "CM").toUpperCase();
-      if (countryCode.length > 2 && operator?.countryId) {
-        const opCountry = await storage.getCountry(operator.countryId).catch(() => null);
-        if (opCountry?.code) countryCode = opCountry.code.toUpperCase();
-      }
+      const countryCode = resolvedCountryCode || "CM";
       const phone = tx.recipientPhone || "";
       const creditedAmount = parseFloat(tx.amount);
       const totalAmount = parseFloat(tx.totalAmount || tx.amount);
@@ -16000,6 +16071,7 @@ export async function registerRoutes(
           externalReference: afribaAdminRetryRef,
           metadata: {
             ...retryMetadata,
+            paymentProvider: "afribapay",
             pendingPayoutProvider: "afribapay",
           },
         } as any);
@@ -16021,7 +16093,7 @@ export async function registerRoutes(
         payoutResult = result;
 
       } else if (provider === "pixpay") {
-        const serviceId = getPixPayServiceId(operator?.name || "", countryCode, "cash_in");
+        const serviceId = getPixPayServiceId(operator?.name || "", countryCode, "cash_out");
         if (!serviceId) {
           await storage.claimTransactionStatus(txId, "pending_manual", ["processing"]);
           return res.status(400).json({ message: `PixPay non supporté pour cet opérateur (${operator?.name}) dans ${countryCode}` });
@@ -16034,6 +16106,7 @@ export async function registerRoutes(
           externalReference: pixpayAdminRetryRef,
           metadata: {
             ...retryMetadata,
+            paymentProvider: "pixpay",
             pendingPayoutProvider: "pixpay",
           },
         } as any);
@@ -16178,16 +16251,16 @@ export async function registerRoutes(
 
         if (retrySafe) {
           const providerLabel = payoutProviderDisplayName(requestedProvider || provider);
-          console.log(`[Admin] Explicit insufficient balance via ${provider} for ${txRef}; retry enabled on same provider only`);
+          console.log(`[Admin] Explicit insufficient balance via ${provider} for ${txRef}; provider attempt recorded as safely rejected`);
           res.status(409).json({
             pendingManual: true,
-            message: `Solde ${providerLabel} insuffisant. Rechargez le compte fournisseur puis relancez cette transaction via ${providerLabel} uniquement.`,
+            message: `Solde ${providerLabel} insuffisant. Rechargez le compte; vous pourrez ensuite choisir un fournisseur disponible pour ce pays.`,
           });
         } else if (requiresManualReview) {
           console.log(`[Admin] Execute pending_manual — still insufficient via ${provider} for ${txRef}: ${payoutResult.message}`);
           res.status(409).json({
             pendingManual: true,
-            message: `Résultat de ${payoutProviderDisplayName(provider)} à vérifier. La transaction reste en attente; aucune nouvelle soumission ne sera autorisée sans refus explicite pour solde insuffisant.`,
+            message: `Résultat de ${payoutProviderDisplayName(provider)} à vérifier. La transaction reste en attente. Une relance manuelle via un fournisseur disponible reste possible, mais peut entraîner un double paiement.`,
           });
         } else {
           console.error(`[Admin] Execute pending_manual failed (${provider}): ${payoutResult.message}`);

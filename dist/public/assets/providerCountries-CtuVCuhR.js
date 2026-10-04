@@ -1,1 +1,0 @@
-const i=["BJ","BF","CM","CF","CG","CI","GA","GW","ML","NE","CD","SN","TD","TG"],n=["CM","CD","CI","SN","BF"],A=["BJ","BF","CM","CI","CD","ET","GA","GH","KE","LS","MW","MZ","NG","CG","RW","SN","SL","TZ","UG","ZM"];function s(C,a){return C==="afribapay"?i.includes(a):C==="pixpay"?n.includes(a):C==="pawapay"?A.includes(a):!1}export{s as i};

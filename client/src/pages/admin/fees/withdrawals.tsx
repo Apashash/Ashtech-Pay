@@ -18,6 +18,7 @@ import { Pencil, ArrowUpCircle, Info, ChevronDown, ChevronRight, Zap, Globe, Cop
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { isProviderAvailable } from "@/lib/providerCountries";
+import { ProviderCountryCoverage } from "@/components/admin/ProviderCountryCoverage";
 import { guessPawaPayProviderCode } from "@/lib/pawapayProviderCode";
 import type { Fee, Country, Operator } from "@shared/schema";
 import { getOperatorDisplayName } from "@/lib/operator-logos";
@@ -527,6 +528,8 @@ export default function AdminFeesWithdrawals() {
                       </SelectContent>
                     </Select>
                   </div>
+
+                   <ProviderCountryCoverage provider={localProvider} countries={countries || []} />
 
                   {localProvider === "afribapay" && (
                     <div className="space-y-2">

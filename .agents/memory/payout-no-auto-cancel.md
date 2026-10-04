@@ -43,10 +43,10 @@ Manual completion must not submit another payout. Manual failure/cancellation
 must immediately refund the original wallet, even though a late provider payout
 could cause a double payment. Keep the provider reference in the audit record.
 
-User requirement (2026-10-04): payout initiation uses the provider configured
-for that payout. An explicit insufficient provider balance stays pending_manual
-without refund; after the admin replenishes that provider, the admin can resubmit
-through the same provider. A definitive provider confirmation then updates the
+User requirement (2026-10-04): payout initiation normally uses the provider
+configured for that payout. An explicit insufficient provider balance stays
+pending_manual without refund; after the admin replenishes that provider, the
+admin can resubmit. A definitive provider confirmation then updates the
 transaction automatically. The manual "confirm" action is separate and does not
 call the provider.
 
@@ -54,9 +54,22 @@ call the provider.
 configured providers.
 
 **How to apply:** preserve the configured provider on the pending transaction,
-allow a same-provider retry after an explicit no-payout balance rejection, and
-settle through provider callback/polling rather than treating an admin status
-override as a provider execution.
+allow retry after an explicit no-payout balance rejection, and settle through
+provider callback/polling rather than treating an admin status override as a
+provider execution.
+
+User requirement (2026-10-04): an admin may explicitly resubmit an ambiguous
+pending Mobile Money payout through AfribaPay, PixPay, or PawaPay when that
+provider supports the recipient country. Show the double-payment risk before
+confirmation and preserve the prior provider reference and attempt history.
+Crypto/IziChange payouts do not use this alternate-provider path.
+
+**Why:** the user accepted this risk after being told an earlier provider attempt
+could still complete after a new submission.
+
+**How to apply:** keep automatic retries disabled; require an authenticated
+admin action and explicit warning, validate provider-country availability on the
+server, and retain prior attempt references in transaction metadata.
 
 For providers whose callback and poller can race, the terminal transaction
 claim and corresponding wallet credit/refund must commit in one database

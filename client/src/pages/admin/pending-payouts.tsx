@@ -11,6 +11,7 @@ import {
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Clock, RefreshCw, Loader2, User, Phone, Banknote,
   ArrowUpRight, Send, AlertTriangle, CheckCircle2, XCircle,
@@ -19,6 +20,7 @@ import {
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { getOperatorDisplayName } from "@/lib/operator-logos";
+import { getAvailablePayoutProviders, PAYOUT_PROVIDER_LABELS, type PayoutProvider } from "@shared/provider-countries";
 
 interface PendingPayout {
   id: string;
@@ -37,6 +39,8 @@ interface PendingPayout {
   userEmail: string;
   operatorName: string | null;
   originalProvider: string | null;
+  recipientCountryCode?: string | null;
+  availableRetryProviders?: PayoutProvider[];
   externalReference?: string | null;
   metadata?: Record<string, any> | null;
 }
@@ -48,13 +52,18 @@ const PROVIDER_LABELS: Record<string, { label: string; color: string }> = {
   izichange: { label: "IziChange", color: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400" },
 };
 
-type Action = { txId: string; type: "execute" | "confirm" | "refund" };
+type Action = {
+  txId: string;
+  type: "execute" | "confirm" | "refund";
+  provider?: PayoutProvider | "izichange";
+};
 
 export default function AdminPendingPayoutsPage() {
   const { toast } = useToast();
   const [confirmAction, setConfirmAction] = useState<Action | null>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [retryProviderByTx, setRetryProviderByTx] = useState<Record<string, PayoutProvider>>({});
 
   const { data: payouts = [], isLoading, refetch } = useQuery<PendingPayout[]>({
     queryKey: ["/api/admin/pending-payouts"],
@@ -66,8 +75,8 @@ export default function AdminPendingPayoutsPage() {
   });
 
   const executeMutation = useMutation({
-    mutationFn: async ({ txId }: { txId: string }) => {
-      const res = await apiRequest("POST", `/api/admin/pending-payouts/${txId}/execute`, {});
+    mutationFn: async ({ txId, provider }: { txId: string; provider: PayoutProvider | "izichange" }) => {
+      const res = await apiRequest("POST", `/api/admin/pending-payouts/${txId}/execute`, { provider });
       const data = await res.json();
       if (!res.ok) {
         const err = new Error(data.message || "Erreur") as Error & { pendingManual?: boolean };
@@ -154,7 +163,9 @@ export default function AdminPendingPayoutsPage() {
     if (!confirmAction) return;
     setLoadingId(confirmAction.txId);
     if (confirmAction.type === "execute") {
-      executeMutation.mutate({ txId: confirmAction.txId });
+      if (confirmAction.provider) {
+        executeMutation.mutate({ txId: confirmAction.txId, provider: confirmAction.provider });
+      }
     } else if (confirmAction.type === "confirm") {
       confirmMutation.mutate(confirmAction.txId);
     } else if (confirmAction.type === "refund") {
@@ -168,7 +179,7 @@ export default function AdminPendingPayoutsPage() {
       ? "Rembourser immédiatement et annuler ? Le fournisseur peut encore payer ensuite, ce qui peut provoquer un double paiement."
       : confirmAction?.type === "confirm"
         ? "Marquer comme effectué sans relancer le fournisseur ? Son résultat réel peut encore différer."
-        : `Resoumettre via ${confirmAction ? PROVIDER_LABELS[payouts.find(p => p.id === confirmAction.txId)?.originalProvider || ""]?.label || "le fournisseur configuré" : "le fournisseur configuré"} ? Le fournisseur avait explicitement refusé la tentative pour solde insuffisant; aucun changement de fournisseur ne sera possible.`;
+        : `Relancer via ${confirmAction?.provider ? PROVIDER_LABELS[confirmAction.provider]?.label || PAYOUT_PROVIDER_LABELS[confirmAction.provider as PayoutProvider] || confirmAction.provider : "le fournisseur sélectionné"} ? La tentative précédente peut encore aboutir; ce nouvel envoi peut entraîner un double paiement.`;
 
   return (
     <AdminLayout>
@@ -218,6 +229,16 @@ export default function AdminPendingPayoutsPage() {
                   label: "Fournisseur non identifié",
                   color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
                 };
+                const isCryptoPayout = isIziChange || !!payout.metadata?.iziPayoutRequest;
+                const availableRetryProviders = isCryptoPayout
+                  ? []
+                  : payout.availableRetryProviders ||
+                    (payout.recipientCountryCode ? getAvailablePayoutProviders(payout.recipientCountryCode) : []);
+                const selectedRetryProvider =
+                  availableRetryProviders.find(provider => provider === retryProviderByTx[payout.id]) ||
+                  (availableRetryProviders.includes(payout.originalProvider as PayoutProvider)
+                    ? payout.originalProvider as PayoutProvider
+                    : availableRetryProviders[0]);
 
                 return (
                   <Card
@@ -313,7 +334,7 @@ export default function AdminPendingPayoutsPage() {
                           </div>
                         </div>
 
-                        {retryAllowed ? (
+                        {isIziChange && retryAllowed ? (
                           <div className="mb-3 rounded-md border border-green-300 bg-green-50 p-3 text-xs text-green-800 dark:border-green-800 dark:bg-green-950/20 dark:text-green-300">
                             <p className="font-semibold">Refus explicite pour solde fournisseur insuffisant.</p>
                             <p className="mt-1">Après recharge, relancez uniquement via {providerInfo.label}. Le résultat sera confirmé par le fournisseur et non par ce bouton.</p>
@@ -326,13 +347,67 @@ export default function AdminPendingPayoutsPage() {
                               size="sm"
                               variant="outline"
                               disabled={isBusy}
-                              onClick={() => setConfirmAction({ txId: payout.id, type: "execute" })}
+                              onClick={() => setConfirmAction({ txId: payout.id, type: "execute", provider: "izichange" })}
                               className={`mt-2 gap-1.5 text-xs ${providerInfo.color} border-current/20`}
                               data-testid={`btn-execute-${payout.originalProvider}-${payout.id}`}
                             >
                               {isBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Banknote className="w-3 h-3" />}
                               Relancer via {providerInfo.label}
                             </Button>
+                          </div>
+                        ) : !isCryptoPayout && availableRetryProviders.length > 0 && selectedRetryProvider ? (
+                          <div className="mb-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/20 dark:text-amber-200">
+                            <p className="font-semibold">Relance manuelle disponible pour {payout.recipientCountryCode}.</p>
+                            <p className="mt-1">
+                              La tentative précédente peut encore aboutir. Une nouvelle soumission peut donc payer le bénéficiaire deux fois; vérifiez son statut si possible.
+                            </p>
+                            {payout.externalReference && (
+                              <p className="mt-1 break-all font-mono">
+                                Référence précédente : {payout.externalReference}
+                              </p>
+                            )}
+                            <div className="mt-3 flex flex-col sm:flex-row gap-2">
+                              <Select
+                                value={selectedRetryProvider}
+                                onValueChange={(value) => setRetryProviderByTx(current => ({
+                                  ...current,
+                                  [payout.id]: value as PayoutProvider,
+                                }))}
+                              >
+                                <SelectTrigger className="h-9 flex-1 bg-background text-foreground">
+                                  <SelectValue placeholder="Choisir un fournisseur" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {availableRetryProviders.map(provider => (
+                                    <SelectItem key={provider} value={provider}>
+                                      {PAYOUT_PROVIDER_LABELS[provider]}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={isBusy}
+                                onClick={() => setConfirmAction({
+                                  txId: payout.id,
+                                  type: "execute",
+                                  provider: selectedRetryProvider,
+                                })}
+                                className="gap-1.5 text-xs border-amber-500/40"
+                                data-testid={`btn-execute-${selectedRetryProvider}-${payout.id}`}
+                              >
+                                {isBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Banknote className="w-3 h-3" />}
+                                Relancer via {PAYOUT_PROVIDER_LABELS[selectedRetryProvider]}
+                              </Button>
+                            </div>
+                            {Array.isArray(payout.metadata?.payoutAttemptHistory) &&
+                              payout.metadata.payoutAttemptHistory.slice(-3).map((attempt: any, index: number) => (
+                                <p key={`${attempt.recordedAt || attempt.reference || "attempt"}-${index}`} className="mt-2 break-all">
+                                  Tentative précédente ({PROVIDER_LABELS[attempt.provider]?.label || attempt.provider || "fournisseur inconnu"}) :
+                                  {" "}{attempt.externalReference || attempt.reference || "référence non enregistrée"}
+                                </p>
+                              ))}
                           </div>
                         ) : isIziChange ? (
                           <div className="mb-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/20 dark:text-amber-300">
@@ -349,14 +424,12 @@ export default function AdminPendingPayoutsPage() {
                         ) : payout.externalReference ? (
                           <div className="mb-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/20 dark:text-amber-300">
                             <p className="font-semibold">Référence fournisseur déjà enregistrée.</p>
-                            <p className="mt-1">Le résultat de cette tentative doit être vérifié. Aucune nouvelle soumission n'est autorisée tant que le fournisseur n'a pas explicitement refusé le paiement pour solde insuffisant.</p>
+                            <p className="mt-1">Le résultat de cette tentative doit être vérifié avant toute autre action.</p>
                             <p className="mt-1 font-mono break-all">{payout.externalReference}</p>
                           </div>
                         ) : (
                           <div className="mb-3">
-                            <p className="text-xs text-muted-foreground">
-                              Nouvelle soumission désactivée : aucune réponse explicite confirmant un refus pour solde insuffisant n'est enregistrée.
-                            </p>
+                            <p className="text-xs text-muted-foreground">Aucun fournisseur pris en charge n’est disponible pour ce pays ({payout.recipientCountryCode || payout.recipientCountry || "pays inconnu"}).</p>
                           </div>
                         )}
 
