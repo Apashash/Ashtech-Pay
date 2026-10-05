@@ -104,7 +104,7 @@ const menuItems: MenuItem[] = [
     label: "Transactions",
     subItems: [
       { icon: ArrowDownCircle, label: "Dépôts", href: `${ADMIN}/transactions/deposits` },
-      { icon: ArrowUpCircle, label: "Retraits", href: `${ADMIN}/transactions/withdrawals` },
+      { icon: ArrowUpCircle, label: "Retraits & Envois", href: `${ADMIN}/transactions/withdrawals` },
     ]
   },
   { icon: Clock, label: "Paiements en attente", href: `${ADMIN}/pending-payouts` },

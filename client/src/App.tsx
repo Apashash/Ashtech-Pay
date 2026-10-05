@@ -70,11 +70,9 @@ const AdminSettingsPawaPay = React.lazy(() => import("@/pages/admin/settings/paw
 const AdminWithdrawalNumbers = React.lazy(() => import("@/pages/admin/withdrawal-numbers"));
 const AdminDeposits = React.lazy(() => import("@/pages/admin/transactions/deposits"));
 const AdminWithdrawals = React.lazy(() => import("@/pages/admin/transactions/withdrawals"));
-const AdminTransfers = React.lazy(() => import("@/pages/admin/transactions/transfers"));
 const AdminTransactionDetail = React.lazy(() => import("@/pages/admin/transaction-detail"));
 const AdminFeesDeposits = React.lazy(() => import("@/pages/admin/fees/deposits"));
 const AdminFeesWithdrawals = React.lazy(() => import("@/pages/admin/fees/withdrawals"));
-const AdminFeesTransfers = React.lazy(() => import("@/pages/admin/fees/transfers"));
 const AdminGlobalMessages = React.lazy(() => import("@/pages/admin/global-messages"));
 const AdminKYC = React.lazy(() => import("@/pages/admin/kyc"));
 const AdminConversions = React.lazy(() => import("@/pages/admin/conversions"));
@@ -249,12 +247,12 @@ function Router() {
       <Route path={`${A}/transactions`} component={AdminTransactions} />
       <Route path={`${A}/transactions/deposits`} component={AdminDeposits} />
       <Route path={`${A}/transactions/withdrawals`} component={AdminWithdrawals} />
-      <Route path={`${A}/transactions/transfers`} component={AdminTransfers} />
+      <Route path={`${A}/transactions/transfers`} component={AdminWithdrawals} />
       <Route path={`${A}/transactions/:id`} component={AdminTransactionDetail} />
       <Route path={`${A}/fees`} component={AdminFees} />
       <Route path={`${A}/fees/deposits`} component={AdminFeesDeposits} />
       <Route path={`${A}/fees/withdrawals`} component={AdminFeesWithdrawals} />
-      <Route path={`${A}/fees/transfers`} component={AdminFeesTransfers} />
+      <Route path={`${A}/fees/transfers`} component={AdminFeesWithdrawals} />
       <Route path={`${A}/countries`} component={AdminCountries} />
       <Route path={`${A}/links`} component={AdminLinks} />
       <Route path={`${A}/support`} component={AdminSupport} />

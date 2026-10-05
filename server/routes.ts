@@ -5781,6 +5781,9 @@ export async function registerRoutes(
   app.get("/api/transfers/config", requireAuth, async (req, res) => {
     try {
       const transactionType = (req.query.type as string) || "transfer";
+      const feeTransactionType = transactionType === "transfer" || transactionType === "withdrawal"
+        ? "withdrawal"
+        : transactionType;
       const countries = (await storage.getActiveCountries()).filter(country => {
         if (transactionType === "deposit") return country.isActiveForDeposit !== false;
         if (transactionType === "withdrawal") return country.isActiveForWithdrawal !== false;
@@ -5798,21 +5801,21 @@ export async function registerRoutes(
             !op.isInMaintenance
           )
           .map(op => {
-            const isAvailable = !isOperatorDisabledByFee(allFees, op.id, transactionType);
+            const isAvailable = !isOperatorDisabledByFee(allFees, op.id, feeTransactionType);
             // Find operator-specific fee first
             let operatorFee = allFees.find(
-              f => f.operatorId === op.id && f.transactionType === transactionType && f.isActive
+              f => f.operatorId === op.id && f.transactionType === feeTransactionType && f.isActive
             );
             // If no operator-specific, try country-level fee
             if (!operatorFee) {
               operatorFee = allFees.find(
-                f => !f.operatorId && f.countryId === country.id && f.transactionType === transactionType && f.isActive
+                f => !f.operatorId && f.countryId === country.id && f.transactionType === feeTransactionType && f.isActive
               );
             }
             // If no country-level, try global fee
             if (!operatorFee) {
               operatorFee = allFees.find(
-                f => !f.operatorId && !f.countryId && f.transactionType === transactionType && f.isActive
+                f => !f.operatorId && !f.countryId && f.transactionType === feeTransactionType && f.isActive
               );
             }
             // For deposits, use depositPaymentProvider; for others use paymentProvider
@@ -5893,7 +5896,7 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Opérateur non trouvé" });
       }
       const allFees = await storage.getAllFees();
-      if (isOperatorDisabledByFee(allFees, operator.id, "transfer")) {
+      if (isOperatorDisabledByFee(allFees, operator.id, "withdrawal")) {
         return res.status(400).json({ message: OPERATOR_DISABLED_BY_ADMIN_MESSAGE, code: "OPERATOR_DISABLED_BY_ADMIN" });
       }
 
@@ -5901,7 +5904,7 @@ export async function registerRoutes(
       if (provider !== "afribapay" && provider !== "pixpay" && provider !== "pawapay") {
         return res.status(400).json({ message: "Aucun fournisseur de paiement configuré pour cet opérateur." });
       }
-      const fee = await storage.resolveFee("transfer", (operator as any).countryId, operatorId);
+      const fee = await storage.resolveFee("withdrawal", (operator as any).countryId, operatorId);
       let feeAmount = 0;
       let feePercentage = 0;
       
@@ -6074,7 +6077,7 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Opérateur non trouvé" });
       }
       const allFees = await storage.getAllFees();
-      if (isOperatorDisabledByFee(allFees, operator.id, "transfer")) {
+      if (isOperatorDisabledByFee(allFees, operator.id, "withdrawal")) {
         return res.status(400).json({ message: OPERATOR_DISABLED_BY_ADMIN_MESSAGE, code: "OPERATOR_DISABLED_BY_ADMIN" });
       }
 
@@ -6131,7 +6134,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Aucun fournisseur de paiement configuré pour cet opérateur." });
       }
 
-      const fee = await storage.resolveFee("transfer", countryId, operatorId);
+      const fee = await storage.resolveFee("withdrawal", countryId, operatorId);
       let feeAmount = 0;
       let ashtechFeeAmount = 0;
 
@@ -14768,116 +14771,6 @@ export async function registerRoutes(
     }
   });
 
-  // Admin: Copier tous les frais retrait → envoi (transfer)
-  app.post("/api/admin/fees/sync-withdrawals-to-transfers", requireAuth, requireAdmin, async (req, res) => {
-    try {
-      const { operatorId } = req.body || {};
-      const allFees = await storage.getAllFees();
-      let withdrawalFees = allFees.filter(f => f.transactionType === 'withdrawal');
-      if (operatorId) withdrawalFees = withdrawalFees.filter(f => f.operatorId === operatorId);
-      let synced = 0;
-      let created = 0;
-
-      for (const wFee of withdrawalFees) {
-        let tFee: typeof allFees[number] | undefined;
-        if (wFee.operatorId) {
-          tFee = allFees.find(f => f.operatorId === wFee.operatorId && f.transactionType === 'transfer');
-        } else if (wFee.countryId) {
-          tFee = allFees.find(f => f.countryId === wFee.countryId && !f.operatorId && f.transactionType === 'transfer');
-        } else {
-          tFee = allFees.find(f => !f.operatorId && !f.countryId && f.transactionType === 'transfer');
-        }
-
-        const syncValues = {
-          feeValue: wFee.feeValue,
-          ashtechMargin: wFee.ashtechMargin,
-          afribapayFee: wFee.afribapayFee,
-          pixpayFee: wFee.pixpayFee,
-          minFee: wFee.minFee,
-          isActive: wFee.isActive,
-        };
-
-        if (tFee) {
-          await storage.updateFee(tFee.id, syncValues);
-          synced++;
-        } else {
-          const newName = wFee.name.replace(/retrait/gi, 'Envoi').replace(/withdrawal/gi, 'Transfer');
-          await storage.createFee({
-            ...syncValues,
-            name: newName !== wFee.name ? newName : `Envoi - ${wFee.name}`,
-            feeType: wFee.feeType,
-            transactionType: 'transfer',
-            operatorId: wFee.operatorId || null,
-            countryId: wFee.countryId || null,
-          } as any);
-          created++;
-        }
-      }
-
-      await storage.createAdminLog({
-        adminId: req.userId!,
-        action: "sync_fees_withdrawal_to_transfer",
-        targetType: "fee",
-        targetId: null,
-        details: JSON.stringify({ synced, created }),
-        ipAddress: req.ip || null,
-      });
-
-      res.json({ success: true, synced, created });
-    } catch (error) {
-      console.error("Sync withdrawal to transfer fees error:", error);
-      res.status(500).json({ message: "Erreur serveur" });
-    }
-  });
-
-  // Admin: Copier tous les frais envoi → retrait (sens inverse)
-  app.post("/api/admin/fees/sync-transfers-to-withdrawals", requireAuth, requireAdmin, async (req, res) => {
-    try {
-      const { operatorId } = req.body || {};
-      const allFees = await storage.getAllFees();
-      let transferFees = allFees.filter(f => f.transactionType === 'transfer');
-      if (operatorId) transferFees = transferFees.filter(f => f.operatorId === operatorId);
-      let synced = 0;
-      let created = 0;
-
-      for (const tFee of transferFees) {
-        let wFee: typeof allFees[number] | undefined;
-        if (tFee.operatorId) {
-          wFee = allFees.find(f => f.operatorId === tFee.operatorId && f.transactionType === 'withdrawal');
-        } else if (tFee.countryId) {
-          wFee = allFees.find(f => f.countryId === tFee.countryId && !f.operatorId && f.transactionType === 'withdrawal');
-        }
-        const syncValues = {
-          feeValue: tFee.feeValue,
-          ashtechMargin: tFee.ashtechMargin,
-          afribapayFee: tFee.afribapayFee,
-          pixpayFee: tFee.pixpayFee,
-          minFee: tFee.minFee,
-          isActive: tFee.isActive,
-        };
-        if (wFee) {
-          await storage.updateFee(wFee.id, syncValues);
-          synced++;
-        } else {
-          const newName = tFee.name.replace(/envoi/gi, 'Retrait').replace(/transfer/gi, 'Withdrawal');
-          await storage.createFee({
-            ...syncValues,
-            name: newName !== tFee.name ? newName : `Retrait - ${tFee.name}`,
-            feeType: tFee.feeType,
-            transactionType: 'withdrawal',
-            operatorId: tFee.operatorId || null,
-            countryId: tFee.countryId || null,
-          } as any);
-          created++;
-        }
-      }
-      res.json({ success: true, synced, created });
-    } catch (error) {
-      console.error("Sync transfer to withdrawal fees error:", error);
-      res.status(500).json({ message: "Erreur serveur" });
-    }
-  });
-
   // Admin: Fees CRUD
   app.get("/api/admin/fees", requireAuth, requireAdmin, async (req, res) => {
     try {
@@ -14889,9 +14782,8 @@ export async function registerRoutes(
     }
   });
 
-  // Admin: Toggle one operator for one transaction type without synchronizing
-  // the other operation types. An operator-specific inactive fee must override
-  // country/global fallback fees, so create the scoped override when needed.
+  // Admin: Toggle deposits separately; withdrawal and external transfer share a fee.
+  // An operator-specific inactive fee must override country/global fallbacks.
   app.patch("/api/admin/fees/operator-toggle", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { operatorId, transactionType, isActive } = req.body || {};
@@ -14909,9 +14801,10 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Opérateur non trouvé." });
       }
 
+      const feeTransactionType = transactionType === "transfer" ? "withdrawal" : transactionType;
       const allFees = await storage.getAllFees();
       const operatorFee = allFees.find(
-        fee => fee.operatorId === operator.id && fee.transactionType === transactionType,
+        fee => fee.operatorId === operator.id && fee.transactionType === feeTransactionType,
       );
 
       let updatedFee;
@@ -14920,12 +14813,12 @@ export async function registerRoutes(
       } else {
         const fallbackFee = allFees.find(
           fee =>
-            fee.transactionType === transactionType &&
+            fee.transactionType === feeTransactionType &&
             !fee.operatorId &&
             fee.countryId === operator.countryId,
         ) || allFees.find(
           fee =>
-            fee.transactionType === transactionType &&
+            fee.transactionType === feeTransactionType &&
             !fee.operatorId &&
             !fee.countryId,
         );
@@ -14941,7 +14834,7 @@ export async function registerRoutes(
             /^(Dépôt|Retrait|Envoi)/i,
             match => `${match} - ${operator.name}`,
           ),
-          transactionType: fallbackFee.transactionType,
+          transactionType: feeTransactionType,
           feeType: fallbackFee.feeType,
           feeValue: fallbackFee.feeValue,
           afribapayFee: fallbackFee.afribapayFee,
@@ -14968,7 +14861,7 @@ export async function registerRoutes(
         details: JSON.stringify({
           operatorId: operator.id,
           operatorName: operator.name,
-          transactionType,
+          transactionType: feeTransactionType,
           isActive,
         }),
         ipAddress: req.ip || null,
@@ -14983,14 +14876,18 @@ export async function registerRoutes(
 
   app.post("/api/admin/fees", requireAuth, requireAdmin, async (req, res) => {
     try {
-      const fee = await storage.createFee(req.body);
+      const feeData = {
+        ...req.body,
+        transactionType: req.body?.transactionType === "transfer" ? "withdrawal" : req.body?.transactionType,
+      };
+      const fee = await storage.createFee(feeData);
       
       await storage.createAdminLog({
         adminId: req.userId!,
         action: "create_fee",
         targetType: "fee",
         targetId: fee.id,
-        details: JSON.stringify(req.body),
+        details: JSON.stringify(feeData),
         ipAddress: req.ip || null,
       });
       
@@ -15017,26 +14914,6 @@ export async function registerRoutes(
       };
 
       const updatedFee = await storage.updateFee(req.params.id, updates);
-
-      // Synchroniser l'autre type (transfer <-> withdrawal) pour le même opérateur ou pays
-      if (fee.transactionType === 'transfer' || fee.transactionType === 'withdrawal') {
-        const otherType = fee.transactionType === 'transfer' ? 'withdrawal' : 'transfer';
-        const allFees = await storage.getAllFees();
-        let otherFee: typeof allFees[number] | undefined;
-        if (fee.operatorId) {
-          otherFee = allFees.find(f => f.operatorId === fee.operatorId && f.transactionType === otherType);
-        } else if (fee.countryId) {
-          otherFee = allFees.find(f => f.countryId === fee.countryId && !f.operatorId && f.transactionType === otherType);
-        }
-        if (otherFee) {
-          await storage.updateFee(otherFee.id, {
-            ashtechMargin: updates.ashtechMargin,
-            feeValue: updates.feeValue,
-            isActive: updates.isActive,
-            minFee: updates.minFee
-          });
-        }
-      }
 
       await storage.createAdminLog({
         adminId: req.userId!,
@@ -18634,20 +18511,6 @@ export async function registerRoutes(
       if (isActive !== undefined) updates.isActive = Boolean(isActive);
       if (minFee !== undefined) updates.minFee = minFee ? String(minFee) : null;
       const updated = await storage.updateFee(id, updates);
-      // Sync retrait <-> envoi
-      if (fee.transactionType === 'transfer' || fee.transactionType === 'withdrawal') {
-        const otherType = fee.transactionType === 'transfer' ? 'withdrawal' : 'transfer';
-        const allFees = await storage.getAllFees();
-        let otherFee: typeof allFees[number] | undefined;
-        if (fee.operatorId) {
-          otherFee = allFees.find(f => f.operatorId === fee.operatorId && f.transactionType === otherType);
-        } else if (fee.countryId) {
-          otherFee = allFees.find(f => f.countryId === fee.countryId && !f.operatorId && f.transactionType === otherType);
-        }
-        if (otherFee) {
-          await storage.updateFee(otherFee.id, updates);
-        }
-      }
       res.json({ success: true, fee: updated });
     } catch (err: any) {
       console.error("[Admin AfribaPay Fee] Error:", err);
@@ -18675,20 +18538,6 @@ export async function registerRoutes(
       if (isActive !== undefined) updates.isActive = Boolean(isActive);
       if (minFee !== undefined) updates.minFee = minFee ? String(minFee) : null;
       const updated = await storage.updateFee(id, updates);
-      // Sync retrait <-> envoi
-      if (fee.transactionType === 'transfer' || fee.transactionType === 'withdrawal') {
-        const otherType = fee.transactionType === 'transfer' ? 'withdrawal' : 'transfer';
-        const allFees = await storage.getAllFees();
-        let otherFee: typeof allFees[number] | undefined;
-        if (fee.operatorId) {
-          otherFee = allFees.find(f => f.operatorId === fee.operatorId && f.transactionType === otherType);
-        } else if (fee.countryId) {
-          otherFee = allFees.find(f => f.countryId === fee.countryId && !f.operatorId && f.transactionType === otherType);
-        }
-        if (otherFee) {
-          await storage.updateFee(otherFee.id, updates);
-        }
-      }
       res.json({ success: true, fee: updated });
     } catch (err: any) {
       console.error("[Admin PixPay Fee] Error:", err);

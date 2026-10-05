@@ -1,8 +1,6 @@
 import { useState, useMemo, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { AdminLayout } from "../layout";
-import { AdminSectionTabs } from "@/components/admin/AdminSectionTabs";
-import { getAdminPath } from "@/lib/adminPath";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +14,7 @@ import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Pencil, ArrowUpCircle, Send, Info, ChevronDown, ChevronRight, Zap, Globe, Copy, Loader2 } from "lucide-react";
+import { Pencil, ArrowLeftRight, Info, ChevronDown, ChevronRight, Zap, Globe } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { isProviderAvailable } from "@/lib/providerCountries";
@@ -24,8 +22,6 @@ import { ProviderCountryCoverage } from "@/components/admin/ProviderCountryCover
 import { guessPawaPayProviderCode } from "@/lib/pawapayProviderCode";
 import type { Fee, Country, Operator } from "@shared/schema";
 import { getOperatorDisplayName } from "@/lib/operator-logos";
-
-const A = getAdminPath();
 
 interface EditState {
   fee: Fee | null;
@@ -187,7 +183,7 @@ export default function AdminFeesWithdrawals() {
       }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/fees"] });
-      toast({ title: variables.isActive ? "Opérateur retrait activé" : "Opérateur retrait désactivé" });
+      toast({ title: variables.isActive ? "Opérateur retrait/envoi activé" : "Opérateur retrait/envoi désactivé" });
     },
     onError: (err: any) => toast({ title: "Erreur d'activation", description: err?.message || "Erreur serveur", variant: "destructive" }),
   });
@@ -235,12 +231,6 @@ export default function AdminFeesWithdrawals() {
     onError: (err: any) => toast({ title: "Erreur AfribaPay", description: err?.message || "Erreur serveur", variant: "destructive" }),
   });
 
-  const syncToTransferMutation = useMutation({
-    mutationFn: async (operatorId: string) =>
-      apiRequest("POST", "/api/admin/fees/sync-withdrawals-to-transfers", { operatorId }),
-    onError: () => {},
-  });
-
   const handleSave = async () => {
     if (!editing) return;
     const originalProvider = ((editing.operator as any).paymentProvider || "afribapay") as "afribapay" | "pixpay" | "pawapay";
@@ -264,7 +254,7 @@ export default function AdminFeesWithdrawals() {
         ? afribaFeeVal + marginVal
         : localProvider === "pixpay" ? pixpayFeeVal + marginVal : pawapayFeeVal + marginVal;
       await createFeeMutation.mutateAsync({
-        name: `Retrait - ${getOperatorDisplayName(editing.operator.name)}`,
+        name: `Retrait & Envoi - ${getOperatorDisplayName(editing.operator.name)}`,
         transactionType: "withdrawal",
         feeType: (editing.fee as any)?.feeType || "percentage",
         operatorId: editing.operator.id,
@@ -284,25 +274,9 @@ export default function AdminFeesWithdrawals() {
     } else {
       await pawapayMutation.mutateAsync({ id: editing.fee!.id, pawaFee: pawapayFee, margin: ashtechMargin, active: isActive, min: minFee });
     }
-    syncToTransferMutation.mutate(editing.operator.id);
   };
 
   const isPending = afribaMutation.isPending || pixpayMutation.isPending || pawapayMutation.isPending || providerMutation.isPending || createFeeMutation.isPending;
-
-  const syncMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/admin/fees/sync-withdrawals-to-transfers", {});
-      return res.json();
-    },
-    onSuccess: (data: { synced: number; created: number }) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/fees"] });
-      toast({
-        title: "Synchronisation réussie",
-        description: `${data.synced} frais mis à jour, ${data.created} créé(s) pour l'envoi`,
-      });
-    },
-    onError: () => toast({ title: "Erreur de synchronisation", variant: "destructive" }),
-  });
 
   const computeTotal = (): string => {
     if (!editing) return "0";
@@ -317,37 +291,15 @@ export default function AdminFeesWithdrawals() {
   return (
     <AdminLayout>
       <div className="p-6 space-y-6">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-red-500/10 rounded-lg">
-              <ArrowUpCircle className="w-6 h-6 text-red-500" />
+        <div className="flex items-center gap-3">
+            <div className="p-2 bg-blue-500/10 rounded-lg">
+              <ArrowLeftRight className="w-6 h-6 text-blue-500" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold">Frais de Retrait</h1>
-              <p className="text-muted-foreground">Par pays et opérateur actif — frais + minimum de charge</p>
+              <h1 className="text-2xl font-bold">Frais de Retrait et d’Envoi</h1>
+              <p className="text-muted-foreground">Une configuration commune par pays et opérateur actif</p>
             </div>
-          </div>
-          <Button
-            variant="outline"
-            onClick={() => syncMutation.mutate()}
-            disabled={syncMutation.isPending}
-            className="flex items-center gap-2 border-orange-500/50 text-orange-500 hover:bg-orange-500/10"
-            data-testid="button-sync-withdrawals-to-transfers"
-          >
-            {syncMutation.isPending
-              ? <Loader2 className="w-4 h-4 animate-spin" />
-              : <Copy className="w-4 h-4" />}
-            Copier vers Envoi
-          </Button>
         </div>
-
-        <AdminSectionTabs
-          label="Configuration des frais de retrait et d’envoi"
-          items={[
-            { href: `${A}/fees/withdrawals`, label: "Retraits", icon: ArrowUpCircle },
-            { href: `${A}/fees/transfers`, label: "Envois", icon: Send },
-          ]}
-        />
 
         <Card className="border-blue-500/20 bg-blue-500/5">
           <CardContent className="pt-4 pb-3">
@@ -355,7 +307,7 @@ export default function AdminFeesWithdrawals() {
               <Info className="w-4 h-4 mt-0.5 shrink-0" />
               <div>
                 <span className="font-semibold">Note :</span> Seuls les opérateurs <span className="font-semibold">actifs</span> sont affichés.
-                Les frais fournisseur et la marge Ashtech sont configurables séparément par fournisseur.
+                Cette configuration s’applique aux retraits et aux envois externes. Les frais fournisseur et la marge Ashtech sont configurables séparément par fournisseur.
                 Le minimum de charge est le montant minimum prélevé si le % est inférieur.
               </div>
             </div>
@@ -472,7 +424,7 @@ export default function AdminFeesWithdrawals() {
                                  checked={feeIsActive}
                                  disabled={operatorToggleMutation.isPending}
                                  onCheckedChange={(checked) => operatorToggleMutation.mutate({ operatorId: op.id, isActive: checked })}
-                                  aria-label={`${feeIsActive ? "Désactiver" : "Activer"} ${getOperatorDisplayName(op.name)} pour les retraits`}
+                                  aria-label={`${feeIsActive ? "Désactiver" : "Activer"} ${getOperatorDisplayName(op.name)} pour les retraits et envois`}
                                  data-testid={`switch-operator-withdrawal-${op.id}`}
                                />
                                <button
@@ -500,7 +452,7 @@ export default function AdminFeesWithdrawals() {
           <DialogContent className="flex flex-col max-h-[92vh]">
             <DialogHeader>
               <DialogTitle>
-                 {editing?.needsCreate ? "Configurer les frais" : "Modifier les frais"} retrait — {getOperatorDisplayName(editing?.operator.name)} ({editing?.country.flag} {editing?.country.name})
+                 {editing?.needsCreate ? "Configurer les frais" : "Modifier les frais"} retrait/envoi — {getOperatorDisplayName(editing?.operator.name)} ({editing?.country.flag} {editing?.country.name})
               </DialogTitle>
             </DialogHeader>
             {editing && (() => {

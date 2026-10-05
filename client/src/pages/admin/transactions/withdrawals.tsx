@@ -244,7 +244,7 @@ export default function AdminWithdrawals() {
               <ArrowLeftRight className="w-6 h-6 text-primary" />
               Historique des Retraits et Envois
             </h1>
-            <p className="text-muted-foreground">Retraits et envois réunis dans un seul historique.</p>
+              <p className="text-muted-foreground">Retraits, envois externes et réceptions réunis dans un seul historique.</p>
           </div>
           <div className="flex gap-4">
             <Card className="px-4 py-2">
@@ -456,14 +456,18 @@ export default function AdminWithdrawals() {
         <Dialog open={!!selectedTxId} onOpenChange={(open) => !open && setSelectedTxId(null)}>
           <DialogContent className="max-w-lg max-h-[90vh] flex flex-col">
             <DialogHeader className="shrink-0">
-              <DialogTitle>Détails du retrait</DialogTitle>
+                <DialogTitle>
+                  {tx?.type === "withdrawal" ? "Détails du retrait" : tx?.type === "transfer_in" ? "Détails de la réception" : "Détails de l’envoi"}
+                </DialogTitle>
             </DialogHeader>
             {tx && (
               <div className="space-y-4 overflow-y-auto flex-1 pr-1">
                 <div className="text-center p-4 bg-muted/50 rounded-lg">
-                  <p className="text-sm text-muted-foreground mb-1">Montant Net Retiré</p>
-                  <p className="text-3xl font-bold text-red-500">
-                    -{formatCurrency(tx.amount, (tx.currency || "XAF") as SupportedCurrency)}
+                  <p className="text-sm text-muted-foreground mb-1">
+                    {tx.type === "withdrawal" ? "Montant net retiré" : tx.type === "transfer_in" ? "Montant reçu" : "Montant envoyé"}
+                  </p>
+                  <p className={`text-3xl font-bold ${tx.type === "withdrawal" ? "text-red-500" : tx.type === "transfer_in" ? "text-green-500" : "text-blue-500"}`}>
+                    {tx.type === "transfer_in" ? "+" : "−"}{formatCurrency(tx.amount, (tx.currency || "XAF") as SupportedCurrency)}
                   </p>
                   {tx.feeAmount && parseFloat(tx.feeAmount) > 0 && (
                     <div className="mt-2 text-sm space-y-1">

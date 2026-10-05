@@ -1,4 +1,4 @@
-// Seed/update withdrawal and transfer fees per country
+// Seed/update shared withdrawal + external transfer fees, and separate deposit fees, per country
 // Provider fee + Ashtech margin = total client fee
 // Run once on startup — fully idempotent (upsert by country + transactionType)
 
@@ -34,16 +34,15 @@ const FEE_SPECS: CountryFeeSpec[] = [
   { code: "US", countryName: "États-Unis",           afribapayFee: 3.00, ashtechMargin: 2.00, minFee: 50.17 },
 ];
 
-const TRANSACTION_TYPES = ["withdrawal", "transfer", "deposit"] as const;
+const TRANSACTION_TYPES = ["withdrawal", "deposit"] as const;
 
 const TX_TYPE_LABEL: Record<string, string> = {
   withdrawal: "Retrait",
-  transfer:   "Transfert",
   deposit:    "Dépôt",
 };
 
 export async function seedWithdrawalTransferFees() {
-  console.log("[FeesSeed] Starting fee seeding (withdrawal + transfer + deposit)...");
+  console.log("[FeesSeed] Starting fee seeding (shared withdrawal/transfer + deposit)...");
   let created = 0;
   let updated = 0;
 
