@@ -4,7 +4,6 @@ import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { AdminLayout } from "../layout";
-import { AdminSectionTabs } from "@/components/admin/AdminSectionTabs";
 const A = getAdminPath();
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -33,8 +32,7 @@ import {
   XCircle, 
   Clock,
   AlertTriangle,
-  ArrowUpCircle,
-  Send,
+  ArrowLeftRight,
   Eye,
   Copy,
   User as UserIcon,
@@ -78,9 +76,9 @@ export default function AdminWithdrawals() {
   useEffect(() => { setPage(1); }, [statusFilter, search]);
 
   const { data: txData, isLoading } = useQuery<{ data: EnrichedTransaction[]; total: number; pages: number }>({
-    queryKey: ["/api/admin/transactions", "withdrawals", page, statusFilter, search],
+    queryKey: ["/api/admin/transactions", "withdrawals-transfers", page, statusFilter, search],
     queryFn: async () => {
-      const p = new URLSearchParams({ page: String(page), limit: "50", type: "withdrawal" });
+      const p = new URLSearchParams({ page: String(page), limit: "50", type: "withdrawal,transfer_out,transfer_in" });
       if (statusFilter !== "all") p.set("status", statusFilter);
       if (search.trim()) p.set("search", search.trim());
       const res = await fetch(`/api/admin/transactions?${p}`, { credentials: "include", headers: getAuthHeaders() });
@@ -90,7 +88,9 @@ export default function AdminWithdrawals() {
     // Poll every 4s whenever there are "pending" transactions so status changes
     // (completed / failed) from the payout poller are reflected automatically.
     refetchInterval: (query) => {
-      const hasPending = query.state.data?.data?.some(tx => tx.status === "pending");
+      const hasPending = query.state.data?.data?.some(
+        tx => tx.status === "pending" && (tx.type === "withdrawal" || tx.type === "transfer_out")
+      );
       return hasPending ? 4_000 : false;
     },
   });
@@ -125,7 +125,7 @@ export default function AdminWithdrawals() {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/layout-stats"] });
       toast({
         title: response.status === 202 ? "Paiement en cours" : response.manualProviderOverride ? "Statut modifié manuellement" : "Statut mis à jour",
-        description: response.message || (response.status === 202 ? "Le fournisseur doit encore confirmer le retrait." : undefined),
+      description: response.message || (response.status === 202 ? "Le fournisseur doit encore confirmer l’opération." : undefined),
       });
       setSelectedTxId(null);
     },
@@ -225,11 +225,9 @@ export default function AdminWithdrawals() {
     },
   });
 
-  const pendingCount = allTransactions.filter(tx => tx.status === "pending").length;
-  const totalWithdrawals = allTransactions.reduce((sum, tx) => {
-    if (tx.status === "completed") return sum + parseFloat(tx.amount);
-    return sum;
-  }, 0);
+  const pendingCount = allTransactions.filter(
+    tx => tx.status === "pending" && (tx.type === "withdrawal" || tx.type === "transfer_out")
+  ).length;
 
   const tx = txDetails || allTransactions.find(t => t.id === selectedTxId);
 
@@ -243,10 +241,10 @@ export default function AdminWithdrawals() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
-              <ArrowUpCircle className="w-6 h-6 text-red-500" />
-              Historique des Retraits
+              <ArrowLeftRight className="w-6 h-6 text-primary" />
+              Historique des Retraits et Envois
             </h1>
-            <p className="text-muted-foreground">Gérez les demandes de retrait</p>
+            <p className="text-muted-foreground">Retraits et envois réunis dans un seul historique.</p>
           </div>
           <div className="flex gap-4">
             <Card className="px-4 py-2">
@@ -254,25 +252,17 @@ export default function AdminWithdrawals() {
               <p className="text-xl font-bold text-amber-500">{pendingCount}</p>
             </Card>
             <Card className="px-4 py-2">
-              <p className="text-sm text-muted-foreground">Total payé</p>
-              <p className="text-xl font-bold text-red-500">{formatCurrency(totalWithdrawals.toString(), "XAF")}</p>
+              <p className="text-sm text-muted-foreground">Transactions trouvées</p>
+              <p className="text-xl font-bold">{txData?.total || 0}</p>
             </Card>
           </div>
         </div>
-
-        <AdminSectionTabs
-          label="Historique des retraits et envois"
-          items={[
-            { href: `${A}/transactions/withdrawals`, label: "Retraits", icon: ArrowUpCircle },
-            { href: `${A}/transactions/transfers`, label: "Envois", icon: Send },
-          ]}
-        />
 
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
-              placeholder="Référence, nom ou adresse de paiement..."
+              placeholder="Référence, nom, téléphone ou adresse..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-10"
@@ -298,13 +288,14 @@ export default function AdminWithdrawals() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Référence</TableHead>
+                  <TableHead>Opération</TableHead>
                   <TableHead>Réf. fournisseur</TableHead>
                   <TableHead>Utilisateur</TableHead>
                   <TableHead>Réseau de paiement</TableHead>
-                  <TableHead>Adresse de paiement</TableHead>
-                  <TableHead>Montant Net</TableHead>
+                  <TableHead>Destinataire / adresse</TableHead>
+                  <TableHead>Montant net</TableHead>
                   <TableHead>Frais</TableHead>
-                  <TableHead>Total Débité</TableHead>
+                  <TableHead>Total débité</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead>Statut</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -313,25 +304,39 @@ export default function AdminWithdrawals() {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={11} className="text-center py-8">Chargement...</TableCell>
+                    <TableCell colSpan={12} className="text-center py-8">Chargement...</TableCell>
                   </TableRow>
                 ) : filteredTransactions.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
-                      Aucun retrait trouvé
+                    <TableCell colSpan={12} className="text-center py-8 text-muted-foreground">
+                      Aucune opération trouvée
                     </TableCell>
                   </TableRow>
                 ) : (
                   filteredTransactions.map((tx) => (
-                    <TableRow key={tx.id} data-testid={`withdrawal-row-${tx.id}`}>
+                    <TableRow key={tx.id} data-testid={`payout-row-${tx.id}`}>
                       <TableCell className="font-mono text-sm">{tx.reference}</TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className={
+                            tx.type === "withdrawal"
+                              ? "border-orange-500/30 text-orange-500"
+                              : tx.type === "transfer_in"
+                                ? "border-green-500/30 text-green-500"
+                                : "border-blue-500/30 text-blue-500"
+                          }
+                        >
+                          {tx.type === "withdrawal" ? "Retrait" : tx.type === "transfer_in" ? "Réception" : "Envoi"}
+                        </Badge>
+                      </TableCell>
                       <TableCell className="max-w-[190px]">
                         {getTransactionProviderReference(tx) ? (
                           <div className="flex items-center gap-1">
                             <code
                               className="min-w-0 break-all font-mono text-xs"
                               title={getTransactionProviderReference(tx) || undefined}
-                              data-testid={`withdrawal-provider-reference-${tx.id}`}
+                              data-testid={`payout-provider-reference-${tx.id}`}
                             >
                               {getTransactionProviderReference(tx)}
                             </code>
@@ -366,12 +371,22 @@ export default function AdminWithdrawals() {
                         )}
                       </TableCell>
                       <TableCell className="max-w-[280px]">
-                        <span className="block max-w-[280px] whitespace-normal break-all font-mono text-xs" title={getPaymentAddress(tx)}>
-                          {getPaymentAddress(tx)}
+                        <span
+                          className="block max-w-[280px] whitespace-normal break-all text-xs"
+                          title={tx.type === "withdrawal" ? getPaymentAddress(tx) : undefined}
+                        >
+                          {tx.type === "withdrawal"
+                            ? getPaymentAddress(tx)
+                            : tx.recipientName || (tx.type === "transfer_in" ? "Réception interne" : "Envoi")}
                         </span>
+                        {tx.type !== "withdrawal" && (tx.recipientPhone || tx.recipientCountry) && (
+                          <span className="block text-xs text-muted-foreground">
+                            {tx.recipientPhone || tx.recipientCountry}
+                          </span>
+                        )}
                       </TableCell>
-                      <TableCell className="font-bold text-red-500">
-                        -{formatCurrency(tx.amount, (tx.currency || "XAF") as SupportedCurrency)}
+                      <TableCell className={`font-bold ${tx.type === "withdrawal" ? "text-red-500" : tx.type === "transfer_in" ? "text-green-500" : "text-blue-500"}`}>
+                        {tx.type === "transfer_in" ? "+" : "−"}{formatCurrency(tx.amount, (tx.currency || "XAF") as SupportedCurrency)}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {tx.feeAmount && parseFloat(tx.feeAmount) > 0 
@@ -393,18 +408,18 @@ export default function AdminWithdrawals() {
                             size="icon" 
                             variant="ghost"
                             onClick={() => navigate(`${A}/transactions/${tx.id}`)}
-                            data-testid={`button-view-withdrawal-${tx.id}`}
+                            data-testid={`button-view-payout-${tx.id}`}
                           >
                             <Eye className="w-4 h-4" />
                           </Button>
-                          {tx.status === "pending" && (
+                          {tx.status === "pending" && tx.type !== "transfer_in" && (
                             <>
                               <Button 
                                 size="icon" 
                                 variant="ghost"
                                 className="text-green-500"
                                 onClick={() => updateStatusMutation.mutate({ id: tx.id, status: "completed" })}
-                                data-testid={`button-approve-withdrawal-${tx.id}`}
+                                data-testid={`button-approve-payout-${tx.id}`}
                               >
                                 <CheckCircle className="w-4 h-4" />
                               </Button>
@@ -413,7 +428,7 @@ export default function AdminWithdrawals() {
                                 variant="ghost"
                                 className="text-red-500"
                                 onClick={() => updateStatusMutation.mutate({ id: tx.id, status: "failed" })}
-                                data-testid={`button-reject-withdrawal-${tx.id}`}
+                                data-testid={`button-reject-payout-${tx.id}`}
                               >
                                 <XCircle className="w-4 h-4" />
                               </Button>
