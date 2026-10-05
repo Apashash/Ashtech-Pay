@@ -63,6 +63,16 @@ interface TransactionDetails extends Transaction {
   paymentIntent?: { payerCountry?: string } | null;
 }
 
+function isInternalTransfer(transaction: Transaction): boolean {
+  return transaction.type === "transfer_in" ||
+    Boolean(transaction.internalTransferKey) ||
+    (transaction.type === "transfer_out" &&
+      Boolean(transaction.recipientId) &&
+      !transaction.operatorId &&
+      !transaction.recipientPhone &&
+      !transaction.recipientCountry);
+}
+
 export default function AdminWithdrawals() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
@@ -170,6 +180,10 @@ export default function AdminWithdrawals() {
   };
 
   const getPaymentNetwork = (transaction: Transaction): string => {
+    if (isInternalTransfer(transaction)) {
+      return (transaction.currency || "XAF").toUpperCase();
+    }
+
     const metadata = transaction.metadata || {};
     const assetCode = metadata.iziPayoutRequest?.assetCode || metadata.assetCode;
     if (typeof assetCode === "string" && assetCode.trim()) {
@@ -291,7 +305,7 @@ export default function AdminWithdrawals() {
                   <TableHead>Opération</TableHead>
                   <TableHead>Réf. fournisseur</TableHead>
                   <TableHead>Utilisateur</TableHead>
-                  <TableHead>Réseau de paiement</TableHead>
+                  <TableHead>Opérateur / réseau</TableHead>
                   <TableHead>Destinataire / adresse</TableHead>
                   <TableHead>Montant net</TableHead>
                   <TableHead>Frais</TableHead>
@@ -356,8 +370,8 @@ export default function AdminWithdrawals() {
                       </TableCell>
                       <TableCell>
                         <div>
-                          <p className="font-medium">{tx.user?.fullName || "N/A"}</p>
-                          <p className="text-xs text-muted-foreground">{tx.user?.email}</p>
+                          <p className="max-w-[180px] truncate font-medium">{tx.user?.fullName || "N/A"}</p>
+                          <p className="max-w-[180px] truncate text-xs text-muted-foreground">{tx.user?.email}</p>
                         </div>
                       </TableCell>
                       <TableCell>
@@ -378,7 +392,7 @@ export default function AdminWithdrawals() {
                           {tx.type === "withdrawal"
                             ? getPaymentAddress(tx)
                             : tx.type === "transfer_in"
-                              ? (tx.currency || "XAF").toUpperCase()
+                              ? "—"
                               : tx.recipientName || "Envoi"}
                         </span>
                         {tx.type === "transfer_out" && (tx.recipientPhone || tx.recipientCountry) && (
@@ -391,9 +405,11 @@ export default function AdminWithdrawals() {
                         {tx.type === "transfer_in" ? "+" : "−"}{formatCurrency(tx.amount, (tx.currency || "XAF") as SupportedCurrency)}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
-                        {tx.feeAmount && parseFloat(tx.feeAmount) > 0 
-                          ? formatCurrency(tx.feeAmount, (tx.currency || "XAF") as SupportedCurrency)
-                          : "-"}
+                        {isInternalTransfer(tx)
+                          ? formatCurrency(tx.feeAmount || "0", (tx.currency || "XAF") as SupportedCurrency)
+                          : tx.feeAmount && parseFloat(tx.feeAmount) > 0
+                            ? formatCurrency(tx.feeAmount, (tx.currency || "XAF") as SupportedCurrency)
+                            : "-"}
                       </TableCell>
                       <TableCell className="font-medium">
                         {tx.totalAmount 
