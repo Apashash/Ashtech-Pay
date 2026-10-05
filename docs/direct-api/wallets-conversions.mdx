@@ -5,6 +5,13 @@ description: "Consultez les soldes et configurez les conversions immédiates ou 
 
 Chaque requête ci-dessous utilise la clé API Bearer. `user_id` doit être l'identifiant du profil AshTech Pay propriétaire de cette clé. Un identifiant manquant renvoie `400 user_id_required`; un identifiant qui ne correspond pas à la clé renvoie `403 user_id_mismatch`.
 
+## Quel wallet utiliser ?
+
+- **Wallet source** : utilisez `wallet_currency` dans la réponse de `GET /v1/wallets?user_id=...`. Cette route liste les wallets et soldes de ce profil, pas tous les wallets possibles par pays.
+- **Pays de destination** : chargez les pays actifs et leurs codes avec [`GET /v1/countries`](/docs/reference/countries). Son champ `currency` est une devise ISO normalisée (`XAF`, `XOF`, etc.) et n'est pas toujours le code interne exact du wallet.
+
+Pour une conversion, envoyez `destination_country_code` (par exemple `CM` ou `TG`), pas un code de wallet cible. AshTech Pay résout le wallet correspondant au pays et renvoie le code exact dans `to_wallet_currency`. L'API Direct ne fournit pas de route séparée qui liste les codes internes de wallet pour tous les pays.
+
 ## Consulter les soldes
 
 ```http
@@ -54,7 +61,7 @@ Content-Type: application/json
 ```
 
 - `from_currency` doit être le code exact du wallet à débiter.
-- AshTech Pay résout `destination_country_code` vers le wallet exact du pays; ne passez pas un code cible choisi par le client.
+- Consultez [`GET /v1/countries`](/docs/reference/countries) pour les codes pays acceptés. AshTech Pay résout `destination_country_code` vers le wallet exact du pays; ne passez pas un code cible choisi par le client.
 - `reference` est obligatoire et sert à rendre les reprises idempotentes. Une même référence avec des paramètres différents renvoie `409 reference_conflict`.
 - `notify_url` est facultative et doit être une URL HTTPS publique. Les soldes insuffisants et les conversions sous le minimum configuré sont rejetés avant débit.
 

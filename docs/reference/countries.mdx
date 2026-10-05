@@ -63,7 +63,7 @@ curl_close($ch);
   </Tab>
 </Tabs>
 
-La réponse contient les pays actifs, leur devise et les opérateurs disponibles. Utilisez cette réponse pour alimenter votre formulaire de paiement.
+La réponse contient les pays actifs, leur devise ISO normalisée et les opérateurs disponibles. Utilisez le champ `code` pour sélectionner un pays. Le champ `currency` (`XAF`, `XOF`, etc.) ne représente pas toujours le code interne exact du wallet de ce pays. Pour une conversion, envoyez plutôt `destination_country_code`; AshTech Pay résout le wallet correspondant. Consultez [Wallets et conversions](/docs/direct-api/wallets-conversions) pour le détail.
 
 ```json
 [
