@@ -81,10 +81,9 @@ For providers whose callback and poller can race, the terminal transaction
 claim and corresponding wallet credit/refund must commit in one database
 transaction.
 
-User requirement (2026-08-07): payout polling is **infinite** — no attempt
-cap at all. While the provider says PENDING, keep the transaction pending and
-keep checking forever; after 30 min the poll cadence slows to every 2 min to
-protect provider API quotas. Never reintroduce a max-attempts bailout.
+User requirement (2026-10-05): payout status polling is **infinite** — no attempt
+cap. Check every 3 minutes during the first 10 minutes, then every 30 minutes
+without a duration limit. Never reintroduce a max-attempts bailout.
 
 **Why:** transient initiation errors and a 60-min poll timeout were
 auto-failing + refunding payouts while the provider still said PENDING —
@@ -114,8 +113,8 @@ the provider captured in an older in-memory queue entry.
 retry, leaving AshTechPay pending even when the new provider has confirmed.
 
 **How to apply:** read the persisted attempt metadata before each provider lookup
-and keep polling unresolved statuses indefinitely; after 30 minutes, poll every
-two minutes.
+and keep polling unresolved statuses indefinitely; use the user's current
+three-minute/ten-minute then thirty-minute cadence.
 
 **Why:** the user explicitly chose immediate refunds for admin-forced payout
 failures after being told a late provider payment could result in a double

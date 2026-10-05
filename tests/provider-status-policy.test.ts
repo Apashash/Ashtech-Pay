@@ -199,22 +199,29 @@ test("payout status lookup uses the current provider reference without unsafe fa
   }), null);
 });
 
-test("provider status polling continues forever and switches to two-minute checks after 30 minutes", () => {
+test("provider status polling checks every three minutes for ten minutes, then every thirty minutes forever", () => {
   const minute = 60 * 1000;
-  const twoMinutes = 2 * minute;
+  const threeMinutes = 3 * minute;
+  const thirtyMinutes = 30 * minute;
+  const tenMinutes = 10 * minute;
   const day = 24 * 60 * minute;
 
-  assert.equal(providerStatusPollIntervalMs(0, 0), minute);
-  assert.equal(providerStatusPollIntervalMs(0, 30 * minute), twoMinutes);
-  assert.equal(providerStatusPollIntervalMs(0, 2 * 60 * minute), twoMinutes);
-  assert.equal(providerStatusPollIntervalMs(0, day), twoMinutes);
-  assert.equal(providerStatusPollIntervalMs(0, 365 * day), twoMinutes);
+  assert.equal(providerStatusPollIntervalMs(0, 0), threeMinutes);
+  assert.equal(providerStatusPollIntervalMs(0, 9 * minute), threeMinutes);
+  assert.equal(providerStatusPollIntervalMs(0, tenMinutes), thirtyMinutes);
+  assert.equal(providerStatusPollIntervalMs(0, 2 * 60 * minute), thirtyMinutes);
+  assert.equal(providerStatusPollIntervalMs(0, day), thirtyMinutes);
+  assert.equal(providerStatusPollIntervalMs(0, 365 * day), thirtyMinutes);
 
   const startedAt = 1_000_000;
-  const now = startedAt + minute;
-  assert.equal(isProviderStatusPollDue(startedAt, now - minute + 1, now), false);
-  assert.equal(isProviderStatusPollDue(startedAt, now - minute, now), true);
+  const now = startedAt + threeMinutes;
+  assert.equal(isProviderStatusPollDue(startedAt, now - threeMinutes + 1, now), false);
+  assert.equal(isProviderStatusPollDue(startedAt, now - threeMinutes, now), true);
   assert.equal(isProviderStatusPollDue(startedAt, 0, now), true);
+  assert.equal(
+    isProviderStatusPollDue(startedAt, startedAt + 9 * minute, startedAt + tenMinutes),
+    false,
+  );
 });
 
 test("recovered provider lookups are deterministically spread over one minute", () => {

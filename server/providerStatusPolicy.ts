@@ -1,9 +1,9 @@
 export const PROVIDER_STATUS_POLL_INTERVALS = [
-  { maxAgeMs: 30 * 60 * 1000, intervalMs: 60 * 1000 },
-  { maxAgeMs: Number.POSITIVE_INFINITY, intervalMs: 2 * 60 * 1000 },
+  { maxAgeMs: 10 * 60 * 1000, intervalMs: 3 * 60 * 1000 },
+  { maxAgeMs: Number.POSITIVE_INFINITY, intervalMs: 30 * 60 * 1000 },
 ] as const;
 
-/** Pending transactions are polled forever; after 30 minutes, poll every two minutes. */
+/** Pending transactions are polled every three minutes for 10 minutes, then every 30 minutes forever. */
 export function providerStatusPollIntervalMs(startedAt: number, now = Date.now()): number {
   const ageMs = Math.max(0, now - startedAt);
   return PROVIDER_STATUS_POLL_INTERVALS.find(({ maxAgeMs }) => ageMs < maxAgeMs)?.intervalMs
