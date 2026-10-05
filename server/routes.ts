@@ -67,9 +67,9 @@ import { transactions as transactionsTable, users as usersTable, wallets as wall
 import { getOperatorDisplayName, operatorNamesMatch } from "@shared/operator-display";
 import { and, count, desc, eq, sql, sql as drizzleSql } from "drizzle-orm";
 import bcrypt from "bcryptjs";
-import multer from "multer";
 import path from "path";
 import fs from "fs";
+import { singleFileUpload } from "./multipartUpload";
 import {
   uploadToSupabase,
   getSignedImageUrl,
@@ -489,17 +489,6 @@ const privateProfileUploadsDirectoryReady = prepareStorageDirectory(
   "ProfileUploads",
 );
 
-const fileStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    cb(null, uploadsDir);
-  },
-  filename: (_req, file, cb) => {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
-    cb(null, `${uniqueSuffix}${ext}`);
-  },
-});
-
 // ─── FIX-10: Validation des fichiers par magic bytes ─────────────────────────
 // Le Content-Type déclaré par le client peut être falsifié. On vérifie les
 // vrais octets du fichier (magic bytes) pour détecter le vrai format.
@@ -519,28 +508,44 @@ function validateFileMagicBytes(buffer: Buffer): { valid: boolean; detected: str
   return { valid: false, detected: "unknown" };
 }
 
-const memoryUpload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => {
-    const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf"];
-    if (allowedTypes.includes(file.mimetype)) cb(null, true);
-    else cb(new Error("Type de fichier non autorisé"));
-  },
+const allowedUploadMimeTypes = [
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+  "application/pdf",
+] as const;
+const maxUploadFileSize = 5 * 1024 * 1024;
+const memoryUpload = singleFileUpload({
+  fieldName: "file",
+  storage: { kind: "memory" },
+  allowedMimeTypes: allowedUploadMimeTypes,
+  maxFileSize: maxUploadFileSize,
+});
+const diskUpload = singleFileUpload({
+  fieldName: "file",
+  storage: { kind: "disk", destination: uploadsDir },
+  allowedMimeTypes: allowedUploadMimeTypes,
+  maxFileSize: maxUploadFileSize,
 });
 
-const upload = multer({
-  storage: fileStorage,
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => {
-    const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf"];
-    if (allowedTypes.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error("Type de fichier non autorisé"));
-    }
-  },
-});
+const handleDiskUpload = (req: Request, res: Response, next: NextFunction) => {
+  diskUpload(req, res, (error: unknown) => {
+    if (!error) return next();
+
+    const uploadError = error as Error & { code?: string };
+    console.warn("[Upload/local] Requête multipart refusée:", {
+      userId: req.userId || null,
+      code: uploadError.code || null,
+      message: uploadError.message || "Échec de l'upload",
+    });
+    const unavailable = ["EACCES", "EPERM", "ENOENT", "EROFS"].includes(uploadError.code || "");
+    return res.status(unavailable ? 503 : 400).json({
+      message: unavailable ? "Le stockage des fichiers est indisponible." : uploadError.message || "Échec de l'upload",
+      code: unavailable ? "UPLOADS_STORAGE_UNAVAILABLE" : uploadError.code || "UPLOAD_REJECTED",
+    });
+  });
+};
 
 const SessionStore = connectPgSimple(session);
 const isMysqlDialect = process.env.DB_DIALECT?.toLowerCase() === "mysql";
@@ -3109,7 +3114,7 @@ export async function registerRoutes(
   }
 
   // File upload endpoint using local storage
-  app.post("/api/uploads/local", requireAuth, upload.single("file"), (req, res) => {
+  app.post("/api/uploads/local", requireAuth, handleDiskUpload, (req, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ message: "Aucun fichier fourni" });
@@ -3117,19 +3122,19 @@ export async function registerRoutes(
 
       // Magic bytes check — the diskStorage saves before we can inspect content,
       // so we read back the first 12 bytes and validate, then delete if invalid.
-      const fileBuffer = fs.readFileSync(req.file.path);
+      const fileBuffer = fs.readFileSync(req.file.path!);
       const magicCheck = validateFileMagicBytes(fileBuffer);
       if (!magicCheck.valid) {
-        fs.unlinkSync(req.file.path);
+        fs.unlinkSync(req.file.path!);
         console.warn(`[Upload/local] Magic bytes invalides pour ${req.file.originalname} — détecté: ${magicCheck.detected}`);
         return res.status(400).json({ message: "Le contenu du fichier ne correspond pas à son type déclaré" });
       }
 
-      const filePath = `/imagepro/${req.file.filename}`;
+      const filePath = `/imagepro/${req.file.filename!}`;
       res.json({ 
         success: true,
         objectPath: filePath,
-        filename: req.file.filename,
+        filename: req.file.filename!,
         size: req.file.size,
         mimetype: req.file.mimetype
       });
@@ -3292,11 +3297,10 @@ export async function registerRoutes(
     }
   });
 
-  // Multer runs before the route handler, so its errors would otherwise bypass
-  // the JSON response below and fall through to Express's generic error page.
-  // Safari then only sees a vague "Échec du téléchargement".
+  // Parse errors must be returned as JSON rather than falling through to
+  // Express's generic error page, which Safari displays as a vague upload failure.
   const handleMemoryUpload = (req: Request, res: Response, next: NextFunction) => {
-    memoryUpload.single("file")(req, res, (error: unknown) => {
+    memoryUpload(req, res, (error: unknown) => {
       if (!error) return next();
 
       const uploadError = error as Error & { code?: string };
@@ -3324,7 +3328,7 @@ export async function registerRoutes(
 
       // FIX-10: Vérification des magic bytes — rejette les fichiers dont le contenu
       // ne correspond pas à leur extension déclarée (ex: .exe renommé en .jpg).
-      const magicCheck = validateFileMagicBytes(req.file.buffer);
+      const magicCheck = validateFileMagicBytes(req.file.buffer!);
       if (!magicCheck.valid) {
         console.warn(`[Upload] Magic bytes invalides pour ${req.file.originalname} — détecté: ${magicCheck.detected}, déclaré: ${req.file.mimetype}`);
         return res.status(400).json({ error: "Le contenu du fichier ne correspond pas à son type déclaré" });
@@ -3340,7 +3344,7 @@ export async function registerRoutes(
         const objectPath = await savePrivateKycUpload(
           req.userId!,
           req.file.originalname,
-          req.file.buffer,
+          req.file.buffer!,
           req.file.mimetype,
         );
         return res.json({
@@ -3368,7 +3372,7 @@ export async function registerRoutes(
       }
       const googleDriveResult = safeFolder === "payment-links"
         && paymentImageStorage === "google_drive"
-        ? await uploadToGoogleDrive(req.file.buffer, req.file.originalname, req.file.mimetype)
+        ? await uploadToGoogleDrive(req.file.buffer!, req.file.originalname, req.file.mimetype)
         : null;
       if (googleDriveResult) {
         return res.json({
@@ -3392,7 +3396,7 @@ export async function registerRoutes(
         }
 
         const supabaseResult = await uploadToSupabase(
-          req.file.buffer,
+          req.file.buffer!,
           req.file.originalname,
           req.file.mimetype,
           safeFolder,
@@ -3425,7 +3429,7 @@ export async function registerRoutes(
       }
 
       const supabaseResult = await uploadToSupabase(
-        req.file.buffer,
+          req.file.buffer!,
         req.file.originalname,
         req.file.mimetype,
         safeFolder,
@@ -3454,7 +3458,7 @@ export async function registerRoutes(
         const ext = /^\.[a-z0-9]+$/.test(rawExt) ? rawExt : "";
         const filename = `${uniqueSuffix}${ext}`;
         const diskPath = path.join(uploadsDir, filename);
-        fs.writeFileSync(diskPath, req.file.buffer);
+        fs.writeFileSync(diskPath, req.file.buffer!);
         const urlPath = `/imagepro/${filename}`;
         res.json({ 
           success: true,
@@ -3551,7 +3555,7 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Veuillez sélectionner une image JPG, PNG, GIF ou WebP." });
       }
 
-      const magicCheck = validateFileMagicBytes(req.file.buffer);
+      const magicCheck = validateFileMagicBytes(req.file.buffer!);
       if (!magicCheck.valid || !magicCheck.detected.startsWith("image/")) {
         return res.status(400).json({ error: "Le contenu du fichier ne correspond pas à une image valide." });
       }
@@ -3565,7 +3569,7 @@ export async function registerRoutes(
       const extension = extensionByType[req.file.mimetype] || ".jpg";
       const filename = `${req.userId}-${Date.now()}${extension}`;
       const supabaseResult = await uploadToSupabase(
-        req.file.buffer,
+        req.file.buffer!,
         filename,
         req.file.mimetype,
         "profile-avatars",
@@ -3581,7 +3585,7 @@ export async function registerRoutes(
           throw storageError;
         }
         const diskFilename = `profile-${req.userId}-${Date.now()}${extension}`;
-        fs.writeFileSync(path.join(privateProfileUploadsDir, diskFilename), req.file.buffer);
+        fs.writeFileSync(path.join(privateProfileUploadsDir, diskFilename), req.file.buffer!);
         profileImagePath = `profile-avatars/${diskFilename}`;
       }
 

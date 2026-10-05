@@ -1,7 +1,7 @@
 import dns from "node:dns/promises";
 import https from "node:https";
 import net from "node:net";
-import { Address4, Address6 } from "ip-address";
+import ipaddr from "ipaddr.js";
 
 const PRIVATE_IPV4_RANGES = [
   "0.0.0.0/8",
@@ -18,7 +18,7 @@ const PRIVATE_IPV4_RANGES = [
   "203.0.113.0/24",
   "224.0.0.0/4",
   "240.0.0.0/4",
-].map((range) => new Address4(range));
+].map((range) => ipaddr.IPv4.parseCIDR(range));
 
 const PRIVATE_IPV6_RANGES = [
   "::/128",
@@ -27,25 +27,19 @@ const PRIVATE_IPV6_RANGES = [
   "fe80::/10",
   "2001:db8::/32",
   "2001:10::/28",
-].map((range) => new Address6(range));
+].map((range) => ipaddr.IPv6.parseCIDR(range));
 
 export function isPrivateOrReservedIp(value: string): boolean {
   const ip = value.trim().replace(/^\[|\]$/g, "");
   const family = net.isIP(ip);
   if (family === 4) {
-    const address = new Address4(ip);
-    return PRIVATE_IPV4_RANGES.some((range) => address.isInSubnet(range));
+    const address = ipaddr.IPv4.parse(ip);
+    return PRIVATE_IPV4_RANGES.some((range) => address.match(range));
   }
   if (family === 6) {
-    const address = new Address6(ip);
-    if (PRIVATE_IPV6_RANGES.some((range) => address.isInSubnet(range))) return true;
-    if (address.isInSubnet(new Address6("::ffff:0:0/96"))) {
-      try {
-        return isPrivateOrReservedIp(address.to4().correctForm());
-      } catch {
-        return true;
-      }
-    }
+    const address = ipaddr.IPv6.parse(ip);
+    if (PRIVATE_IPV6_RANGES.some((range) => address.match(range))) return true;
+    if (address.isIPv4MappedAddress()) return isPrivateOrReservedIp(address.toIPv4Address().toString());
   }
   return false;
 }

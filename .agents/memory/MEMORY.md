@@ -84,3 +84,4 @@
 - [MySQL timestamp timezone](mysql-timestamp-timezone.md) — force MySQL sessions to UTC and display user-facing dates in the user's real device timezone.
 - [MySQL crypto-address FK compatibility](mysql-crypto-address-fk.md) — keep saved-address user IDs indexed without a physical FK; legacy Plesk user schemas can reject the constraint.
 - [Isolated preview capture](isolated-preview-capture.md) — app screenshots target the main app, not the mockup artifact route; use the canvas iframe for isolated previews.
+- [CommonJS server bundle loading](cjs-server-bundle-loading.md) — the production server bundle is CommonJS; ESM-only `import.meta` require paths can work in dev but fail after bundling.

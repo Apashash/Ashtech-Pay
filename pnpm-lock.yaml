@@ -113,9 +113,6 @@ importers:
       '@types/leaflet':
         specifier: ^1.9.22
         version: 1.9.22
-      '@types/multer':
-        specifier: ^2.2.0
-        version: 2.2.0
       '@types/web-push':
         specifier: ^3.6.4
         version: 3.6.4
@@ -140,6 +137,9 @@ importers:
       brace-expansion:
         specifier: ^2.1.4
         version: 2.1.7
+      busboy:
+        specifier: ^1.6.0
+        version: 1.6.0
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -158,9 +158,6 @@ importers:
       date-fns:
         specifier: ^3.6.0
         version: 3.6.0
-      dompurify:
-        specifier: ^3.4.13
-        version: 3.4.16
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.3(@types/pg@8.23.1)(mysql2@3.24.4(@types/node@20.19.43))(pg@8.23.0)
@@ -191,9 +188,9 @@ importers:
       input-otp:
         specifier: ^1.5.0
         version: 1.5.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      ip-address:
-        specifier: ^10.3.1
-        version: 10.7.2
+      ipaddr.js:
+        specifier: ^1.9.1
+        version: 1.9.1
       jspdf:
         specifier: ^4.2.1
         version: 4.2.1
@@ -206,9 +203,6 @@ importers:
       memorystore:
         specifier: ^1.6.8
         version: 1.6.8
-      multer:
-        specifier: ^2.3.0
-        version: 2.4.0
       mysql2:
         specifier: ^3.24.4
         version: 3.24.4(@types/node@20.19.43)
