@@ -7,9 +7,9 @@ The `countries` table (used by `storage.getActiveCountries()` → `/api/transfer
 
 AshTech Pay uses distinct per-country wallet codes for countries sharing the CFA franc; country ISO currencies and internal wallet codes are not interchangeable. The current mapping is defined in `CURRENCY_ZONE`.
 
-**Why:** Collapsing CFA countries to generic XAF/XOF makes wallet selection and withdrawal debit the wrong balance. The Gabon withdrawal flow was checking XAF while the user's funds were in XAFG.
+**Why:** Collapsing CFA countries to generic XAF/XOF makes wallet selection and withdrawal debit the wrong balance. The Gabon withdrawal flow was checking XAF while the user's funds were in XAFG. Treating `sameCfaFamily()` as wallet identity can also misroute a refund: a Benin payout may debit secondary XOFB but credit the user's primary XOF-family balance.
 
-**How to apply:** Whenever debugging a currency/wallet-selection mismatch, check `CURRENCY_ZONE` and the country record before assuming the provider is at fault. Keep the UI wallet display, withdrawal debit/refund logic, and transaction currency aligned; use the generic ISO code only when calling the external provider.
+**How to apply:** Whenever debugging a currency/wallet-selection mismatch, check `CURRENCY_ZONE` and the country record before assuming the provider is at fault. Keep the UI wallet display, withdrawal debit/refund logic, and transaction currency aligned. For wallet mutations, use the exact persisted wallet currency that was debited; `sameCfaFamily()` establishes value equivalence, not wallet identity. Use the generic ISO code only when calling the external provider.
 
 Country-specific deposit and withdrawal limits use the same internal wallet currency as the destination. For public payment links, validate the explicitly submitted display currency first, then convert to that country wallet before comparing the limit.
 
