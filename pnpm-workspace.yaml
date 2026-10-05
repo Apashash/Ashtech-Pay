@@ -1,4 +1,4 @@
-onlyBuiltDependencies:
-  - bufferutil
-  - core-js
-  - esbuild
+allowBuilds:
+  bufferutil: true
+  core-js: true
+  esbuild: true

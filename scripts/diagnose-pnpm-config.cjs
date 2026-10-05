@@ -17,9 +17,33 @@ if (fs.existsSync(packageJsonPath)) {
   console.log(`packageManager field: ${packageJson.packageManager || "not set"}`);
 }
 
+const workspaceManifestPath = path.join(cwd, "pnpm-workspace.yaml");
+if (fs.existsSync(workspaceManifestPath)) {
+  const lines = fs.readFileSync(workspaceManifestPath, "utf8").split(/\r?\n/);
+  const approvedBuilds = [];
+  let readingAllowBuilds = false;
+
+  for (const line of lines) {
+    if (/^allowBuilds:\s*$/.test(line)) {
+      readingAllowBuilds = true;
+      continue;
+    }
+    if (!readingAllowBuilds) continue;
+    if (!line.trim() || /^\s*#/.test(line)) continue;
+    const entry = line.match(/^\s+([^:#]+):\s*(true|false)\s*(?:#.*)?$/);
+    if (entry) {
+      approvedBuilds.push(`${entry[1].trim()}=${entry[2]}`);
+      continue;
+    }
+    if (!/^\s/.test(line)) break;
+  }
+
+  console.log(`workspace allowBuilds: ${approvedBuilds.length ? approvedBuilds.join(", ") : "(unset)"}`);
+}
+
 const commands = [
   { label: "pnpm version", args: ["--version"] },
-  { label: "onlyBuiltDependencies", args: ["config", "get", "onlyBuiltDependencies", "--json"] },
+  { label: "onlyBuiltDependencies (legacy)", args: ["config", "get", "onlyBuiltDependencies", "--json"] },
   { label: "ignoredBuiltDependencies", args: ["config", "get", "ignoredBuiltDependencies", "--json"] },
   { label: "strictDepBuilds", args: ["config", "get", "strictDepBuilds", "--json"] },
   { label: "ignoreScripts", args: ["config", "get", "ignoreScripts", "--json"] },
