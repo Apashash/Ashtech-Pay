@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 import {
   AFRIBAPAY_MAX_PAYIN_AMOUNT,
   AFRIBAPAY_MIN_PAYIN_AMOUNT,
+  buildAfribaPayStatusUrl,
   classifyAfribaPayinStatus,
   classifyAfribaPayoutStatus,
   isRetryableAfribaOtpRejection,
@@ -34,6 +35,19 @@ test("AfribaPay webhook signature validates the exact raw body", () => {
 });
 
 test("AfribaPay webhook parser keeps reference_id and terminal statuses", () => {
+  const documentedPayoutCallback = parseAfribaPayWebhook({
+    order_id: "merchant-order-1",
+    transaction_id: "POM123",
+    reference_id: "merchant-ref",
+    status: "SUCCESS",
+  });
+  assert.deepEqual(documentedPayoutCallback, {
+    order_id: "merchant-order-1",
+    transaction_id: "POM123",
+    reference_id: "merchant-ref",
+    status: "completed",
+  });
+
   const parsed = parseAfribaPayWebhook({
     data: {
       reference_id: "merchant-ref",
@@ -58,6 +72,17 @@ test("AfribaPay payout HTTP 404 and NOT_FOUND are non-final", () => {
   assert.equal(classifyAfribaPayoutStatus(200, "ERROR"), "pending");
   assert.equal(classifyAfribaPayoutStatus(200, "FAILED"), "failed");
   assert.equal(classifyAfribaPayoutStatus(200, "SUCCESS"), "completed");
+});
+
+test("AfribaPay payout status uses the documented shared API host and safely encodes order_id", () => {
+  assert.equal(
+    buildAfribaPayStatusUrl("payout/id 123"),
+    "https://api.afribapay.com/v1/status?order_id=payout%2Fid+123",
+  );
+  assert.equal(
+    buildAfribaPayStatusUrl("POM123", "transaction_id"),
+    "https://api.afribapay.com/v1/status?transaction_id=POM123",
+  );
 });
 
 test("AfribaPay payout retry polls the provider-returned order_id, not the prior attempt", () => {

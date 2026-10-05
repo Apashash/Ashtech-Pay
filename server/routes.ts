@@ -6289,6 +6289,7 @@ export async function registerRoutes(
         let payoutResult: {
           success: boolean;
           transaction_id?: string;
+          order_id?: string;
           message?: string;
           status?: string;
           providerStatus?: number;
@@ -6322,12 +6323,15 @@ export async function registerRoutes(
             reference_id: reference,
             notify_url: callbackUrl,
           });
+          const activeOrderId = afribaResult.success
+            ? resolveAfribaPayPayoutOrderId(afribaResult.order_id, reference)
+            : afribaResult.order_id;
           if (afribaResult.success) {
-            // Persist submitted order_id (= reference) as externalReference so restart
-            // recovery uses the same value the poller checks with (order_id, not transaction_id).
-            await storage.updateTransactionExternalReference(transaction.id, reference);
+            // Keep both restart recovery and the live poller on the provider's
+            // active order_id, falling back to our submitted ID when omitted.
+            await storage.updateTransactionExternalReference(transaction.id, activeOrderId!);
           }
-          payoutResult = afribaResult;
+          payoutResult = { ...afribaResult, order_id: activeOrderId };
 
         } else if (transferProvider === "pixpay") {
           const cashInServiceId = getPixPayServiceId(operator?.name || "", countryCode, "cash_in");
@@ -6398,10 +6402,10 @@ export async function registerRoutes(
 
         if (payoutResult.success) {
           console.log(`[Transfer] Payout submitted OK: ${reference} (ext: ${payoutResult.transaction_id})`);
-          // AfribaPay: poll by submitted order_id (= reference), NOT by transaction_id.
+          // AfribaPay status lookups use the active order_id, never transaction_id.
           // PixPay: poll by provider transaction_id when available.
           const transferPollerRef = transferProvider === "afribapay"
-            ? reference
+            ? resolveAfribaPayPayoutOrderId(payoutResult.order_id, reference)
             : (payoutResult.transaction_id || reference);
           addPendingPayout({
             transactionId: transaction.id,
@@ -14277,7 +14281,7 @@ export async function registerRoutes(
 
       console.log(`[Admin] Payout parameters resolved for transaction=${transaction.id}`);
 
-          let payoutResult: { success: boolean; transaction_id?: string; message?: string } = {
+          let payoutResult: { success: boolean; transaction_id?: string; order_id?: string; message?: string } = {
             success: false,
             message: "Fournisseur de paiement non supporté",
           };
@@ -14318,14 +14322,13 @@ export async function registerRoutes(
             });
             if (afribaResult.success) {
               providerPayoutSubmitted = true;
-              submittedPayoutReference = payoutRef;
-              // Persist submitted order_id (= payoutRef) so restart recovery polls
-              // the right AfribaPay reference (not transaction_id, which status API ignores).
-              await storage.updateTransactionExternalReference(transaction.id, payoutRef);
+              pollerRef = resolveAfribaPayPayoutOrderId(afribaResult.order_id, payoutRef);
+              submittedPayoutReference = pollerRef;
+              // Persist the active provider order_id for both restart recovery and status polling.
+              await storage.updateTransactionExternalReference(transaction.id, pollerRef);
             }
             payoutResult  = afribaResult;
             pollerProvider = "afribapay";
-            pollerRef      = payoutRef; // AfribaPay is queried by order_id
 
           }
 
@@ -20560,7 +20563,7 @@ export async function registerRoutes(
         await persistProviderTransactionReference(transaction.id, result);
         if (result.success) {
           const pollReference = provider === "afribapay"
-            ? providerReference
+            ? resolveAfribaPayPayoutOrderId(result.order_id, providerReference)
             : provider === "pawapay"
               ? providerReference
               : result.transaction_id || providerReference;

@@ -1,10 +1,10 @@
 ---
 name: AfribaPay documentation drift
-description: Durable handling for conflicting AfribaPay callback-signature and PAYIN-limit documentation.
+description: Current AfribaPay callback signature contract and conflicting PAYIN limits.
 ---
 
-AfribaPay’s public documentation has described more than one HMAC input format for `AfribaPAY-Sign` and has published different PAYIN maximums. Until the provider confirms one contract, accept only HMACs computed with the server-side credential over the raw body or the documented timestamp-prefixed variants, and enforce the lower 2,000,000 ceiling.
+The current public Postman collection specifies HMAC-SHA256 over the exact raw request body in `AfribaPAY-Sign`, using the API key/password. It does not specify timestamp-prefixed input; keep timestamp-prefixed verification only as compatibility for explicitly timestamped legacy callbacks. AfribaPay has published different PAYIN maximums, so enforce the lower 2,000,000 ceiling until confirmed.
 
-**Why:** Choosing the higher limit or one signature example alone can either send requests the provider rejects or reject valid provider callbacks.
+**Why:** A current public callback example now provides a concrete raw-body signature contract, while the PAYIN limit remains conflicting. The stricter PAYIN cap avoids sending amounts that another published limit rejects.
 
-**How to apply:** Revisit this decision when AfribaPay supplies a definitive production callback example and account-specific PAYIN limits; then narrow the accepted signature format and update the validation tests together.
+**How to apply:** Verify the public collection before changing signature behavior; sign the untouched raw body and compare in constant time. Revisit the PAYIN cap only when AfribaPay confirms the production limit for the account, then update validation and tests together.

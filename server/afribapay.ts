@@ -5,7 +5,8 @@ import { encryptField, decryptField, isFieldEncryptionConfigured } from "./field
 import { appPath } from "./appPaths";
 
 // ─── AfribaPay Production Credentials ────────────────────────────────────────
-const AFRIBAPAY_PAYIN_URL   = "https://api.afribapay.com";
+const AFRIBAPAY_API_URL     = "https://api.afribapay.com";
+const AFRIBAPAY_PAYIN_URL   = AFRIBAPAY_API_URL;
 const AFRIBAPAY_PAYOUT_URL  = "https://api-payout.afribapay.com";
 
 const TOKEN_FILE = appPath(".local", "afribapay_token.json");
@@ -350,9 +351,8 @@ export function verifyAfribaPayWebhookSignature(
   const signedMessages = [bodyBuffer];
   if (timestamp?.trim()) {
     const timestampValue = timestamp.trim();
-    // AfribaPay's published callback examples use both raw-body and
-    // timestamp-prefixed signing descriptions. Keep all accepted variants
-    // server-side and require the same secret/HMAC for each one.
+    // The current public docs specify raw-body signing. Retain timestamp-prefixed
+    // forms only for explicitly timestamped legacy callbacks.
     signedMessages.push(
       Buffer.from(`${timestampValue}${bodyBuffer.toString("utf8")}`),
       Buffer.from(`${timestampValue}.${bodyBuffer.toString("utf8")}`),
@@ -511,7 +511,7 @@ export interface AfribaPayoutParams {
   order_id: string;
   reference_id?: string;
   lang?: string;
-  notify_url?: string;
+  notify_url: string;
 }
 
 export interface AfribaPayoutResult {
@@ -546,7 +546,7 @@ export async function initiateAfribaPayout(params: AfribaPayoutParams): Promise<
       merchant_key: merchantKey,
       reference_id: params.reference_id || params.order_id,
       lang: params.lang || "fr",
-      notify_url: params.notify_url || "",
+      notify_url: params.notify_url,
       return_url: "",
       cancel_url: "",
     };
@@ -677,14 +677,24 @@ export function classifyAfribaPayoutStatus(
   return "pending";
 }
 
+/** The public docs use the shared API host for transaction status, including order_id lookups. */
+export function buildAfribaPayStatusUrl(
+  identifier: string,
+  type: "order_id" | "transaction_id" = "order_id",
+): string {
+  const url = new URL(`${AFRIBAPAY_API_URL}/v1/status`);
+  url.searchParams.set(type, identifier);
+  return url.toString();
+}
+
 // ─── Check payout status (withdrawals / transfers) ────────────────────────────
 export async function checkAfribaPayoutStatus(
   identifier: string,
   type: "order_id" | "transaction_id" = "order_id"
 ): Promise<{ status: "completed" | "failed" | "pending"; raw?: any }> {
   try {
-    const param = type === "transaction_id" ? `transaction_id=${identifier}` : `order_id=${identifier}`;
-    const url = `${AFRIBAPAY_PAYOUT_URL}/v1/status?${param}`;
+    const url = buildAfribaPayStatusUrl(identifier, type);
+    const param = `${type}=${identifier}`;
     const { res, data } = await fetchAfribaPayJson(url);
 
     const d = data.data;
