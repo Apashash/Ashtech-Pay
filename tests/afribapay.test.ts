@@ -8,6 +8,7 @@ import {
   classifyAfribaPayoutStatus,
   isRetryableAfribaOtpRejection,
   parseAfribaPayWebhook,
+  resolveAfribaPayPayoutOrderId,
   resolveAfribaPayPayinTransactionId,
   shouldCheckAfribaPayOrderIdFallback,
   validateAfribaPayinAmount,
@@ -57,6 +58,17 @@ test("AfribaPay payout HTTP 404 and NOT_FOUND are non-final", () => {
   assert.equal(classifyAfribaPayoutStatus(200, "ERROR"), "pending");
   assert.equal(classifyAfribaPayoutStatus(200, "FAILED"), "failed");
   assert.equal(classifyAfribaPayoutStatus(200, "SUCCESS"), "completed");
+});
+
+test("AfribaPay payout retry polls the provider-returned order_id, not the prior attempt", () => {
+  assert.equal(
+    resolveAfribaPayPayoutOrderId(" AFRIBA-NEW-ORDER ", "ASHPAY-ORDER-RNEW"),
+    "AFRIBA-NEW-ORDER",
+  );
+  assert.equal(
+    resolveAfribaPayPayoutOrderId(undefined, "ASHPAY-ORDER-RNEW"),
+    "ASHPAY-ORDER-RNEW",
+  );
 });
 
 test("AfribaPay pay-in lookup errors and missing IDs remain pending", () => {

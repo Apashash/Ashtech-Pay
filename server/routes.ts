@@ -95,7 +95,7 @@ import {
   sandboxStatusLabel,
   type SandboxCollectStatus,
 } from "./sandboxTestNumbers";
-import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, checkAfribaPayStatus, checkAfribaPayoutStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, getAfribaPayOtpInfo, confirmAfribaPayOtp, isAfribaPayOtpRequiredMessage, isRetryableAfribaOtpRejection, verifyAfribaPayWebhookSignature, validateAfribaPayinAmount } from "./afribapay";
+import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, resolveAfribaPayPayoutOrderId, checkAfribaPayStatus, checkAfribaPayoutStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, getAfribaPayOtpInfo, confirmAfribaPayOtp, isAfribaPayOtpRequiredMessage, isRetryableAfribaOtpRejection, verifyAfribaPayWebhookSignature, validateAfribaPayinAmount } from "./afribapay";
 import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, initiatePixPayPayout, checkPixPayStatus, computePixPayFees, parsePixPayWebhook, PIXPAY_CURRENCY_MAP, PIXPAY_SUPPORTED_COUNTRIES, detectPixPayFlowType, getPixPayServiceId, PIXPAY_OTP_USSD_CODES } from "./pixpay";
 import { assertPawaPayProviderActive, classifyPawaPayControlledTransaction, createPawaPayDeposit, createPawaPayId, createPawaPayPayout, createPawaPayPaymentPage, getPawaPayActiveConfiguration, getPawaPayDeposit, getPawaPayPayout, resolvePawaPayOperationConfiguration, PAWAPAY_CUSTOMER_MESSAGE } from "./pawapay";
 import { addPendingPayment, removePendingPayment, expireCryptoPaymentIfNeeded } from "./paymentPoller";
@@ -15971,6 +15971,7 @@ export async function registerRoutes(
         success: boolean;
         transaction_id?: string;
         transactionId?: string;
+        order_id?: string;
         message?: string;
         status?: string;
         providerStatus?: number;
@@ -16106,8 +16107,9 @@ export async function registerRoutes(
           notify_url: callbackUrl,
         });
         if (result.success) {
-          // AfribaPay status API uses order_id for lookup.
-          pollerRef = afribaAdminRetryRef;
+          // Prefer AfribaPay's newly returned order_id; never reuse the previous attempt's ID.
+          pollerRef = resolveAfribaPayPayoutOrderId(result.order_id, afribaAdminRetryRef);
+          await storage.updateTransactionExternalReference(txId, pollerRef);
         }
         payoutResult = result;
 
@@ -22575,7 +22577,7 @@ export async function registerRoutes(
           try {
             let insufficientProviderBalance = false;
             let providerError: string | undefined;
-            let payoutResult: { success: boolean; transaction_id?: string; message?: string };
+            let payoutResult: { success: boolean; transaction_id?: string; order_id?: string; message?: string };
             // pollerRef must match the actual reference submitted to the provider
             // so the poller status check finds the right transaction.
             let telegramPollerRef = txRef;
@@ -22599,6 +22601,8 @@ export async function registerRoutes(
 
               // Use a unique retry ref so AfribaPay doesn't reject "reference already exists"
               const afribaRetryRef = `${txRef}-R${Date.now().toString(36)}`;
+              // Keep recovery on this new attempt if the process stops during submission.
+              await storage.updateTransactionExternalReference(tx.id, afribaRetryRef);
               const afribaResult = await initiateAfribaPayout({
                 operator: afribapayOperatorCode,
                 country: countryCode,
@@ -22610,10 +22614,9 @@ export async function registerRoutes(
                 notify_url: callbackUrl,
               });
               if (afribaResult.success) {
-                // Poll by submitted order_id — AfribaPay status API uses order_id.
-                // Persist it as externalReference so restart recovery finds the right ref.
-                telegramPollerRef = afribaRetryRef;
-                await storage.updateTransactionExternalReference(tx.id, afribaRetryRef);
+                // Prefer AfribaPay's returned order_id; fall back only to this fresh retry ID.
+                telegramPollerRef = resolveAfribaPayPayoutOrderId(afribaResult.order_id, afribaRetryRef);
+                await storage.updateTransactionExternalReference(tx.id, telegramPollerRef);
               }
               payoutResult = afribaResult;
 

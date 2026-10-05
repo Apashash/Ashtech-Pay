@@ -116,6 +116,17 @@ retry, leaving AshTechPay pending even when the new provider has confirmed.
 and keep polling unresolved statuses indefinitely; use the user's current
 three-minute/ten-minute then thirty-minute cadence.
 
+For AfribaPay payout retries, use the `order_id` returned by the successful
+initiation response as the active status-lookup reference. Persist the fresh
+submitted retry ID before sending, then replace it with AfribaPay's returned
+ID; never query the previous attempt's ID.
+
+**Why:** the provider may assign a new order ID to a retry, and polling the old
+attempt can leave the AshTechPay transaction pending after the new payout settles.
+
+**How to apply:** prefer the returned provider `order_id`; if the response omits
+it, fall back only to the unique ID submitted for this retry.
+
 **Why:** the user explicitly chose immediate refunds for admin-forced payout
 failures after being told a late provider payment could result in a double
 payment. This is an intentional admin-only exception to the automatic

@@ -525,6 +525,13 @@ export interface AfribaPayoutResult {
   raw?: any;
 }
 
+export function resolveAfribaPayPayoutOrderId(
+  providerOrderId: string | null | undefined,
+  submittedOrderId: string,
+): string {
+  return providerOrderId?.trim() || submittedOrderId.trim();
+}
+
 export async function initiateAfribaPayout(params: AfribaPayoutParams): Promise<AfribaPayoutResult> {
   try {
     const { merchantKey } = getAfribaPayCredentials();
