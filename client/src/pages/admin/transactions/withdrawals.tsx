@@ -377,9 +377,11 @@ export default function AdminWithdrawals() {
                         >
                           {tx.type === "withdrawal"
                             ? getPaymentAddress(tx)
-                            : tx.recipientName || (tx.type === "transfer_in" ? "Réception interne" : "Envoi")}
+                            : tx.type === "transfer_in"
+                              ? (tx.currency || "XAF").toUpperCase()
+                              : tx.recipientName || "Envoi"}
                         </span>
-                        {tx.type !== "withdrawal" && (tx.recipientPhone || tx.recipientCountry) && (
+                        {tx.type === "transfer_out" && (tx.recipientPhone || tx.recipientCountry) && (
                           <span className="block text-xs text-muted-foreground">
                             {tx.recipientPhone || tx.recipientCountry}
                           </span>
