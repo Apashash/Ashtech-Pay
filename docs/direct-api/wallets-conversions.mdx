@@ -1,0 +1,128 @@
+---
+title: "Wallets et conversions"
+description: "Consultez les soldes et configurez les conversions immédiates ou automatiques."
+---
+
+Chaque requête ci-dessous utilise la clé API Bearer. `user_id` doit être l'identifiant du profil AshTech Pay propriétaire de cette clé. Un identifiant manquant renvoie `400 user_id_required`; un identifiant qui ne correspond pas à la clé renvoie `403 user_id_mismatch`.
+
+## Consulter les soldes
+
+```http
+GET https://www.ashtechpay.com/v1/wallets?user_id=VOTRE_USER_ID
+Authorization: Bearer ASHTECH_API_KEY
+```
+
+La réponse comprend le wallet principal et les wallets secondaires. `wallet_currency` est le code exact du wallet utilisé en interne (par exemple `XAFG`, `XOFC` ou `XOFT`); `currency` est son code ISO regroupé (`XAF` ou `XOF`).
+
+```json
+{
+  "user_id": "VOTRE_USER_ID",
+  "wallets": [
+    {
+      "wallet_currency": "XAF",
+      "currency": "XAF",
+      "balance": 12500,
+      "is_primary": true
+    },
+    {
+      "wallet_currency": "XOFT",
+      "currency": "XOF",
+      "balance": 8400,
+      "is_primary": false
+    }
+  ]
+}
+```
+
+## Demander une conversion
+
+```http
+POST https://www.ashtechpay.com/v1/conversions
+Authorization: Bearer ASHTECH_API_KEY
+Content-Type: application/json
+```
+
+```json
+{
+  "user_id": "VOTRE_USER_ID",
+  "from_currency": "XOFT",
+  "destination_country_code": "CM",
+  "amount": "5000",
+  "reference": "commande-2026-10025",
+  "notify_url": "https://example.com/webhooks/ashtechpay"
+}
+```
+
+- `from_currency` doit être le code exact du wallet à débiter.
+- AshTech Pay résout `destination_country_code` vers le wallet exact du pays; ne passez pas un code cible choisi par le client.
+- `reference` est obligatoire et sert à rendre les reprises idempotentes. Une même référence avec des paramètres différents renvoie `409 reference_conflict`.
+- `notify_url` est facultative et doit être une URL HTTPS publique. Les soldes insuffisants et les conversions sous le minimum configuré sont rejetés avant débit.
+
+Une réponse `202` signifie que la demande est enregistrée et que le montant source a été débité. Le montant cible est crédité après le traitement asynchrone.
+
+```json
+{
+  "transaction_id": "uuid",
+  "conversion_id": "uuid",
+  "reference": "ASHPAY-CONV-...",
+  "merchant_reference": "commande-2026-10025",
+  "status": "pending",
+  "from_amount": 5000,
+  "from_currency": "XOF",
+  "from_wallet_currency": "XOFT",
+  "to_amount": 4875,
+  "to_currency": "XAF",
+  "to_wallet_currency": "XAF",
+  "fee_amount": 125,
+  "fee_currency": "XOF",
+  "estimated_seconds": 10
+}
+```
+
+### Suivre une conversion
+
+```http
+GET https://www.ashtechpay.com/v1/conversions/CONVERSION_ID?user_id=VOTRE_USER_ID
+Authorization: Bearer ASHTECH_API_KEY
+```
+
+Les états sont `pending`, `completed` ou `cancelled`. Une conversion annulée après création recrédite le wallet source. La même opération émet `conversion.completed` ou `conversion.failed` au webhook lorsqu'un `notify_url` est configuré.
+
+## Conversions automatiques
+
+Une règle convertit automatiquement les fonds reçus dans le wallet source choisi vers le wallet exact associé au pays cible. Une règle active maximum est autorisée par devise source.
+
+Créer une règle :
+
+```http
+POST https://www.ashtechpay.com/v1/auto-conversion-rules
+Authorization: Bearer ASHTECH_API_KEY
+Content-Type: application/json
+```
+
+```json
+{
+  "user_id": "VOTRE_USER_ID",
+  "from_currency": "XOFT",
+  "destination_country_code": "CM",
+  "notify_url": "https://example.com/webhooks/ashtechpay"
+}
+```
+
+Si le wallet source a déjà un solde, AshTech Pay tente immédiatement une première conversion. La réponse contient `initial_conversion_id` lorsqu'une demande a été créée; utilisez `GET /v1/conversions/:id?user_id=...` pour en suivre l'état. Les crédits ultérieurs dans ce wallet déclenchent la même règle.
+
+Lister les règles :
+
+```http
+GET https://www.ashtechpay.com/v1/auto-conversion-rules?user_id=VOTRE_USER_ID
+Authorization: Bearer ASHTECH_API_KEY
+```
+
+Supprimer une règle :
+
+```http
+DELETE https://www.ashtechpay.com/v1/auto-conversion-rules/RULE_ID?user_id=VOTRE_USER_ID
+Authorization: Bearer ASHTECH_API_KEY
+```
+
+La suppression empêche les conversions automatiques futures; elle n'annule pas une conversion déjà en attente.

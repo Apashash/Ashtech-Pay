@@ -85,6 +85,7 @@ const response = await fetch("https://www.ashtechpay.com/v1/crypto/collect", {
     "Content-Type": "application/json",
   },
   body: JSON.stringify({
+    user_id: "VOTRE_USER_ID",
     amount: "25",
     currency: "USDT",
     asset_code: "USDT.TRC20",
@@ -115,6 +116,7 @@ response = requests.post(
         "Content-Type": "application/json",
     },
     json={
+        "user_id": "VOTRE_USER_ID",
         "amount": "25",
         "currency": "USDT",
         "asset_code": "USDT.TRC20",
@@ -139,6 +141,7 @@ curl -X POST https://www.ashtechpay.com/v1/crypto/collect \
   -H "Authorization: Bearer $ASHTECH_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
+    "user_id": "VOTRE_USER_ID",
     "amount": "25",
     "currency": "USDT",
     "asset_code": "USDT.TRC20",
@@ -160,6 +163,7 @@ curl -X POST https://www.ashtechpay.com/v1/crypto/collect \
 <?php
 
 $payload = [
+    "user_id" => "VOTRE_USER_ID",
     "amount" => "25",
     "currency" => "USDT",
     "asset_code" => "USDT.TRC20",
@@ -242,7 +246,7 @@ est retourné sous `merchant_reference`. Un nouvel appel avec la même
 `idempotent_replay: true`. Dans ce cas, `status` reflète l'état déjà enregistré
 et peut différer de `pending`. Si deux requêtes arrivent pendant que la
 première crée encore l'adresse, la seconde peut renvoyer `202 pending` sans
-adresse. Consultez alors `GET /v1/transaction/{transaction_id}` pour récupérer
+adresse. Consultez alors `GET /v1/transaction/{transaction_id}?user_id=VOTRE_USER_ID` pour récupérer
 l'adresse dès qu'elle est prête; ne créez pas une nouvelle référence pour
 relancer le paiement.
 

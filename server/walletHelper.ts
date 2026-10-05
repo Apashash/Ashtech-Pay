@@ -214,12 +214,12 @@ export async function maybeAutoConvert(
   userId: string,
   creditedCurrency: string,
   creditedAmount: number
-): Promise<void> {
+): Promise<string | null> {
   const rule = await storage.getAutoConversionRuleByCurrency(userId, creditedCurrency);
-  if (!rule || rule.toCurrency === creditedCurrency) return;
+  if (!rule || rule.toCurrency === creditedCurrency) return null;
 
   const user = await storage.getUser(userId);
-  if (!user) return;
+  if (!user) return null;
   const userPrimary = user.preferredCurrency || "XAF";
 
   // Re-check actual available balance for the credited currency (in case of
@@ -232,7 +232,7 @@ export async function maybeAutoConvert(
     available = w ? parseFloat(w.balance) : 0;
   }
   const amountToConvert = Math.min(creditedAmount, available);
-  if (amountToConvert <= 0) return;
+  if (amountToConvert <= 0) return null;
 
   const pairKey = getConversionPairKey(creditedCurrency, rule.toCurrency);
   const PAIR_DEFAULTS: Record<string, [number, number]> = {
@@ -261,63 +261,65 @@ export async function maybeAutoConvert(
   const minimumXaf = await getConversionMinimumXaf();
   if (convertToXAF(amountToConvert, creditedCurrency, fxRates) < minimumXaf - 1e-7) {
     console.log(`[AutoConversion] Skipping ${userId} ${creditedCurrency}->${rule.toCurrency}: amount is below ${minimumXaf} XAF minimum`);
-    return;
+    return null;
   }
   const amountInXAF = convertToXAF(amountAfterFee, creditedCurrency, fxRates);
   const receivedAmount = convertFromXAF(amountInXAF, rule.toCurrency, fxRates);
 
   if (!isFinite(receivedAmount) || receivedAmount <= 0) {
     console.error(`[AutoConversion] Invalid computed amount for user ${userId}: ${creditedCurrency}->${rule.toCurrency}`);
-    return;
+    return null;
   }
 
   const delaySeconds = Math.floor(Math.random() * (15 - 5 + 1)) + 5;
   const executeAt = Date.now() + delaySeconds * 1000;
   const reference = generateAutoConversionReference();
-
-  const transaction = await storage.createTransaction({
-    userId,
-    type: "conversion",
-    amount: amountToConvert.toFixed(2),
-    currency: creditedCurrency,
-    status: "pending",
-    description: `Conversion automatique ${amountToConvert.toFixed(2)} ${creditedCurrency} → ${receivedAmount.toFixed(2)} ${rule.toCurrency} (règle auto)`,
-    reference,
-    feeAmount: totalFeeAmount.toFixed(2),
-    ashtechFeeAmount: ashtechFeeAmount.toFixed(2),
-    totalAmount: receivedAmount.toFixed(2),
-    recipientCountry: rule.toCurrency,
-  });
-
-  const convReq = await storage.createConversionRequest({
-    userId,
-    fromCurrency: creditedCurrency,
-    toCurrency: rule.toCurrency,
-    fromAmount: amountToConvert.toFixed(2),
-    toAmount: receivedAmount.toFixed(2),
-    status: "pending",
-    notes: JSON.stringify({
-      executeAt,
-      txId: transaction.id,
-      feeAmount: totalFeeAmount.toFixed(2),
-      feePercent: `${providerFeePercent}% opérateurs + ${ashtechFeePercent}% Ashtech = ${totalFeePercent}`,
-      fromAmount: amountToConvert.toFixed(2),
-      toAmount: receivedAmount.toFixed(2),
-      auto: true,
-    }),
-  });
-
+  const transactionId = crypto.randomUUID();
+  const conversionId = crypto.randomUUID();
+  let transaction: any;
+  let convReq: any;
   try {
-    if (creditedCurrency === userPrimary) {
-      await storage.updateUserBalance(userId, -amountToConvert);
-    } else {
-      await storage.upsertWallet(userId, creditedCurrency, -amountToConvert);
-    }
+    ({ transaction, conversionRequest: convReq } = await storage.createConversionAndDebit(
+      {
+        id: transactionId,
+        userId,
+        type: "conversion",
+        amount: amountToConvert.toFixed(2),
+        currency: creditedCurrency,
+        status: "pending",
+        description: `Conversion automatique ${amountToConvert.toFixed(2)} ${creditedCurrency} → ${receivedAmount.toFixed(2)} ${rule.toCurrency} (règle auto)`,
+        reference,
+        feeAmount: totalFeeAmount.toFixed(2),
+        ashtechFeeAmount: ashtechFeeAmount.toFixed(2),
+        totalAmount: receivedAmount.toFixed(2),
+        recipientCountry: rule.toCurrency,
+        ...(rule.notifyUrl ? { source: "api", notifyUrl: rule.notifyUrl } : {}),
+        ...(rule.notifyUrl ? { metadata: { conversionId, automatic: true } } : {}),
+      } as any,
+      {
+        id: conversionId,
+        userId,
+        fromCurrency: creditedCurrency,
+        toCurrency: rule.toCurrency,
+        fromAmount: amountToConvert.toFixed(2),
+        toAmount: receivedAmount.toFixed(2),
+        status: "pending",
+        notes: JSON.stringify({
+          executeAt,
+          txId: transactionId,
+          feeAmount: totalFeeAmount.toFixed(2),
+          feePercent: `${providerFeePercent}% opérateurs + ${ashtechFeePercent}% Ashtech = ${totalFeePercent}`,
+          fromAmount: amountToConvert.toFixed(2),
+          toAmount: receivedAmount.toFixed(2),
+          auto: true,
+        }),
+      } as any,
+      amountToConvert,
+      creditedCurrency,
+    ));
   } catch (debitErr: any) {
-    await storage.updateConversionRequest(convReq.id, { status: "cancelled" }).catch(() => {});
-    await storage.updateTransactionStatus(transaction.id, "failed").catch(() => {});
-    console.error(`[AutoConversion] Debit failed for user ${userId}:`, debitErr.message);
-    return;
+    console.error(`[AutoConversion] Atomic debit/request failed for user ${userId}:`, debitErr.message);
+    return null;
   }
 
   await storage.createUserNotification({
@@ -326,7 +328,7 @@ export async function maybeAutoConvert(
     message: `Vous avez reçu ${amountToConvert.toFixed(2)} ${creditedCurrency}. Conversion automatique vers ${rule.toCurrency} en cours.`,
     transactionId: transaction.id,
     type: "info",
-  });
+  }).catch((error) => console.error("[AutoConversion] Notification failed:", error?.message || error));
 
   console.log(`[AutoConversion] ${reference} — user ${userId}: ${amountToConvert} ${creditedCurrency} → ${receivedAmount.toFixed(2)} ${rule.toCurrency} in ${delaySeconds}s`);
 
@@ -344,4 +346,5 @@ export async function maybeAutoConvert(
     estimatedSeconds: delaySeconds,
     conversionId: convReq.id,
   }).catch(() => {});
+  return convReq.id;
 }

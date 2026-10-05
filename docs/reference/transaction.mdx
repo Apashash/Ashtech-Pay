@@ -4,7 +4,7 @@ description: "Consultez le statut d'une transaction."
 ---
 
 ```http
-GET https://www.ashtechpay.com/v1/transaction/{transaction_id}
+GET https://www.ashtechpay.com/v1/transaction/{transaction_id}?user_id=VOTRE_USER_ID
 ```
 
 <Tabs>
@@ -12,7 +12,7 @@ GET https://www.ashtechpay.com/v1/transaction/{transaction_id}
 
 ```javascript
 const response = await fetch(
-  "https://www.ashtechpay.com/v1/transaction/TRANSACTION_ID",
+  "https://www.ashtechpay.com/v1/transaction/TRANSACTION_ID?user_id=VOTRE_USER_ID",
   {
     headers: {
       Authorization: `Bearer ${process.env.ASHTECH_API_KEY}`,
@@ -31,7 +31,7 @@ import os
 import requests
 
 response = requests.get(
-    "https://www.ashtechpay.com/v1/transaction/TRANSACTION_ID",
+    "https://www.ashtechpay.com/v1/transaction/TRANSACTION_ID?user_id=VOTRE_USER_ID",
     headers={"Authorization": f"Bearer {os.environ['ASHTECH_API_KEY']}"},
 )
 transaction = response.json()
@@ -41,7 +41,7 @@ transaction = response.json()
   <Tab title="cURL">
 
 ```bash
-curl https://www.ashtechpay.com/v1/transaction/TRANSACTION_ID \
+curl "https://www.ashtechpay.com/v1/transaction/TRANSACTION_ID?user_id=VOTRE_USER_ID" \
   -H "Authorization: Bearer $ASHTECH_API_KEY"
 ```
 
@@ -51,7 +51,7 @@ curl https://www.ashtechpay.com/v1/transaction/TRANSACTION_ID \
 ```php
 <?php
 
-$ch = curl_init("https://www.ashtechpay.com/v1/transaction/TRANSACTION_ID");
+$ch = curl_init("https://www.ashtechpay.com/v1/transaction/TRANSACTION_ID?user_id=VOTRE_USER_ID");
 curl_setopt_array($ch, [
     CURLOPT_RETURNTRANSFER => true,
     CURLOPT_HTTPHEADER => [
@@ -66,7 +66,7 @@ curl_close($ch);
   </Tab>
 </Tabs>
 
-Utilisez l'identifiant renvoyé par la création de paiement. Les statuts peuvent inclure :
+Utilisez l'identifiant renvoyé par la création de paiement et le `user_id` du profil AshTech Pay associé à la clé Bearer. Un `user_id` manquant renvoie `400 user_id_required`; un identifiant qui ne correspond pas au propriétaire de la clé renvoie `403 user_id_mismatch`. Les statuts peuvent inclure :
 
 - `pending` : le paiement est encore en traitement ;
 - `success` : le paiement est confirmé ;

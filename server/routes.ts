@@ -8236,54 +8236,52 @@ export async function registerRoutes(
       const delaySeconds = Math.floor(Math.random() * (15 - 5 + 1)) + 5;
       const executeAt = Date.now() + delaySeconds * 1000;
 
-      // Créer d'abord la transaction et la demande de conversion (avant tout débit)
-      // Si la création échoue, aucun argent n'est débité.
-      const transaction = await storage.createTransaction({
-        userId,
-        type: "conversion",
-        amount: parsedAmount.toFixed(2),
-        currency: fromCurrency,
-        status: "pending",
-        description: `Conversion ${parsedAmount.toFixed(2)} ${fromCurrency} → ${receivedAmount.toFixed(2)} ${toCurrency} (Frais: ${providerFeePercent}% opérateurs + ${ashtechFeePercent}% Ashtech = ${conversionFeePercent}%)`,
-        reference: generateTransactionReference("CONV"),
-        feeAmount: totalFeeAmount.toFixed(2),
-        ashtechFeeAmount: ashtechFeeAmount.toFixed(2),
-        totalAmount: receivedAmount.toFixed(2),
-        recipientCountry: toCurrency,
-      });
-
-      // Conversion request persistée AVANT le débit — le conversionPoller crédite le wallet cible
-      const convReq = await storage.createConversionRequest({
-        userId,
-        fromCurrency,
-        toCurrency,
-        fromAmount: parsedAmount.toFixed(2),
-        toAmount: receivedAmount.toFixed(2),
-        status: "pending",
-        notes: JSON.stringify({
-          executeAt,
-          txId: transaction.id,
-          feeAmount: totalFeeAmount.toFixed(2),
-          feePercent: `${providerFeePercent}% opérateurs + ${ashtechFeePercent}% Ashtech = ${conversionFeePercent}`,
-          fromAmount: parsedAmount.toFixed(2),
-          toAmount: receivedAmount.toFixed(2),
-        }),
-      });
-
-      // Débit de la source APRÈS que la demande est sauvegardée en base
-      // Ainsi, si le débit échoue, la demande peut être annulée sans perte d'argent
+      const transactionId = crypto.randomUUID();
+      const conversionId = crypto.randomUUID();
+      let transaction: Transaction;
+      let convReq: any;
       try {
-        if (fromCurrency === userPrimary) {
-          await storage.updateUserBalance(userId, -parsedAmount);
-        } else {
-          await storage.upsertWallet(userId, fromCurrency, -parsedAmount);
-        }
+        ({ transaction, conversionRequest: convReq } = await storage.createConversionAndDebit(
+          {
+            id: transactionId,
+            userId,
+            type: "conversion",
+            amount: parsedAmount.toFixed(2),
+            currency: fromCurrency,
+            status: "pending",
+            description: `Conversion ${parsedAmount.toFixed(2)} ${fromCurrency} → ${receivedAmount.toFixed(2)} ${toCurrency} (Frais: ${providerFeePercent}% opérateurs + ${ashtechFeePercent}% Ashtech = ${conversionFeePercent}%)`,
+            reference: generateTransactionReference("CONV"),
+            feeAmount: totalFeeAmount.toFixed(2),
+            ashtechFeeAmount: ashtechFeeAmount.toFixed(2),
+            totalAmount: receivedAmount.toFixed(2),
+            recipientCountry: toCurrency,
+          } as any,
+          {
+            id: conversionId,
+            userId,
+            fromCurrency,
+            toCurrency,
+            fromAmount: parsedAmount.toFixed(2),
+            toAmount: receivedAmount.toFixed(2),
+            status: "pending",
+            notes: JSON.stringify({
+              executeAt,
+              txId: transactionId,
+              feeAmount: totalFeeAmount.toFixed(2),
+              feePercent: `${providerFeePercent}% opérateurs + ${ashtechFeePercent}% Ashtech = ${conversionFeePercent}`,
+              fromAmount: parsedAmount.toFixed(2),
+              toAmount: receivedAmount.toFixed(2),
+            }),
+          } as any,
+          parsedAmount,
+          fromCurrency,
+        ));
       } catch (debitErr: any) {
-        // Rollback: annuler la demande et la transaction si le débit échoue
-        await storage.updateConversionRequest(convReq.id, { status: "cancelled" }).catch(() => {});
-        await storage.updateTransactionStatus(transaction.id, "failed").catch(() => {});
-        console.error(`[Conversion] Debit failed for user ${userId}, rolled back conversion ${convReq.id}:`, debitErr.message);
-        return res.status(500).json({ message: "Erreur lors du débit de votre compte. Aucun argent n'a été prélevé." });
+        console.error(`[Conversion] Atomic debit/request failed for user ${userId}:`, debitErr.message);
+        if (debitErr?.message === "INSUFFICIENT_WALLET_BALANCE") {
+          return res.status(409).json({ message: `Solde insuffisant en ${fromCurrency}. La conversion n'a pas été créée.` });
+        }
+        return res.status(500).json({ message: "Erreur lors de la création de la conversion. Aucun montant n'a été débité." });
       }
 
       // Notification "en cours"
@@ -8464,7 +8462,7 @@ export async function registerRoutes(
           await storage.createAutoConversionRule({ userId, fromCurrency, toCurrency });
           created.push({ fromCurrency, toCurrency });
           // Also add to allRules so subsequent iterations see correct state
-          allRules.push({ id: "", userId, fromCurrency, toCurrency, isActive: true, createdAt: new Date() });
+          allRules.push({ id: "", userId, fromCurrency, toCurrency, notifyUrl: null, isActive: true, createdAt: new Date() });
         } catch {
           skipped.push(fromCurrency);
         }
@@ -8909,6 +8907,12 @@ export async function registerRoutes(
 
       // Notify user
       const execTxId = execNotes.txId || null;
+      const completedApiTx = execTxId ? await storage.getTransactionById(execTxId).catch(() => undefined) : undefined;
+      if (completedApiTx?.source === "api") {
+        await enqueueMerchantWebhook(completedApiTx, "completed").catch((error) => {
+          console.error("[Admin] Conversion webhook enqueue failed:", error instanceof Error ? error.message : "unknown error");
+        });
+      }
       await storage.createUserNotification({
         userId: request.userId,
         title: "Conversion effectuée",
@@ -8958,6 +8962,12 @@ export async function registerRoutes(
 
       // Notify user
       const cancelTxId = cancelNotes.txId || null;
+      const failedApiTx = cancelTxId ? await storage.getTransactionById(cancelTxId).catch(() => undefined) : undefined;
+      if (failedApiTx?.source === "api") {
+        await enqueueMerchantWebhook(failedApiTx, "failed").catch((error) => {
+          console.error("[Admin] Conversion webhook enqueue failed:", error instanceof Error ? error.message : "unknown error");
+        });
+      }
       await storage.createUserNotification({
         userId: request.userId,
         title: "Conversion annulée",
@@ -18604,6 +18614,27 @@ export async function registerRoutes(
     next();
   }
 
+  /** Bind account-scoped Direct API operations to the Bearer key owner. */
+  function requireApiUserId(req: any, res: any, next: any) {
+    const rawUserId = ["GET", "DELETE"].includes(String(req.method).toUpperCase())
+      ? req.query?.user_id
+      : req.body?.user_id;
+    if (typeof rawUserId !== "string" || !rawUserId.trim() || rawUserId.length > 191) {
+      return res.status(400).json({
+        error: "user_id_required",
+        message: "Le champ user_id est requis pour cette opération.",
+      });
+    }
+    if (rawUserId.trim() !== String(req.apiUser?.id || "")) {
+      return res.status(403).json({
+        error: "user_id_mismatch",
+        message: "user_id ne correspond pas au propriétaire de la clé API.",
+      });
+    }
+    req.apiUserId = rawUserId.trim();
+    next();
+  }
+
   /**
    * Normalize internal DB currency codes to standard ISO codes.
    * The DB uses suffixed codes (XOFB, XOFF, XAFC…) to distinguish sub-zones internally,
@@ -18694,7 +18725,7 @@ export async function registerRoutes(
    * This is deliberately separate from /v1/collect: the existing Mobile Money
    * contract and routing are left untouched.
    */
-  app.post("/v1/crypto/collect", apiV1Limiter, requireApiKey, async (req: any, res) => {
+  app.post("/v1/crypto/collect", apiV1Limiter, requireApiKey, requireApiUserId, async (req: any, res) => {
     const requestId = crypto.randomUUID();
     try {
       const merchant = req.apiUser;
@@ -19021,7 +19052,7 @@ export async function registerRoutes(
   });
 
   /** POST /v1/collect — initiate a Mobile Money collection */
-  app.post("/v1/collect", apiV1Limiter, requireApiKey, async (req: any, res) => {
+  app.post("/v1/collect", apiV1Limiter, requireApiKey, requireApiUserId, async (req: any, res) => {
     try {
       const merchant = req.apiUser;
       const {
@@ -19877,8 +19908,1003 @@ export async function registerRoutes(
     }
   });
 
+  /** GET /v1/wallets — balances belonging to the Bearer-key owner. */
+  app.get("/v1/wallets", apiV1Limiter, requireApiKey, requireApiUserId, async (req: any, res) => {
+    try {
+      const userId = req.apiUserId as string;
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(404).json({ error: "not_found", message: "Profil introuvable." });
+      const secondaryWallets = await storage.getUserWallets(userId);
+      const primaryCurrency = user.preferredCurrency || "XAF";
+      const balances = [
+        {
+          wallet_currency: primaryCurrency,
+          currency: normalizeApiCurrency(primaryCurrency),
+          balance: Number(user.balance || 0),
+          is_primary: true,
+        },
+        ...secondaryWallets
+          .filter(wallet => wallet.currency !== primaryCurrency)
+          .map(wallet => ({
+            wallet_currency: wallet.currency,
+            currency: normalizeApiCurrency(wallet.currency),
+            balance: Number(wallet.balance || 0),
+            is_primary: false,
+          })),
+      ];
+      res.setHeader("Cache-Control", "no-store");
+      return res.json({ user_id: userId, wallets: balances });
+    } catch (error) {
+      console.error("[API v1 /wallets]", error);
+      return res.status(500).json({ error: "server_error", message: "Impossible de lire les soldes." });
+    }
+  });
+
+  /** POST /v1/conversions — convert between this profile's exact wallet currencies. */
+  app.post("/v1/conversions", apiV1Limiter, requireApiKey, requireApiUserId, async (req: any, res) => {
+    const userId = req.apiUserId as string;
+    try {
+      const fromCurrency = typeof req.body?.from_currency === "string" ? req.body.from_currency.trim().toUpperCase() : "";
+      const destinationCode = typeof req.body?.destination_country_code === "string"
+        ? req.body.destination_country_code.trim().toUpperCase()
+        : "";
+      const amountText = String(req.body?.amount ?? "").trim();
+      const merchantReference = typeof req.body?.reference === "string" ? req.body.reference.trim() : "";
+      if (!fromCurrency || !destinationCode || !amountText || !merchantReference) {
+        return res.status(400).json({
+          error: "bad_request",
+          message: "Champs requis : from_currency, destination_country_code, amount, reference.",
+        });
+      }
+      if (!/^[A-Z0-9]{3,8}$/.test(fromCurrency) || !/^[A-Z]{2}$/.test(destinationCode)) {
+        return res.status(400).json({ error: "invalid_currency_or_country", message: "Devise source ou code pays invalide." });
+      }
+      if (merchantReference.length > 191) {
+        return res.status(400).json({ error: "invalid_reference", message: "reference ne doit pas dépasser 191 caractères." });
+      }
+      if (!/^\d{1,12}(?:\.\d{1,2})?$/.test(amountText) || !Number.isFinite(Number(amountText)) || Number(amountText) <= 0) {
+        return res.status(400).json({ error: "invalid_amount", message: "amount doit être positif et limité à deux décimales." });
+      }
+      const notify = await normalizeSafeNotifyUrl(req.body?.notify_url);
+      if (!notify.valid) {
+        return res.status(400).json({ error: "invalid_notify_url", message: "notify_url doit être une URL HTTPS publique." });
+      }
+
+      const countries = await storage.getActiveCountries();
+      const country = countries.find((item: any) => String(item.code || "").toUpperCase() === destinationCode);
+      if (!country) return res.status(422).json({ error: "unsupported_country", message: `Pays de destination non pris en charge : ${destinationCode}.` });
+      const toCurrency = countryWalletCurrency(country);
+      if (!toCurrency || fromCurrency === toCurrency) {
+        return res.status(400).json({ error: "invalid_currency_pair", message: "Les devises source et destination doivent être différentes." });
+      }
+
+      const existing = await storage.getApiTransactionByMerchantReference(userId, merchantReference);
+      if (existing) {
+        const metadata = readTransactionMetadata((existing as any).metadata);
+        const priorRequest = metadata.directApiRequest || {};
+        if (
+          existing.type !== "conversion" ||
+          priorRequest.operation !== "conversion" ||
+          priorRequest.fromCurrency !== fromCurrency ||
+          priorRequest.toCurrency !== toCurrency ||
+          Number(priorRequest.amount) !== Number(amountText)
+        ) {
+          return res.status(409).json({ error: "reference_conflict", message: "Cette reference a déjà été utilisée avec une opération différente." });
+        }
+        return res.status(202).json({
+          transaction_id: existing.id,
+          conversion_id: metadata.conversionId || null,
+          reference: existing.reference,
+          merchant_reference: merchantReference,
+          status: existing.status,
+          from_amount: Number(existing.amount),
+          from_currency: normalizeApiCurrency(existing.currency),
+          from_wallet_currency: existing.currency,
+          to_amount: Number(existing.totalAmount || 0),
+          to_currency: normalizeApiCurrency(toCurrency),
+          to_wallet_currency: toCurrency,
+          idempotent_replay: true,
+        });
+      }
+
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(404).json({ error: "not_found", message: "Profil introuvable." });
+      const primaryCurrency = user.preferredCurrency || "XAF";
+      const sourceWallet = fromCurrency === primaryCurrency ? null : await storage.getWallet(userId, fromCurrency);
+      const available = fromCurrency === primaryCurrency
+        ? Number(user.balance || 0)
+        : Number(sourceWallet?.balance || 0);
+      const amount = Number(amountText);
+      if (available < amount) {
+        return res.status(409).json({ error: "insufficient_balance", message: `Solde insuffisant dans le wallet ${fromCurrency}.` });
+      }
+
+      const pairKey = getConversionPairKey(fromCurrency, toCurrency);
+      const pairDefaults: Record<string, [number, number]> = {
+        xaf_xaf: [0, 0], xof_xof: [0, 0], xof_xaf: [1, 1], xaf_xof: [1, 1],
+        cdf_cfa: [3, 2], cfa_cdf: [3, 2], cfa_usdt: [1, 1], usdt_cfa: [1, 1],
+      };
+      const defaults = pairKey ? pairDefaults[pairKey] : undefined;
+      const [providerSetting, ashtechSetting] = pairKey
+        ? await Promise.all([
+            storage.getSetting(`conversion_provider_fee_${pairKey}`),
+            storage.getSetting(`conversion_ashtech_fee_${pairKey}`),
+          ])
+        : [null, null];
+      const providerRate = providerSetting ? Number(providerSetting.value) : defaults?.[0] ?? 1;
+      const ashtechRate = ashtechSetting ? Number(ashtechSetting.value) : defaults?.[1] ?? 1;
+      if (![providerRate, ashtechRate].every(value => Number.isFinite(value) && value >= 0)) {
+        return res.status(503).json({ error: "conversion_configuration_error", message: "Les frais de conversion ne sont pas configurés correctement." });
+      }
+      const providerFee = amount * providerRate / 100;
+      const ashtechFee = amount * ashtechRate / 100;
+      const totalFee = providerFee + ashtechFee;
+      const netAmount = amount - totalFee;
+      if (netAmount <= 0) return res.status(422).json({ error: "fees_exceed_amount", message: "Les frais sont supérieurs au montant à convertir." });
+
+      const fxRates = await loadFxRates();
+      const minimumXaf = await getConversionMinimumXaf();
+      if (convertToXAF(amount, fromCurrency, fxRates) < minimumXaf - 1e-7) {
+        return res.status(422).json({
+          error: "below_minimum",
+          code: "MINIMUM_CONVERSION_AMOUNT",
+          message: minimumConversionErrorMessage(minimumXaf, fromCurrency, fxRates),
+          minimum_amount: minimumConversionAmountInCurrency(minimumXaf, fromCurrency, fxRates),
+          minimum_currency: fromCurrency,
+        });
+      }
+      const toAmount = convertFromXAF(convertToXAF(netAmount, fromCurrency, fxRates), toCurrency, fxRates);
+      if (!Number.isFinite(toAmount) || toAmount <= 0) {
+        return res.status(503).json({ error: "conversion_rate_unavailable", message: `Impossible de calculer le montant reçu en ${toCurrency}.` });
+      }
+
+      const delaySeconds = Math.floor(Math.random() * 11) + 5;
+      const executeAt = Date.now() + delaySeconds * 1000;
+      const transactionId = crypto.randomUUID();
+      const conversionId = crypto.randomUUID();
+      const internalReference = generateTransactionReference("CONV");
+      const directApiRequest = { operation: "conversion", fromCurrency, toCurrency, amount: amountText };
+      const { transaction, conversionRequest } = await storage.createConversionAndDebit(
+        {
+          id: transactionId,
+          userId,
+          type: "conversion",
+          amount: amount.toFixed(2),
+          currency: fromCurrency,
+          status: "pending",
+          description: `Direct API conversion ${fromCurrency} vers ${toCurrency}`,
+          reference: internalReference,
+          merchantReference,
+          source: "api",
+          notifyUrl: notify.url,
+          feeAmount: totalFee.toFixed(2),
+          ashtechFeeAmount: ashtechFee.toFixed(2),
+          totalAmount: toAmount.toFixed(2),
+          recipientCountry: destinationCode,
+          metadata: { merchantReference, conversionId, directApiRequest },
+        } as any,
+        {
+          id: conversionId,
+          userId,
+          fromCurrency,
+          toCurrency,
+          fromAmount: amount.toFixed(2),
+          toAmount: toAmount.toFixed(2),
+          status: "pending",
+          notes: JSON.stringify({
+            executeAt,
+            txId: transactionId,
+            feeAmount: totalFee.toFixed(2),
+            feePercent: `${providerRate}% fournisseur + ${ashtechRate}% AshTech Pay`,
+            fromAmount: amount.toFixed(2),
+            toAmount: toAmount.toFixed(2),
+          }),
+        } as any,
+        amount,
+        fromCurrency,
+      );
+      await storage.createUserNotification({
+        userId,
+        title: "Conversion en cours",
+        message: `Conversion ${amount.toFixed(2)} ${fromCurrency} vers ${toAmount.toFixed(2)} ${toCurrency} en cours.`,
+        transactionId: transaction.id,
+        type: "info",
+      }).catch(() => {});
+      return res.status(202).json({
+        transaction_id: transaction.id,
+        conversion_id: conversionRequest.id,
+        reference: internalReference,
+        merchant_reference: merchantReference,
+        status: "pending",
+        from_amount: amount,
+        from_currency: normalizeApiCurrency(fromCurrency),
+        from_wallet_currency: fromCurrency,
+        to_amount: toAmount,
+        to_currency: normalizeApiCurrency(toCurrency),
+        to_wallet_currency: toCurrency,
+        fee_amount: totalFee,
+        fee_currency: normalizeApiCurrency(fromCurrency),
+        estimated_seconds: delaySeconds,
+      });
+    } catch (error: any) {
+      if (error?.message === "INSUFFICIENT_WALLET_BALANCE") {
+        return res.status(409).json({ error: "insufficient_balance", message: "Le solde disponible a changé. Aucune conversion n'a été débitée." });
+      }
+      if (["23505", "ER_DUP_ENTRY", "1062"].includes(String(error?.code))) {
+        const reference = typeof req.body?.reference === "string" ? req.body.reference.trim() : "";
+        const existing = reference ? await storage.getApiTransactionByMerchantReference(userId, reference).catch(() => undefined) : undefined;
+        if (existing) return res.status(409).json({ error: "reference_conflict", message: "Cette reference vient d'être utilisée. Vérifiez son statut avant de réessayer." });
+      }
+      console.error("[API v1 /conversions]", error);
+      return res.status(500).json({ error: "server_error", message: "La conversion n'a pas pu être créée." });
+    }
+  });
+
+  /** GET /v1/conversions/:id — poll a conversion request owned by this profile. */
+  app.get("/v1/conversions/:id", apiV1Limiter, requireApiKey, requireApiUserId, async (req: any, res) => {
+    try {
+      const conversion = await storage.getConversionRequest(req.params.id);
+      if (!conversion || conversion.userId !== req.apiUserId) {
+        return res.status(404).json({ error: "not_found", message: "Conversion introuvable." });
+      }
+      let notes: any = {};
+      try { notes = JSON.parse(conversion.notes || "{}"); } catch {}
+      const transaction = notes.txId ? await storage.getTransactionById(String(notes.txId)) : undefined;
+      res.setHeader("Cache-Control", "no-store");
+      return res.json({
+        conversion_id: conversion.id,
+        transaction_id: transaction?.id || notes.txId || null,
+        reference: transaction?.reference || null,
+        merchant_reference: (transaction as any)?.merchantReference || null,
+        status: conversion.status,
+        from_amount: Number(conversion.fromAmount || 0),
+        from_currency: normalizeApiCurrency(conversion.fromCurrency),
+        from_wallet_currency: conversion.fromCurrency,
+        to_amount: Number(conversion.toAmount || 0),
+        to_currency: normalizeApiCurrency(conversion.toCurrency),
+        to_wallet_currency: conversion.toCurrency,
+        created_at: conversion.createdAt,
+        executed_at: conversion.executedAt,
+      });
+    } catch (error) {
+      console.error("[API v1 /conversions/:id]", error);
+      return res.status(500).json({ error: "server_error", message: "Impossible de lire l'état de la conversion." });
+    }
+  });
+
+  /** Merchant-managed automatic conversion rules. */
+  app.get("/v1/auto-conversion-rules", apiV1Limiter, requireApiKey, requireApiUserId, async (req: any, res) => {
+    try {
+      const rules = await storage.getAutoConversionRules(req.apiUserId);
+      return res.json({
+        user_id: req.apiUserId,
+        rules: rules.map(rule => ({
+          id: rule.id,
+          from_currency: rule.fromCurrency,
+          to_currency: normalizeApiCurrency(rule.toCurrency),
+          target_wallet_currency: rule.toCurrency,
+          notify_url: rule.notifyUrl || null,
+          is_active: rule.isActive,
+          created_at: rule.createdAt,
+        })),
+      });
+    } catch (error) {
+      console.error("[API v1 /auto-conversion-rules:list]", error);
+      return res.status(500).json({ error: "server_error", message: "Impossible de lire les règles de conversion." });
+    }
+  });
+
+  app.post("/v1/auto-conversion-rules", apiV1Limiter, requireApiKey, requireApiUserId, async (req: any, res) => {
+    try {
+      const userId = req.apiUserId as string;
+      const fromCurrency = typeof req.body?.from_currency === "string" ? req.body.from_currency.trim().toUpperCase() : "";
+      const countryCode = typeof req.body?.destination_country_code === "string"
+        ? req.body.destination_country_code.trim().toUpperCase()
+        : "";
+      if (!/^[A-Z0-9]{3,8}$/.test(fromCurrency) || !/^[A-Z]{2}$/.test(countryCode)) {
+        return res.status(400).json({ error: "bad_request", message: "from_currency et destination_country_code valides sont requis." });
+      }
+      const notify = await normalizeSafeNotifyUrl(req.body?.notify_url);
+      if (!notify.valid) {
+        return res.status(400).json({ error: "invalid_notify_url", message: "notify_url doit être une URL HTTPS publique." });
+      }
+      const countries = await storage.getActiveCountries();
+      const country = countries.find((item: any) => String(item.code || "").toUpperCase() === countryCode);
+      if (!country) return res.status(422).json({ error: "unsupported_country", message: "Pays de destination non pris en charge." });
+      const toCurrency = countryWalletCurrency(country);
+      if (fromCurrency === toCurrency) {
+        return res.status(400).json({ error: "invalid_currency_pair", message: "Les devises source et destination doivent être différentes." });
+      }
+      const existing = await storage.getAutoConversionRuleByCurrency(userId, fromCurrency);
+      if (existing) {
+        if (existing.toCurrency === toCurrency && (existing.notifyUrl || null) === (notify.url || null)) {
+          return res.status(200).json({ id: existing.id, from_currency: fromCurrency, target_wallet_currency: toCurrency, idempotent_replay: true });
+        }
+        return res.status(409).json({ error: "rule_conflict", message: "Une règle existe déjà pour cette devise source. Supprimez-la avant de la remplacer." });
+      }
+      const activeRules = await storage.getAutoConversionRules(userId);
+      if (activeRules.some(rule => rule.toCurrency === fromCurrency) || activeRules.some(rule => rule.fromCurrency === toCurrency)) {
+        return res.status(409).json({ error: "rule_cycle", message: "Cette règle créerait un cycle avec une autre règle de conversion." });
+      }
+      const rule = await storage.createAutoConversionRule({
+        userId,
+        fromCurrency,
+        toCurrency,
+        notifyUrl: notify.url,
+      } as any);
+      const user = await storage.getUser(userId);
+      let balance = 0;
+      if (user && fromCurrency === (user.preferredCurrency || "XAF")) balance = Number(user.balance || 0);
+      else balance = Number((await storage.getWallet(userId, fromCurrency))?.balance || 0);
+      let initialConversionId: string | null = null;
+      if (balance > 0) initialConversionId = await maybeAutoConvert(userId, fromCurrency, balance).catch(error => {
+        console.error("[API v1 /auto-conversion-rules] Immediate conversion trigger failed:", error?.message || error);
+        return null;
+      });
+      return res.status(201).json({
+        id: rule.id,
+        from_currency: fromCurrency,
+        target_wallet_currency: toCurrency,
+        to_currency: normalizeApiCurrency(toCurrency),
+        notify_url: rule.notifyUrl || null,
+        is_active: rule.isActive,
+        initial_conversion_id: initialConversionId,
+      });
+    } catch (error: any) {
+      if (["23505", "ER_DUP_ENTRY", "1062"].includes(String(error?.code))) {
+        return res.status(409).json({ error: "rule_conflict", message: "Une règle existe déjà pour cette devise source." });
+      }
+      console.error("[API v1 /auto-conversion-rules:create]", error);
+      return res.status(500).json({ error: "server_error", message: "Impossible de créer la règle de conversion." });
+    }
+  });
+
+  app.delete("/v1/auto-conversion-rules/:id", apiV1Limiter, requireApiKey, requireApiUserId, async (req: any, res) => {
+    try {
+      const rules = await storage.getAutoConversionRules(req.apiUserId);
+      if (!rules.some(rule => rule.id === req.params.id)) {
+        return res.status(404).json({ error: "not_found", message: "Règle de conversion introuvable." });
+      }
+      await storage.deleteAutoConversionRule(req.params.id, req.apiUserId);
+      return res.json({ deleted: true, id: req.params.id });
+    } catch (error) {
+      console.error("[API v1 /auto-conversion-rules:delete]", error);
+      return res.status(500).json({ error: "server_error", message: "Impossible de supprimer la règle." });
+    }
+  });
+
+  /** POST /v1/payouts/mobile-money — payout from the destination's exact wallet. */
+  app.post("/v1/payouts/mobile-money", apiV1Limiter, requireApiKey, requireApiUserId, async (req: any, res) => {
+    const userId = req.apiUserId as string;
+    let payoutLockUntil: number | null = null;
+    try {
+      const referenceInput = typeof req.body?.reference === "string" ? req.body.reference.trim() : "";
+      const countryCode = typeof req.body?.country_code === "string" ? req.body.country_code.trim().toUpperCase() : "";
+      const operatorName = typeof req.body?.operator === "string" ? req.body.operator.trim() : "";
+      const amountText = String(req.body?.amount ?? "").trim();
+      const phoneResult = parsePhoneInput(req.body?.phone);
+      const feeBearer = req.body?.fee_bearer === undefined ? "sender" : req.body.fee_bearer;
+      if (!referenceInput || !countryCode || !operatorName || !phoneResult.ok || !amountText) {
+        return res.status(400).json({
+          error: "bad_request",
+          message: "Champs requis : reference, country_code, operator, phone, amount.",
+        });
+      }
+      if (referenceInput.length > 191) return res.status(400).json({ error: "invalid_reference", message: "reference ne doit pas dépasser 191 caractères." });
+      if (feeBearer !== "sender" && feeBearer !== "recipient") {
+        return res.status(400).json({ error: "invalid_fee_bearer", message: "fee_bearer doit valoir sender ou recipient." });
+      }
+      if (!/^\d{1,12}(?:\.\d{1,2})?$/.test(amountText) || !Number.isFinite(Number(amountText)) || Number(amountText) <= 0) {
+        return res.status(400).json({ error: "invalid_amount", message: "amount doit être positif et limité à deux décimales." });
+      }
+      const notify = await normalizeSafeNotifyUrl(req.body?.notify_url);
+      if (!notify.valid) return res.status(400).json({ error: "invalid_notify_url", message: "notify_url doit être une URL HTTPS publique." });
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(404).json({ error: "not_found", message: "Profil introuvable." });
+      if ((user as any).withdrawalBlocked) {
+        return res.status(403).json({ error: "withdrawal_blocked", message: "Les payouts sont désactivés pour ce compte." });
+      }
+      const cooldown = getFailedCooldown(userId);
+      if (cooldown.active) return res.status(429).json({ error: "payout_cooldown", message: "Une opération précédente a été rejetée. Réessayez plus tard." });
+
+      const existing = await storage.getApiTransactionByMerchantReference(userId, referenceInput);
+      if (existing) {
+        const metadata = readTransactionMetadata((existing as any).metadata);
+        const priorRequest = metadata.directApiRequest || {};
+        if (
+          existing.type !== "transfer_out" ||
+          priorRequest.operation !== "mobile_money_payout" ||
+          priorRequest.countryCode !== countryCode ||
+          !operatorNamesMatch(priorRequest.operatorName, operatorName) ||
+          priorRequest.phone !== phoneResult.phone ||
+          Number(priorRequest.amount) !== Number(amountText) ||
+          priorRequest.feeBearer !== feeBearer
+        ) {
+          return res.status(409).json({ error: "reference_conflict", message: "Cette reference a déjà été utilisée avec une opération différente." });
+        }
+        return res.status(202).json({
+          transaction_id: existing.id,
+          reference: existing.reference,
+          merchant_reference: referenceInput,
+          status: existing.status,
+          amount: Number(existing.amount),
+          total_debited: Number(existing.totalAmount || existing.amount),
+          currency: normalizeApiCurrency(existing.currency),
+          wallet_currency: String(metadata.walletCurrency || existing.currency),
+          idempotent_replay: true,
+        });
+      }
+
+      const countries = await storage.getActiveCountries();
+      const country = countries.find((item: any) => String(item.code || "").toUpperCase() === countryCode);
+      if (!country) return res.status(422).json({ error: "unsupported_country", message: `Pays non pris en charge : ${countryCode}.` });
+      if (country.isActiveForTransfer === false) {
+        return res.status(422).json({ error: "payout_unavailable", message: "Les payouts vers ce pays sont désactivés." });
+      }
+      const operators = await storage.getOperatorsByCountry(country.id);
+      const operator = operators.find((item: any) => operatorNamesMatch(item.name, operatorName));
+      if (!operator || operator.countryId !== country.id) {
+        return res.status(422).json({ error: "unsupported_operator", message: "L'opérateur ne correspond pas au pays de destination." });
+      }
+      if (!operator.isActive || operator.isInMaintenance) {
+        return res.status(422).json({ error: "operator_unavailable", message: "Cet opérateur est temporairement indisponible." });
+      }
+      const allFees = await storage.getAllFees();
+      if (isOperatorDisabledByFee(allFees, operator.id, "withdrawal")) {
+        return res.status(422).json({ error: "operator_unavailable", code: "OPERATOR_DISABLED_BY_ADMIN", message: OPERATOR_DISABLED_BY_ADMIN_MESSAGE });
+      }
+      const provider = (operator as any).withdrawalPaymentProvider || (operator as any).paymentProvider;
+      if (!["afribapay", "pixpay", "pawapay"].includes(provider)) {
+        return res.status(422).json({ error: "provider_unavailable", message: "Aucun fournisseur de payout n'est configuré pour cet opérateur." });
+      }
+      const phone = String(phoneResult.phone || "");
+      const phoneError = validateMobileMoneyPhone(phone, countryCode);
+      if (phoneError) return res.status(400).json({ error: "invalid_phone", code: "INVALID_RECIPIENT_PHONE", message: phoneError });
+
+      const walletCurrency = countryWalletCurrency(country);
+      const amount = Number(amountText);
+      const minimum = Number(country.minWithdrawal ?? 300);
+      const maximum = Number(country.maxWithdrawal ?? 500000);
+      if (amount < minimum || amount > maximum) {
+        return res.status(422).json({
+          error: "amount_out_of_range",
+          message: `Le montant doit être compris entre ${minimum} et ${maximum} ${normalizeApiCurrency(walletCurrency)}.`,
+          minimum_amount: minimum,
+          maximum_amount: maximum,
+        });
+      }
+      const fee = await storage.resolveFee("withdrawal", country.id, operator.id);
+      let providerRate = 0;
+      let ashtechRate = 0;
+      if (fee) {
+        providerRate = Number(provider === "pixpay" ? fee.pixpayFee : provider === "pawapay" ? (fee as any).pawapayFee : fee.afribapayFee) || 0;
+        ashtechRate = Number(fee.ashtechMargin || 0);
+      }
+      const totalRate = providerRate + ashtechRate;
+      let totalFee = 0;
+      if (fee) {
+        totalFee = fee.feeType === "percentage" || totalRate > 0
+          ? amount * (totalRate > 0 ? totalRate : Number(fee.feeValue || 0)) / 100
+          : Number(fee.feeValue || 0);
+        if (fee.maxFee && totalFee > Number(fee.maxFee)) totalFee = Number(fee.maxFee);
+      }
+      const ashtechFee = totalRate > 0 ? amount * ashtechRate / 100 : totalFee;
+      const senderPays = feeBearer === "sender";
+      const payoutAmount = senderPays ? amount : amount - totalFee;
+      const totalDebited = senderPays ? amount + totalFee : amount;
+      if (payoutAmount <= 0) return res.status(422).json({ error: "fees_exceed_amount", message: "Les frais sont supérieurs au montant du payout." });
+
+      if (provider === "pixpay" && !getPixPayServiceId(operator.name || "", countryCode, "cash_in")) {
+        return res.status(503).json({ error: "provider_configuration_error", message: "Le service de payout PixPay n'est pas configuré pour cet opérateur." });
+      }
+      if (provider === "pawapay") {
+        try {
+          await assertPawaPayProviderActive(
+            resolvePawaPayProviderCode(operator, operator.name || "", countryCode),
+            "PAYOUT",
+            pawaPayCountry(countryCode),
+          );
+        } catch {
+          return res.status(503).json({ error: "provider_unavailable", message: "Le service PawaPay est temporairement indisponible." });
+        }
+      }
+
+      const reference = generateTransactionReference("transfer_out");
+      const providerReference = provider === "pawapay" ? createPawaPayId() : reference;
+      const directApiRequest = {
+        operation: "mobile_money_payout",
+        countryCode,
+        operatorId: String(operator.id),
+          operatorName: operator.name,
+        phone,
+        amount: amountText,
+        feeBearer,
+      };
+      payoutLockUntil = await acquirePayoutOperationLock(userId);
+      if (!payoutLockUntil) {
+        return res.status(429).json({ error: "payout_in_progress", message: "Une autre opération est déjà en cours pour ce compte." });
+      }
+
+      const transaction = await storage.createPayoutAndDebit({
+        userId,
+        type: "transfer_out",
+        amount: payoutAmount.toFixed(2),
+        currency: walletCurrency,
+        status: "pending",
+        description: `Direct API payout Mobile Money (${countryCode})`,
+        recipientName: typeof req.body?.recipient_name === "string" ? req.body.recipient_name.trim().slice(0, 191) : "Destinataire",
+        recipientPhone: phone,
+        recipientCountry: countryCode,
+        operatorId: operator.id,
+        paymentMethod: operator.type || "mobile_money",
+        reference,
+        merchantReference: referenceInput,
+        source: "api",
+        notifyUrl: notify.url,
+        externalReference: providerReference,
+        feeAmount: totalFee.toFixed(2),
+        ashtechFeeAmount: ashtechFee.toFixed(2),
+        totalAmount: totalDebited.toFixed(2),
+        metadata: {
+          paymentProvider: provider,
+          walletCurrency,
+          merchantReference: referenceInput,
+          directApiRequest,
+          ...(provider === "pawapay" ? { pawaCountry: pawaPayCountry(countryCode) } : {}),
+        },
+      } as any, totalDebited);
+
+      const pendingPayout = {
+        attempts: 0,
+        transactionId: transaction.id,
+        reference: providerReference,
+        externalReference: provider === "pawapay" ? providerReference : undefined,
+        userId,
+        amount: payoutAmount.toFixed(2),
+        totalDebited: totalDebited.toFixed(2),
+        provider: provider as "afribapay" | "pixpay" | "pawapay",
+        countryCode,
+        txType: "transfer_out",
+        txCurrency: walletCurrency,
+        walletCurrency,
+      };
+      try {
+        let result: any;
+        if (provider === "afribapay") {
+          const localPhone = getAfribaPayPayoutPhone(phone, countryCode, toLocalMobileMoneyPhone(phone, countryCode));
+          result = await initiateAfribaPayout({
+            operator: resolveAfribaPayOperatorCode(operator, operator.name || ""),
+            country: countryCode,
+            phone_number: localPhone,
+            amount: payoutAmount,
+            currency: AFRIBAPAY_ISO_CURRENCY[countryCode] || walletCurrency,
+            order_id: providerReference,
+            reference_id: providerReference,
+            notify_url: buildWebhookUrl("/api/afribapay/webhook"),
+          });
+        } else if (provider === "pixpay") {
+          const pix = await initiatePixPayPayout({
+            serviceId: String(getPixPayServiceId(operator.name || "", countryCode, "cash_in")),
+            amount: payoutAmount,
+            phone: phone.replace(/\s/g, ""),
+            countryCode,
+            orderId: providerReference,
+            ipnUrl: buildWebhookUrl("/api/pixpay/webhook"),
+            customData: reference,
+          });
+          result = {
+            success: pix.success,
+            transaction_id: pix.transactionId,
+            message: pix.message,
+            status: pix.status,
+            providerStatus: pix.providerStatus,
+            raw: pix.raw,
+          };
+        } else {
+          const pawa = await createPawaPayPayout({
+            payoutId: providerReference,
+            country: pawaPayCountry(countryCode),
+            amount: payoutAmount.toFixed(2),
+            currency: toPawaPayCurrency(walletCurrency),
+            recipient: {
+              provider: resolvePawaPayProviderCode(operator, operator.name || "", countryCode),
+              phoneNumber: normalizePhone(phone) || "",
+            },
+            clientReferenceId: reference,
+            customerMessage: PAWAPAY_CUSTOMER_MESSAGE,
+          });
+          result = {
+            success: pawa.success,
+            transaction_id: pawa.id || providerReference,
+            message: pawa.providerMessage,
+            status: pawa.status,
+            providerStatus: pawa.providerStatus,
+            providerCode: pawa.providerCode,
+            raw: pawa.raw,
+          };
+        }
+
+        await persistProviderTransactionReference(transaction.id, result);
+        if (result.success) {
+          const pollReference = provider === "afribapay"
+            ? providerReference
+            : provider === "pawapay"
+              ? providerReference
+              : result.transaction_id || providerReference;
+          if (pollReference !== providerReference) {
+            await storage.updateTransactionExternalReference(transaction.id, pollReference);
+          }
+          pendingPayout.reference = pollReference;
+          pendingPayout.externalReference = provider === "pawapay" ? pollReference : undefined;
+          addPendingPayout(pendingPayout);
+          return res.status(202).json({
+            transaction_id: transaction.id,
+            reference,
+            merchant_reference: referenceInput,
+            status: "pending",
+            amount: payoutAmount,
+            fee_amount: totalFee,
+            total_debited: totalDebited,
+            currency: normalizeApiCurrency(walletCurrency),
+            wallet_currency: walletCurrency,
+          });
+        }
+
+        const statusText = String(result.status || "").toLowerCase();
+        const terminalReject = ["failed", "refunded", "cancelled", "canceled", "rejected"].includes(statusText);
+        if (terminalReject) {
+          await processPayout(pendingPayout, "failed");
+          return res.status(422).json(buildProviderErrorPayload({
+            error: "payout_rejected",
+            message: result.message,
+            fallback: "Le fournisseur a refusé le payout.",
+            provider,
+            raw: result.raw,
+            providerCode: result.providerCode,
+            providerStatus: result.providerStatus,
+            sensitiveValues: [phone, req.body?.recipient_name],
+          }));
+        }
+        const explicitBalanceRejection = isExplicitInsufficientPayoutBalance(provider as PayoutStatusProvider, { ...result, success: false });
+        if (explicitBalanceRejection) {
+          await markPayoutRetrySafeAfterBalanceRejection(transaction.id, provider as PayoutStatusProvider, providerReference, result);
+        } else {
+          await storage.claimTransactionStatus(transaction.id, "pending_manual", ["pending", "processing"]);
+        }
+        addPendingPayout(pendingPayout);
+        return res.status(202).json({
+          transaction_id: transaction.id,
+          reference,
+          merchant_reference: referenceInput,
+          status: "pending_manual",
+          retry_safe: explicitBalanceRejection,
+          error: explicitBalanceRejection ? "provider_balance_insufficient" : "provider_result_unknown",
+          message: explicitBalanceRejection
+            ? "Le fournisseur a explicitement indiqué un solde insuffisant. Le montant reste réservé jusqu'à résolution."
+            : "Le résultat du fournisseur est incertain. Le montant reste réservé jusqu'à vérification.",
+        });
+      } catch (providerError: any) {
+        const errorView = {
+          success: false,
+          message: providerError?.message,
+          providerCode: providerError?.providerCode || providerError?.code,
+          providerStatus: providerError?.providerStatus ?? providerError?.status ?? providerError?.statusCode,
+          raw: providerError?.raw,
+        };
+        const explicitBalanceRejection = isExplicitInsufficientPayoutBalance(provider as PayoutStatusProvider, { ...errorView, success: false });
+        const statusCode = Number(errorView.providerStatus);
+        const explicitlyTerminal = ![404, 408, 429].includes(statusCode) && statusCode < 500 &&
+          (/\b(rejected|invalid phone|invalid number|invalid operator|unsupported|not supported)\b|num[eé]ro invalide|op[eé]rateur invalide/i.test(String(errorView.message || "")));
+        if (explicitlyTerminal) {
+          await processPayout(pendingPayout, "failed");
+          return res.status(422).json(buildProviderErrorPayload({
+            error: "payout_rejected",
+            message: errorView.message,
+            fallback: "Le fournisseur a refusé le payout.",
+            provider,
+            raw: errorView.raw,
+            providerCode: errorView.providerCode,
+            providerStatus: errorView.providerStatus,
+            sensitiveValues: [phone, req.body?.recipient_name],
+          }));
+        }
+        if (explicitBalanceRejection) {
+          await markPayoutRetrySafeAfterBalanceRejection(transaction.id, provider as PayoutStatusProvider, providerReference, errorView);
+        } else {
+          await storage.claimTransactionStatus(transaction.id, "pending_manual", ["pending", "processing"]);
+        }
+        addPendingPayout(pendingPayout);
+        console.error(`[API v1 /payouts/mobile-money] Provider outcome unresolved for transaction ${transaction.id}`);
+        return res.status(202).json({
+          transaction_id: transaction.id,
+          reference,
+          merchant_reference: referenceInput,
+          status: "pending_manual",
+          retry_safe: explicitBalanceRejection,
+          error: explicitBalanceRejection ? "provider_balance_insufficient" : "provider_result_unknown",
+          message: explicitBalanceRejection
+            ? "Le fournisseur a explicitement indiqué un solde insuffisant. Le montant reste réservé jusqu'à résolution."
+            : "Le résultat du fournisseur est incertain. Le montant reste réservé jusqu'à vérification.",
+        });
+      }
+    } catch (error: any) {
+      if (error?.message === "INSUFFICIENT_WALLET_BALANCE") {
+        return res.status(409).json({ error: "insufficient_balance", message: "Le wallet correspondant au pays de destination ne couvre pas le montant et les frais." });
+      }
+      if (["23505", "ER_DUP_ENTRY", "1062"].includes(String(error?.code))) {
+        return res.status(409).json({ error: "reference_conflict", message: "Cette reference existe déjà. Vérifiez son statut avant de réessayer." });
+      }
+      console.error("[API v1 /payouts/mobile-money]", error?.message || error);
+      return res.status(500).json({ error: "server_error", message: "Le payout n'a pas pu être préparé." });
+    } finally {
+      if (payoutLockUntil) await releasePayoutOperationLock(userId, payoutLockUntil);
+    }
+  });
+
+  /** POST /v1/payouts/crypto — automated USDT withdrawal via IziChange. */
+  app.post("/v1/payouts/crypto", apiV1Limiter, requireApiKey, requireApiUserId, async (req: any, res) => {
+    const userId = req.apiUserId as string;
+    let payoutLockUntil: number | null = null;
+    try {
+      if (!isIziPayConfigured()) {
+        return res.status(503).json({ error: "crypto_payout_unavailable", message: "Le fournisseur de payout crypto n'est pas configuré." });
+      }
+      const referenceInput = typeof req.body?.reference === "string" ? req.body.reference.trim() : "";
+      const assetCode = typeof req.body?.asset_code === "string" ? req.body.asset_code.trim().toUpperCase() : "";
+      const address = typeof req.body?.destination_address === "string" ? req.body.destination_address.trim() : "";
+      const memo = typeof req.body?.destination_memo === "string" ? req.body.destination_memo.trim() : "";
+      const amountText = String(req.body?.amount ?? "").trim();
+      const feeBearer = req.body?.fee_bearer === undefined ? "sender" : req.body.fee_bearer;
+      if (!referenceInput || !assetCode || !address || !amountText) {
+        return res.status(400).json({
+          error: "bad_request",
+          message: "Champs requis : reference, asset_code, destination_address, amount.",
+        });
+      }
+      if (referenceInput.length > 191) return res.status(400).json({ error: "invalid_reference", message: "reference ne doit pas dépasser 191 caractères." });
+      if (feeBearer !== "sender" && feeBearer !== "recipient") {
+        return res.status(400).json({ error: "invalid_fee_bearer", message: "fee_bearer doit valoir sender ou recipient." });
+      }
+      if (!/^USDT\.[A-Z0-9_-]+$/.test(assetCode)) return res.status(400).json({ error: "invalid_asset", message: "asset_code doit désigner un réseau USDT actif." });
+      if (address.length < 8 || address.length > 256) return res.status(400).json({ error: "invalid_address", message: "Adresse de destination invalide." });
+      if (memo.length > 128) return res.status(400).json({ error: "invalid_memo", message: "destination_memo ne doit pas dépasser 128 caractères." });
+      if (!/^\d{1,12}(?:\.\d{1,2})?$/.test(amountText) || !Number.isFinite(Number(amountText)) || Number(amountText) <= 0) {
+        return res.status(400).json({ error: "invalid_amount", message: "amount doit être positif et limité à deux décimales." });
+      }
+      const notify = await normalizeSafeNotifyUrl(req.body?.notify_url);
+      if (!notify.valid) return res.status(400).json({ error: "invalid_notify_url", message: "notify_url doit être une URL HTTPS publique." });
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(404).json({ error: "not_found", message: "Profil introuvable." });
+      if (!(user as any).isVerified) return res.status(403).json({ error: "account_not_verified", message: "La vérification KYC est nécessaire pour effectuer un payout crypto." });
+      if ((user as any).withdrawalBlocked) {
+        return res.status(403).json({ error: "withdrawal_blocked", message: "Les payouts sont désactivés pour ce compte." });
+      }
+      const existing = await storage.getApiTransactionByMerchantReference(userId, referenceInput);
+      if (existing) {
+        const metadata = readTransactionMetadata((existing as any).metadata);
+        const priorRequest = metadata.directApiRequest || {};
+        if (
+          existing.type !== "withdrawal" ||
+          priorRequest.operation !== "crypto_payout" ||
+          priorRequest.assetCode !== assetCode ||
+          priorRequest.address !== address ||
+          priorRequest.memo !== memo ||
+          Number(priorRequest.amount) !== Number(amountText) ||
+          priorRequest.feeBearer !== feeBearer
+        ) {
+          return res.status(409).json({ error: "reference_conflict", message: "Cette reference a déjà été utilisée avec une opération différente." });
+        }
+        return res.status(202).json({
+          transaction_id: existing.id,
+          reference: existing.reference,
+          merchant_reference: referenceInput,
+          status: existing.status,
+          amount: Number(existing.amount),
+          total_debited: Number(existing.totalAmount || existing.amount),
+          currency: "USDT",
+          wallet_currency: "USDT",
+          asset_code: assetCode,
+          idempotent_replay: true,
+        });
+      }
+      const amount = Number(amountText);
+      const limitsSetting = await storage.getSetting("crypto_withdrawal_limits");
+      const limits = parseCryptoWithdrawalLimits(limitsSetting?.value);
+      if (!limits.configured) return res.status(503).json({ error: "crypto_limits_unavailable", message: "Les limites de retrait crypto ne sont pas configurées." });
+      if (amount < limits.minUsdt!) return res.status(422).json({ error: "below_minimum", message: `Le montant minimum est de ${limits.minUsdt} USDT.` });
+      if (amount > limits.maxUsdt!) return res.status(422).json({ error: "above_maximum", message: `Le montant maximum est de ${limits.maxUsdt} USDT.` });
+
+      const disabled = parseDisabledCryptoAssets((await storage.getSetting("crypto_disabled_assets"))?.value);
+      const assets = await fetchCryptoAssets().catch(() => getStaticCryptoAssets());
+      const network = filterCryptoAssets(assets, disabled).USDT?.networks.find(item => item.assetCode.toUpperCase() === assetCode);
+      if (!network) return res.status(422).json({ error: "asset_unavailable", message: "Ce réseau USDT est désactivé ou indisponible." });
+      if (network.memoRequired && !memo) return res.status(400).json({ error: "memo_required", message: `Ce réseau exige un ${network.memoType || "memo ou tag"}.` });
+
+      const userCountry = String((user as any).country || "");
+      const countries = await storage.getAllCountries();
+      const country = countries.find((item: any) =>
+        String(item.code || "").toUpperCase() === userCountry.toUpperCase() ||
+        String(item.id) === userCountry ||
+        String(item.name || "").toLowerCase() === userCountry.toLowerCase()
+      );
+      const feeConfig = parseCryptoPayoutFeeConfig((await storage.getSetting("crypto_withdrawal_fees"))?.value);
+      const feeRule = resolveCryptoPayoutFee(feeConfig, country?.id, assetCode);
+      let calculation: any;
+      try {
+        calculation = calculateCryptoPayout(amount, feeRule, feeBearer);
+      } catch (error: any) {
+        return res.status(422).json({
+          error: error?.message === "CRYPTO_PAYOUT_FEE_EXCEEDS_AMOUNT" ? "fees_exceed_amount" : "invalid_amount",
+          message: error?.message === "CRYPTO_PAYOUT_FEE_EXCEEDS_AMOUNT" ? "Les frais sont supérieurs au montant à envoyer." : "Montant crypto invalide.",
+        });
+      }
+      payoutLockUntil = await acquirePayoutOperationLock(userId);
+      if (!payoutLockUntil) return res.status(429).json({ error: "payout_in_progress", message: "Une autre opération est déjà en cours pour ce compte." });
+
+      const reference = generateTransactionReference("withdrawal");
+      const transactionId = crypto.randomUUID();
+      const payoutRequest = {
+        assetCode,
+        amount: calculation.payoutAmount,
+        destinationAddress: address,
+        ...(memo ? { destinationMemo: memo } : {}),
+      };
+      const directApiRequest = { operation: "crypto_payout", assetCode, address, memo, amount: amountText, feeBearer };
+      const metadata = {
+        paymentProvider: "izichange",
+        walletCurrency: "USDT",
+        assetCode,
+        feeBearer,
+        ashtechFeeAmountUsdt: calculation.ashtechFee,
+        ashtechFeePercent: feeRule.percentage,
+        ashtechFeeFixedUsdt: feeRule.fixedUsdt,
+        providerFeeBearer: "merchant",
+        iziPayoutRequest: payoutRequest,
+        iziRetrySafe: false,
+        merchantReference: referenceInput,
+        directApiRequest,
+      };
+      const transaction = await storage.createCryptoPayoutAndDebit({
+        id: transactionId,
+        userId,
+        type: "withdrawal",
+        amount: calculation.payoutAmount,
+        currency: "USDT",
+        status: "pending",
+        description: `Direct API retrait crypto vers ${assetCode}`,
+        paymentMethod: "crypto",
+        reference,
+        merchantReference: referenceInput,
+        source: "api",
+        notifyUrl: notify.url,
+        feeAmount: calculation.ashtechFee,
+        ashtechFeeAmount: calculation.ashtechFee,
+        totalAmount: calculation.totalDebit,
+        recipientName: "Destinataire crypto",
+        recipientPhone: address,
+        recipientCountry: country?.code || userCountry || null,
+        operatorId: `crypto:${assetCode}`,
+        metadata,
+      } as any, Number(calculation.totalDebit));
+
+      try {
+        const providerPayout = await createIziPayout({
+          ...payoutRequest,
+          merchantReference: reference,
+          idempotencyKey: reference,
+          feeBearer: "merchant",
+        });
+        await storage.updateTransaction(transaction.id, {
+          externalReference: providerPayout.id,
+          metadata: {
+            ...metadata,
+            iziPayoutId: providerPayout.id,
+            iziRetrySafe: false,
+            providerFeeAmountUsdt: providerPayout.feeAmount,
+          },
+        } as any);
+        const pending = {
+          transactionId: transaction.id,
+          reference: providerPayout.id,
+          externalReference: providerPayout.id,
+          userId,
+          amount: calculation.payoutAmount,
+          totalDebited: calculation.totalDebit,
+          provider: "izichange" as const,
+          countryCode: country?.code || userCountry || "CM",
+          txType: "withdrawal",
+          txCurrency: "USDT",
+          walletCurrency: "USDT",
+        };
+        addPendingPayout(pending);
+        if (providerPayout.status === "confirmed") {
+          await processIziPayPayoutCallback({ ...transaction, externalReference: providerPayout.id, metadata } as any, "success", providerPayout.id);
+        } else if (["failed", "refunded", "cancelled"].includes(String(providerPayout.status).toLowerCase())) {
+          await processIziPayPayoutCallback({ ...transaction, externalReference: providerPayout.id, metadata } as any, "failed", providerPayout.id);
+        }
+        const status = providerPayout.status === "confirmed"
+          ? "completed"
+          : ["failed", "refunded", "cancelled"].includes(String(providerPayout.status).toLowerCase())
+            ? "failed"
+            : "pending";
+        return res.status(202).json({
+          transaction_id: transaction.id,
+          reference,
+          merchant_reference: referenceInput,
+          payout_id: providerPayout.id,
+          status,
+          amount: calculation.payoutAmount,
+          fee_amount: calculation.ashtechFee,
+          total_debited: calculation.totalDebit,
+          currency: "USDT",
+          wallet_currency: "USDT",
+          asset_code: assetCode,
+        });
+      } catch (providerError: any) {
+        const definitive = isDefinitiveIziPayoutRejection(providerError);
+        if (definitive) {
+          await storage.claimIziPayPayoutFailedAndRefund(transaction.id, ["pending", "processing", "pending_manual"]);
+          return res.status(422).json(buildProviderErrorPayload({
+            error: "payout_rejected",
+            message: providerError.message,
+            fallback: "IziChange a refusé le payout crypto.",
+            provider: "izichange",
+            raw: providerError.raw,
+            providerCode: providerError.providerCode || providerError.code,
+            providerStatus: providerError.providerStatus ?? providerError.status,
+            sensitiveValues: [address, memo],
+          }));
+        }
+        const explicitBalanceRejection = isExplicitInsufficientPayoutBalance("izichange", {
+          success: false,
+          message: providerError?.message,
+          providerCode: providerError?.providerCode || providerError?.code,
+          providerStatus: providerError?.providerStatus ?? providerError?.status ?? providerError?.statusCode,
+          raw: providerError?.raw,
+        });
+        if (explicitBalanceRejection) {
+          await markPayoutRetrySafeAfterBalanceRejection(
+            transaction.id,
+            "izichange",
+            undefined,
+            { providerCode: providerError?.providerCode || providerError?.code, message: providerError?.message },
+            { iziRetrySafe: true, iziInitiationError: "INSUFFICIENT_PROVIDER_BALANCE" },
+          );
+        } else {
+          await storage.claimTransactionStatus(transaction.id, "pending_manual", ["pending", "processing"]);
+          await storage.updateTransaction(transaction.id, {
+            metadata: { ...metadata, iziRetrySafe: false, iziInitiationError: String(providerError?.code || "unknown").slice(0, 80) },
+          } as any);
+        }
+        console.error(`[API v1 /payouts/crypto] Provider result unresolved for transaction ${transaction.id}`);
+        return res.status(202).json({
+          transaction_id: transaction.id,
+          reference,
+          merchant_reference: referenceInput,
+          status: "pending_manual",
+          retry_safe: explicitBalanceRejection,
+          error: explicitBalanceRejection ? "provider_balance_insufficient" : "provider_result_unknown",
+          message: explicitBalanceRejection
+            ? "IziChange a explicitement indiqué un solde insuffisant. Le montant reste réservé jusqu'à résolution."
+            : "Le résultat IziChange est incertain. Le montant reste réservé jusqu'à vérification.",
+        });
+      }
+    } catch (error: any) {
+      if (error?.message === "INSUFFICIENT_WALLET_BALANCE") {
+        return res.status(409).json({ error: "insufficient_balance", message: "Solde USDT insuffisant pour couvrir le montant et les frais." });
+      }
+      if (["23505", "ER_DUP_ENTRY", "1062"].includes(String(error?.code))) {
+        return res.status(409).json({ error: "reference_conflict", message: "Cette reference existe déjà. Vérifiez son statut avant de réessayer." });
+      }
+      console.error("[API v1 /payouts/crypto]", error?.message || error);
+      return res.status(500).json({ error: "server_error", message: "Le payout crypto n'a pas pu être préparé." });
+    } finally {
+      if (payoutLockUntil) await releasePayoutOperationLock(userId, payoutLockUntil);
+    }
+  });
+
   /** GET /v1/transaction/:id — get status of an API transaction */
-  app.get("/v1/transaction/:id", apiV1Limiter, requireApiKey, async (req: any, res) => {
+  app.get("/v1/transaction/:id", apiV1Limiter, requireApiKey, requireApiUserId, async (req: any, res) => {
     try {
       const merchant = req.apiUser;
       const tx = await storage.getTransactionById(req.params.id);
@@ -19910,11 +20936,14 @@ export async function registerRoutes(
         transaction_id: latestTx.id,
         reference: latestTx.reference,
         merchant_reference: (latestTx as any).merchantReference || latestMetadata.merchantReference || null,
+        type: latestTx.type,
         status: isoStatus,
         amount: parseFloat((latestTx as any).totalAmount || latestTx.amount),
         credited_amount: parseFloat(latestTx.amount),
         fee_amount: parseFloat((latestTx as any).feeAmount || "0"),
         currency: normalizeApiCurrency(latestTx.currency),
+        wallet_currency: latestMetadata.walletCurrency || latestTx.currency,
+        payment_method: latestTx.paymentMethod || null,
         phone: latestTx.recipientPhone,
         operator: operatorName,
         created_at: latestTx.createdAt,
@@ -21971,6 +23000,12 @@ export async function registerRoutes(
 
           // Update related transaction
           const meta = (() => { try { return JSON.parse(req.notes || "{}"); } catch { return {}; } })();
+          const completedApiTx = meta.txId ? await storage.getTransactionById(meta.txId).catch(() => undefined) : undefined;
+          if (completedApiTx?.source === "api") {
+            await enqueueMerchantWebhook(completedApiTx, "completed").catch((error) => {
+              console.error("[Telegram] Conversion webhook enqueue failed:", error instanceof Error ? error.message : "unknown error");
+            });
+          }
 
           await storage.createUserNotification({
             userId: req.userId,
@@ -22004,6 +23039,12 @@ export async function registerRoutes(
             cancelReason: "Annulé depuis Telegram",
           });
           if (!settled) return null;
+          const failedApiTx = meta.txId ? await storage.getTransactionById(meta.txId).catch(() => undefined) : undefined;
+          if (failedApiTx?.source === "api") {
+            await enqueueMerchantWebhook(failedApiTx, "failed").catch((error) => {
+              console.error("[Telegram] Conversion webhook enqueue failed:", error instanceof Error ? error.message : "unknown error");
+            });
+          }
 
           await storage.createUserNotification({
             userId: req.userId,

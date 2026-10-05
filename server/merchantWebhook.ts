@@ -42,7 +42,7 @@ export function isSafeMerchantWebhookUrl(rawUrl: string): boolean {
 function buildPayload(transaction: Transaction, finalStatus: FinalStatus, notifyUrl: string) {
   const metadata = ((transaction as any).metadata || {}) as Record<string, any>;
   const isPayout = transaction.type === "withdrawal" || transaction.type === "transfer_out";
-  const eventPrefix = isPayout ? "payout" : "payment";
+  const eventPrefix = transaction.type === "conversion" ? "conversion" : isPayout ? "payout" : "payment";
   return {
     event: finalStatus === "completed" ? `${eventPrefix}.completed` : `${eventPrefix}.failed`,
     transaction_id: transaction.id,

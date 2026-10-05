@@ -1,0 +1,72 @@
+---
+title: "Payouts"
+description: "Envoyez des payouts Mobile Money et USDT depuis les wallets AshTech Pay."
+---
+
+Les payouts utilisent le wallet du profil associé à la clé API. `user_id` est obligatoire dans chaque JSON et doit correspondre au propriétaire de la clé Bearer. Il ne peut pas servir à sélectionner un autre profil.
+
+## Payout Mobile Money
+
+```http
+POST https://www.ashtechpay.com/v1/payouts/mobile-money
+Authorization: Bearer ASHTECH_API_KEY
+Content-Type: application/json
+```
+
+```json
+{
+  "user_id": "VOTRE_USER_ID",
+  "reference": "retrait-commande-8201",
+  "country_code": "CM",
+  "operator": "MTN Money",
+  "phone": "2376XXXXXXXX",
+  "recipient_name": "Client",
+  "amount": "5000",
+  "fee_bearer": "sender",
+  "notify_url": "https://example.com/webhooks/ashtechpay"
+}
+```
+
+- Chargez les opérateurs avec `GET /v1/countries` et transmettez le nom d'opérateur correspondant au pays.
+- Le wallet débité est résolu côté serveur à partir du pays (`CM` → `XAF`, `GA` → `XAFG`, `CG` → `XAFC`, etc.). AshTech Pay ne convertit jamais automatiquement un autre wallet pour couvrir le payout.
+- `reference` est obligatoire et idempotente. Réutilisez-la uniquement pour rejouer la même demande; une référence réutilisée avec des paramètres différents renvoie `409 reference_conflict`.
+- `fee_bearer` vaut `sender` (frais ajoutés au débit) ou `recipient` (frais retranchés au montant envoyé). La valeur par défaut est `sender`.
+- `notify_url` est facultative et doit être une URL HTTPS publique.
+
+Un solde insuffisant renvoie `409 insufficient_balance` avant tout appel au fournisseur. Un payout accepté renvoie `202` avec `status: "pending"`. Si la réponse du fournisseur est incertaine, le statut peut être `pending_manual`; le montant reste réservé, sans nouvel envoi automatique. N'envoyez pas une autre demande pour contourner cet état : vérifiez la transaction ou contactez l'équipe AshTech Pay.
+
+## Payout USDT
+
+Le payout crypto utilise le réseau indiqué par `asset_code` et le wallet USDT. Consultez `GET /v1/crypto/assets` pour choisir un réseau actif; renseignez un memo/tag lorsque le réseau l'exige.
+
+```http
+POST https://www.ashtechpay.com/v1/payouts/crypto
+Authorization: Bearer ASHTECH_API_KEY
+Content-Type: application/json
+```
+
+```json
+{
+  "user_id": "VOTRE_USER_ID",
+  "reference": "retrait-usdt-8202",
+  "asset_code": "USDT.TRC20",
+  "destination_address": "T...",
+  "destination_memo": "",
+  "amount": "25",
+  "fee_bearer": "sender",
+  "notify_url": "https://example.com/webhooks/ashtechpay"
+}
+```
+
+Le compte doit être vérifié, les limites et frais crypto actifs s'appliquent, et le réseau doit accepter la destination. Une réponse `202` peut indiquer `pending`, `completed`, `failed` ou `pending_manual`. Un résultat incertain conserve le débit en attente de rapprochement; ne répétez pas le payout avec une nouvelle référence.
+
+## Lire le statut d'un payout
+
+Utilisez l'identifiant `transaction_id` renvoyé par la création :
+
+```http
+GET https://www.ashtechpay.com/v1/transaction/TRANSACTION_ID?user_id=VOTRE_USER_ID
+Authorization: Bearer ASHTECH_API_KEY
+```
+
+Le résultat final est également livré au `notify_url` sous forme d'événement `payout.completed` ou `payout.failed`. Vérifiez toujours la signature du webhook avant de mettre à jour votre commande.

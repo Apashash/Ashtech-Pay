@@ -841,6 +841,7 @@ app.use((req, res, next) => {
     await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS otp_locked_until BIGINT DEFAULT 0`);
     await db.execute(sql`ALTER TABLE conversion_requests ADD COLUMN IF NOT EXISTS executed_at TIMESTAMP`);
     await db.execute(sql`ALTER TABLE conversion_requests ADD COLUMN IF NOT EXISTS executed_by_id VARCHAR`);
+    await db.execute(sql`ALTER TABLE auto_conversion_rules ADD COLUMN IF NOT EXISTS notify_url TEXT`);
     await db.execute(sql`ALTER TABLE user_notifications ADD COLUMN IF NOT EXISTS type TEXT NOT NULL DEFAULT 'info'`);
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS push_subscriptions (

@@ -92,6 +92,7 @@ export async function ensureMysqlAuxiliarySchema(): Promise<void> {
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS token_revoked_before BIGINT DEFAULT 0`,
     `ALTER TABLE transactions ADD COLUMN IF NOT EXISTS merchant_reference VARCHAR(191) NULL`,
     `ALTER TABLE transactions ADD COLUMN IF NOT EXISTS internal_transfer_key VARCHAR(191) NULL`,
+    `ALTER TABLE auto_conversion_rules ADD COLUMN IF NOT EXISTS notify_url TEXT NULL`,
     `CREATE TABLE IF NOT EXISTS merchant_webhook_deliveries (
       id VARCHAR(191) NOT NULL PRIMARY KEY,
       merchant_id VARCHAR(191),

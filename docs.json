@@ -60,6 +60,8 @@
           "docs/direct-api/mobile-money",
           "docs/direct-api/payment-flows",
           "docs/direct-api/crypto",
+          "docs/direct-api/wallets-conversions",
+          "docs/direct-api/payouts",
           "docs/direct-api/webhooks"
         ]
       },

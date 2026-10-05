@@ -216,7 +216,7 @@ export const conversionRequests = mysqlTable("conversion_requests", {
 });
 export const autoConversionRules = mysqlTable("auto_conversion_rules", {
   id: id(), userId: varchar("user_id", { length: 191 }).notNull().references(() => users.id), fromCurrency: text("from_currency").notNull(), toCurrency: text("to_currency").notNull(),
-  isActive: boolean("is_active").default(true).notNull(), createdAt: dt("created_at"),
+  notifyUrl: text("notify_url"), isActive: boolean("is_active").default(true).notNull(), createdAt: dt("created_at"),
 }, t => ({ userFromCurrencyUnique: uniqueIndex("auto_conversion_user_from_currency_unique").on(t.userId, t.fromCurrency) }));
 export const hostedPageConfigs = mysqlTable("hosted_page_configs", {
   id: id(), userId: varchar("user_id", { length: 191 }).notNull().unique(), successUrl: text("success_url"), cancelUrl: text("cancel_url"), notifyUrl: text("notify_url"),

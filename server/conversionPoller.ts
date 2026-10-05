@@ -1,6 +1,7 @@
 import { storage } from "./storage";
 import { notifyConversionCompleted } from "./telegram";
 import { convertCurrency, loadFxRates } from "./walletHelper";
+import { enqueueMerchantWebhook } from "./merchantWebhook";
 
 const POLL_INTERVAL = 10_000; // 10 seconds
 let conversionProcessing = false;
@@ -47,7 +48,15 @@ export async function processPendingConversions() {
           console.error(`[ConversionPoller] User ${req.userId} not found for conversion ${req.id} — cancelling`);
           await storage.updateConversionRequest(req.id, { status: "cancelled" });
           const stuckTxId = meta?.txId;
-          if (stuckTxId) await storage.updateTransactionStatus(stuckTxId, "failed");
+          if (stuckTxId) {
+            await storage.updateTransactionStatus(stuckTxId, "failed");
+            const failedTx = await storage.getTransactionById(stuckTxId).catch(() => undefined);
+            if (failedTx?.source === "api") {
+              await enqueueMerchantWebhook(failedTx, "failed").catch((error) => {
+                console.error("[ConversionPoller] Merchant webhook enqueue failed:", error instanceof Error ? error.message : "unknown error");
+              });
+            }
+          }
           continue;
         }
 
@@ -78,6 +87,12 @@ export async function processPendingConversions() {
           });
           if (cancelled) {
             console.log(`[ConversionPoller] Refunded ${req.fromAmount} ${req.fromCurrency} to user ${req.userId}`);
+            const failedTx = meta?.txId ? await storage.getTransactionById(meta.txId).catch(() => undefined) : undefined;
+            if (failedTx?.source === "api") {
+              await enqueueMerchantWebhook(failedTx, "failed").catch((error) => {
+                console.error("[ConversionPoller] Merchant webhook enqueue failed:", error instanceof Error ? error.message : "unknown error");
+              });
+            }
           }
           continue;
         }
@@ -90,6 +105,12 @@ export async function processPendingConversions() {
         if (!settled) continue;
 
         const txId = meta?.txId;
+        const completedTx = txId ? await storage.getTransactionById(txId).catch(() => undefined) : undefined;
+        if (completedTx?.source === "api") {
+          await enqueueMerchantWebhook(completedTx, "completed").catch((error) => {
+            console.error("[ConversionPoller] Merchant webhook enqueue failed:", error instanceof Error ? error.message : "unknown error");
+          });
+        }
 
         await storage.createUserNotification({
           userId: req.userId,

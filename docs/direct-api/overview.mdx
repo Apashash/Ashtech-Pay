@@ -3,7 +3,7 @@ title: "Direct API"
 description: "Construisez votre propre expérience de paiement avec l'API AshTech Pay."
 ---
 
-Direct API permet de garder votre interface, vos formulaires et votre logique métier tout en utilisant les rails de paiement AshTech Pay.
+Direct API permet de garder votre interface, vos formulaires et votre logique métier tout en utilisant les rails de paiement AshTech Pay. Les opérations liées à un compte exigent le `user_id` du profil AshTech Pay associé à la clé Bearer. AshTech Pay compare les deux identifiants : ce champ ne permet jamais de choisir un autre compte.
 
 ## Endpoints disponibles
 
@@ -14,14 +14,26 @@ Direct API permet de garder votre interface, vos formulaires et votre logique m�
   <Card title="Crypto" icon="bitcoin" href="/docs/direct-api/crypto">
     Créez une adresse de paiement et recevez du USDT sur le réseau choisi.
   </Card>
+  <Card title="Wallets et conversions" icon="wallet" href="/docs/direct-api/wallets-conversions">
+    Consultez les soldes et configurez les conversions immédiates ou automatiques.
+  </Card>
+  <Card title="Payouts" icon="money-bill-transfer" href="/docs/direct-api/payouts">
+    Envoyez des payouts Mobile Money ou USDT depuis les wallets AshTech Pay.
+  </Card>
 </CardGroup>
 
 | Méthode | Endpoint | Utilisation |
 | --- | --- | --- |
 | `GET` | `/v1/countries` | Pays et opérateurs actifs |
 | `GET` | `/v1/fees` | Frais applicables |
+| `GET` | `/v1/wallets?user_id=...` | Soldes des wallets du profil |
 | `POST` | `/v1/collect` | Collecte Mobile Money |
-| `GET` | `/v1/transaction/:id` | Statut d'une transaction |
+| `POST` | `/v1/conversions` | Conversion immédiate entre wallets |
+| `GET` | `/v1/conversions/:id?user_id=...` | Statut d'une conversion |
+| `GET`, `POST`, `DELETE` | `/v1/auto-conversion-rules` | Règles de conversion automatique |
+| `POST` | `/v1/payouts/mobile-money` | Payout Mobile Money |
+| `POST` | `/v1/payouts/crypto` | Payout USDT |
+| `GET` | `/v1/transaction/:id?user_id=...` | Statut d'une transaction |
 | `GET` | `/v1/crypto/assets` | Réseaux crypto actifs |
 | `POST` | `/v1/crypto/collect` | Création d'un paiement crypto |
 
@@ -32,3 +44,5 @@ Direct API permet de garder votre interface, vos formulaires et votre logique m�
 3. Enregistrez l'identifiant de transaction renvoyé par AshTech Pay.
 4. Attendez le webhook ou vérifiez le statut côté serveur.
 5. Ne créditez jamais une commande uniquement à partir d'une réponse reçue dans le navigateur.
+
+Pour les opérations par profil (`/v1/wallets`, collectes, conversions, règles automatiques, payouts et lecture de transaction), envoyez `user_id` dans le JSON ou dans la query string selon la méthode. Un identifiant absent renvoie `400 user_id_required`; un identifiant différent du propriétaire de la clé renvoie `403 user_id_mismatch`.

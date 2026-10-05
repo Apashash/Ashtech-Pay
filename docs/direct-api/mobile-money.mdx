@@ -20,6 +20,7 @@ const response = await fetch("https://www.ashtechpay.com/v1/collect", {
     "Content-Type": "application/json",
   },
   body: JSON.stringify({
+    user_id: "VOTRE_USER_ID",
     amount: 1000,
     currency: "XAF",
     country_code: "CM",
@@ -47,6 +48,7 @@ response = requests.post(
         "Content-Type": "application/json",
     },
     json={
+        "user_id": "VOTRE_USER_ID",
         "amount": 1000,
         "currency": "XAF",
         "country_code": "CM",
@@ -67,6 +69,7 @@ curl -X POST https://www.ashtechpay.com/v1/collect \
   -H "Authorization: Bearer $ASHTECH_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
+    "user_id": "VOTRE_USER_ID",
     "amount": 1000,
     "currency": "XAF",
     "country_code": "CM",
@@ -84,6 +87,7 @@ curl -X POST https://www.ashtechpay.com/v1/collect \
 <?php
 
 $payload = [
+    "user_id" => "VOTRE_USER_ID",
     "amount" => 1000,
     "currency" => "XAF",
     "country_code" => "CM",
@@ -115,6 +119,7 @@ curl_close($ch);
 
 | Champ | Obligatoire | Description |
 | --- | --- | --- |
+| `user_id` | Oui | Identifiant du profil AshTech Pay associé à la clé Bearer |
 | `amount` | Oui | Montant positif à collecter |
 | `currency` | Oui | Devise du pays sélectionné |
 | `country_code` | Oui | Code pays actif, par exemple `CM` |
@@ -129,7 +134,7 @@ curl_close($ch);
 
 ## Statut
 
-Le traitement peut être asynchrone. Utilisez `GET /v1/transaction/:id` pour vérifier une transaction, mais utilisez le webhook pour déclencher votre fulfillment.
+Le traitement peut être asynchrone. Utilisez `GET /v1/transaction/:id?user_id=VOTRE_USER_ID` pour vérifier une transaction, mais utilisez le webhook pour déclencher votre fulfillment.
 
 Pour les parcours USSD Push, Wave, OTP SMS et OTP USSD, consultez [les flux de paiement détaillés](/docs/direct-api/payment-flows).
 
@@ -138,7 +143,7 @@ Pour les parcours USSD Push, Wave, OTP SMS et OTP USSD, consultez [les flux de p
 
 ```javascript
 const response = await fetch(
-  "https://www.ashtechpay.com/v1/transaction/TRANSACTION_ID",
+  "https://www.ashtechpay.com/v1/transaction/TRANSACTION_ID?user_id=VOTRE_USER_ID",
   {
     headers: {
       Authorization: `Bearer ${process.env.ASHTECH_API_KEY}`,
@@ -156,7 +161,7 @@ import os
 import requests
 
 response = requests.get(
-    "https://www.ashtechpay.com/v1/transaction/TRANSACTION_ID",
+    "https://www.ashtechpay.com/v1/transaction/TRANSACTION_ID?user_id=VOTRE_USER_ID",
     headers={"Authorization": f"Bearer {os.environ['ASHTECH_API_KEY']}"},
 )
 transaction = response.json()
@@ -166,7 +171,7 @@ transaction = response.json()
   <Tab title="cURL">
 
 ```bash
-curl https://www.ashtechpay.com/v1/transaction/TRANSACTION_ID \
+curl "https://www.ashtechpay.com/v1/transaction/TRANSACTION_ID?user_id=VOTRE_USER_ID" \
   -H "Authorization: Bearer $ASHTECH_API_KEY"
 ```
 
@@ -176,7 +181,7 @@ curl https://www.ashtechpay.com/v1/transaction/TRANSACTION_ID \
 ```php
 <?php
 
-$ch = curl_init("https://www.ashtechpay.com/v1/transaction/TRANSACTION_ID");
+$ch = curl_init("https://www.ashtechpay.com/v1/transaction/TRANSACTION_ID?user_id=VOTRE_USER_ID");
 curl_setopt_array($ch, [
     CURLOPT_RETURNTRANSFER => true,
     CURLOPT_HTTPHEADER => [

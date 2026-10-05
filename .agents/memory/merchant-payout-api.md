@@ -9,6 +9,12 @@ The merchant API should let platforms display the authenticated profile's AshTec
 
 Mobile Money payouts use the wallet currency mapped to the selected destination country and must not silently convert funds from another wallet. If that specific wallet lacks funds, reject before submitting to a payout provider. Conversions targeting a country must resolve that country's exact internal wallet currency server-side.
 
+Create a Direct payout debit and its transaction in one database transaction; do the same for a conversion debit, conversion request, and transaction. Conditional balance updates must prevent concurrent requests from overdrawing a wallet. Refund only on a definitive provider rejection; timeouts and ambiguous outcomes remain pending for reconciliation.
+
+**Why:** A partial write could lose the transaction record for money already debited, while a timeout cannot prove that the payout provider did not send the funds.
+
+**How to apply:** Use one storage transaction for the debit plus all records needed to reconcile it. Preserve idempotency references and keep uncertain payouts pending until an authoritative result arrives.
+
 The Direct API payout scope should include automated USDT withdrawals as a separate flow: debit the authenticated profile's USDT wallet, validate the active asset/network and destination address/memo, apply configured USDT fees and limits, and reconcile the asynchronous provider result.
 
 **Why:** The user requires `user_id` on all merchant API operations, wants merchants to display AshTechPay balances inside their own platforms, and requires country-specific wallets and automated USDT payouts.

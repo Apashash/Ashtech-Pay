@@ -1164,6 +1164,7 @@ export const autoConversionRules = pgTable("auto_conversion_rules", {
   userId: varchar("user_id").notNull().references(() => users.id),
   fromCurrency: text("from_currency").notNull(),
   toCurrency: text("to_currency").notNull(),
+  notifyUrl: text("notify_url"),
   isActive: boolean("is_active").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 }, (t) => ({

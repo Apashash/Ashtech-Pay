@@ -397,6 +397,13 @@ export interface IStorage {
   upsertWallet(userId: string, currency: string, balanceDelta: number): Promise<Wallet>;
   setWalletBalance(userId: string, currency: string, newBalance: number): Promise<Wallet>;
   deleteWallet(walletId: string): Promise<void>;
+  createPayoutAndDebit(transaction: InsertTransaction, debitAmount: number): Promise<Transaction>;
+  createConversionAndDebit(
+    transaction: InsertTransaction,
+    conversionRequest: InsertConversionRequest,
+    debitAmount: number,
+    sourceWalletCurrency: string,
+  ): Promise<{ transaction: Transaction; conversionRequest: ConversionRequest }>;
   // Conversion requests
   createConversionRequest(data: InsertConversionRequest): Promise<ConversionRequest>;
   getConversionRequest(id: string): Promise<ConversionRequest | undefined>;
@@ -998,9 +1005,19 @@ export class DatabaseStorage implements IStorage {
     if (!Number.isFinite(debitAmount) || debitAmount <= 0 || insertTransaction.currency !== "USDT") {
       throw new Error("INVALID_CRYPTO_PAYOUT_DEBIT");
     }
+    return this.createPayoutAndDebit(insertTransaction, debitAmount);
+  }
 
+  async createPayoutAndDebit(
+    insertTransaction: InsertTransaction,
+    debitAmount: number,
+  ): Promise<Transaction> {
+    if (!Number.isFinite(debitAmount) || debitAmount <= 0) {
+      throw new Error("INVALID_PAYOUT_DEBIT");
+    }
     const transactionId = (insertTransaction as any).id || randomUUID();
-    const walletCurrency = String((insertTransaction.metadata as any)?.walletCurrency || "USDT");
+    const walletCurrency = String((insertTransaction.metadata as any)?.walletCurrency || insertTransaction.currency || "");
+    if (!walletCurrency) throw new Error("PAYOUT_WALLET_CURRENCY_REQUIRED");
     const created = await db.transaction(async (trx) => {
       const [user] = await trx.select({ preferredCurrency: users.preferredCurrency })
         .from(users)
@@ -1078,6 +1095,116 @@ export class DatabaseStorage implements IStorage {
       const [transaction] = await trx.insert(transactions).values(transactionValues).returning();
       if (!transaction) throw new Error("TRANSACTION_INSERT_READBACK_FAILED");
       return transaction;
+    });
+
+    invalidateUserCache(insertTransaction.userId);
+    return created;
+  }
+
+  async createConversionAndDebit(
+    insertTransaction: InsertTransaction,
+    insertConversionRequest: InsertConversionRequest,
+    debitAmount: number,
+    sourceWalletCurrency: string,
+  ): Promise<{ transaction: Transaction; conversionRequest: ConversionRequest }> {
+    if (
+      !Number.isFinite(debitAmount) ||
+      debitAmount <= 0 ||
+      !sourceWalletCurrency ||
+      insertTransaction.userId !== insertConversionRequest.userId
+    ) {
+      throw new Error("INVALID_CONVERSION_DEBIT");
+    }
+
+    const transactionId = String((insertTransaction as any).id || randomUUID());
+    const conversionId = String((insertConversionRequest as any).id || randomUUID());
+    const amountText = debitAmount.toFixed(2);
+    const created = await db.transaction(async (trx) => {
+      const [user] = await trx.select({ preferredCurrency: users.preferredCurrency })
+        .from(users)
+        .where(eq(users.id, insertTransaction.userId))
+        .limit(1);
+      if (!user) throw new Error("USER_NOT_FOUND");
+
+      const usesPrimaryWallet = (user.preferredCurrency || "XAF") === sourceWalletCurrency;
+      const balanceColumn = usesPrimaryWallet ? users.balance : wallets.balance;
+      const enoughBalance = isMysqlDialect
+        ? sql`CAST(${balanceColumn} AS DECIMAL(30, 10)) >= ${amountText}`
+        : sql`${balanceColumn}::numeric >= ${amountText}::numeric`;
+
+      let debited = false;
+      if (usesPrimaryWallet) {
+        if (isMysqlDialect) {
+          const result = await trx.update(users)
+            .set({ balance: sql`CAST(${users.balance} AS DECIMAL(30, 10)) - ${amountText}` })
+            .where(and(eq(users.id, insertTransaction.userId), enoughBalance));
+          const header = Array.isArray(result) ? result[0] : result;
+          const affectedRows = Number((header as any)?.affectedRows ?? (header as any)?.rowCount ?? (header as any)?.changes);
+          if (!Number.isFinite(affectedRows)) throw new Error("CONVERSION_DEBIT_UNCONFIRMED");
+          debited = affectedRows > 0;
+        } else {
+          const [updated] = await trx.update(users)
+            .set({ balance: sql`${users.balance}::numeric - ${amountText}::numeric` })
+            .where(and(eq(users.id, insertTransaction.userId), enoughBalance))
+            .returning({ id: users.id });
+          debited = !!updated;
+        }
+      } else if (isMysqlDialect) {
+        const result = await trx.update(wallets)
+          .set({
+            balance: sql`CAST(${wallets.balance} AS DECIMAL(30, 10)) - ${amountText}`,
+            updatedAt: new Date(),
+          })
+          .where(and(
+            eq(wallets.userId, insertTransaction.userId),
+            eq(wallets.currency, sourceWalletCurrency),
+            enoughBalance,
+          ));
+        const header = Array.isArray(result) ? result[0] : result;
+        const affectedRows = Number((header as any)?.affectedRows ?? (header as any)?.rowCount ?? (header as any)?.changes);
+        if (!Number.isFinite(affectedRows)) throw new Error("CONVERSION_DEBIT_UNCONFIRMED");
+        debited = affectedRows > 0;
+      } else {
+        const [updated] = await trx.update(wallets)
+          .set({
+            balance: sql`${wallets.balance}::numeric - ${amountText}::numeric`,
+            updatedAt: new Date(),
+          })
+          .where(and(
+            eq(wallets.userId, insertTransaction.userId),
+            eq(wallets.currency, sourceWalletCurrency),
+            enoughBalance,
+          ))
+          .returning({ id: wallets.id });
+        debited = !!updated;
+      }
+      if (!debited) throw new Error("INSUFFICIENT_WALLET_BALANCE");
+
+      const transactionValues = {
+        ...insertTransaction,
+        id: transactionId,
+        status: insertTransaction.status || "pending",
+      } as any;
+      const conversionValues = {
+        ...insertConversionRequest,
+        id: conversionId,
+        fromAmount: amountText,
+        status: insertConversionRequest.status || "pending",
+      } as any;
+
+      if (isMysqlDialect) {
+        await trx.insert(transactions).values(transactionValues);
+        await trx.insert(conversionRequests).values(conversionValues);
+        const [transaction] = await trx.select().from(transactions).where(eq(transactions.id, transactionId)).limit(1);
+        const [conversionRequest] = await trx.select().from(conversionRequests).where(eq(conversionRequests.id, conversionId)).limit(1);
+        if (!transaction || !conversionRequest) throw new Error("CONVERSION_INSERT_READBACK_FAILED");
+        return { transaction, conversionRequest };
+      }
+
+      const [transaction] = await trx.insert(transactions).values(transactionValues).returning();
+      const [conversionRequest] = await trx.insert(conversionRequests).values(conversionValues).returning();
+      if (!transaction || !conversionRequest) throw new Error("CONVERSION_INSERT_READBACK_FAILED");
+      return { transaction, conversionRequest };
     });
 
     invalidateUserCache(insertTransaction.userId);

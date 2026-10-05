@@ -7,6 +7,8 @@ Une collecte Mobile Money n'a pas toujours le même parcours. Le flux dépend du
 
 Ne codez pas le flux à partir du nom de la marque. Chargez [`GET /v1/countries`](/docs/reference/countries), utilisez l'opérateur retourné par le catalogue, puis inspectez la réponse de `POST /v1/collect`.
 
+Toutes les collectes et confirmations OTP exigent `user_id` dans le JSON. Utilisez l'identifiant du profil AshTech Pay associé à la clé Bearer. Les lectures de transaction exigent aussi `user_id` dans la query string.
+
 ## Résumé des flux
 
 | Flux | Réponse initiale | Action côté client |
@@ -25,7 +27,7 @@ Le flux USSD Push est utilisé par la plupart des opérateurs qui ne demandent p
 1. Vous appelez `POST /v1/collect`.
 2. AshTech Pay renvoie `202` et `status: "pending"`.
 3. Le client reçoit une demande sur son téléphone et la valide avec son code secret opérateur.
-4. Votre serveur reçoit le webhook final, ou vérifie périodiquement `GET /v1/transaction/:id`.
+4. Votre serveur reçoit le webhook final, ou vérifie périodiquement `GET /v1/transaction/:id?user_id=VOTRE_USER_ID`.
 
 Exemple de réponse :
 
@@ -83,6 +85,7 @@ curl -X POST https://www.ashtechpay.com/v1/collect \
   -H "Authorization: Bearer $ASHTECH_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
+    "user_id": "VOTRE_USER_ID",
     "amount": 5000,
     "currency": "XOF",
     "phone": "2250XXXXXXXX",
@@ -148,6 +151,7 @@ const response = await fetch("https://www.ashtechpay.com/v1/collect", {
     "Content-Type": "application/json",
   },
   body: JSON.stringify({
+    user_id: "VOTRE_USER_ID",
     amount: 5000,
     currency: "XOF",
     phone: "2250XXXXXXXX",
@@ -174,6 +178,7 @@ response = requests.post(
         "Content-Type": "application/json",
     },
     json={
+        "user_id": "VOTRE_USER_ID",
         "amount": 5000,
         "currency": "XOF",
         "phone": "2250XXXXXXXX",
@@ -194,6 +199,7 @@ curl -X POST https://www.ashtechpay.com/v1/collect \
   -H "Authorization: Bearer $ASHTECH_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
+    "user_id": "VOTRE_USER_ID",
     "amount": 5000,
     "currency": "XOF",
     "phone": "2250XXXXXXXX",
@@ -211,6 +217,7 @@ curl -X POST https://www.ashtechpay.com/v1/collect \
 <?php
 
 $payload = [
+    "user_id" => "VOTRE_USER_ID",
     "amount" => 5000,
     "currency" => "XOF",
     "phone" => "2250XXXXXXXX",
@@ -246,6 +253,7 @@ curl -X POST https://www.ashtechpay.com/v1/collect \
   -H "Authorization: Bearer $ASHTECH_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
+    "user_id": "VOTRE_USER_ID",
     "amount": 5000,
     "currency": "XAF",
     "phone": "2376XXXXXXXX",
@@ -265,6 +273,7 @@ curl -X POST https://www.ashtechpay.com/v1/collect \
   -H "Authorization: Bearer $ASHTECH_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
+    "user_id": "VOTRE_USER_ID",
     "amount": 5000,
     "currency": "XOF",
     "phone": "2250XXXXXXXX",
@@ -284,6 +293,7 @@ curl -X POST https://www.ashtechpay.com/v1/collect \
   -H "Authorization: Bearer $ASHTECH_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
+    "user_id": "VOTRE_USER_ID",
     "amount": 5000,
     "currency": "XOF",
     "phone": "2250XXXXXXXX",
@@ -311,6 +321,7 @@ const response = await fetch("https://www.ashtechpay.com/v1/collect", {
     "Content-Type": "application/json",
   },
   body: JSON.stringify({
+    user_id: "VOTRE_USER_ID",
     amount: 5000,
     currency: "XOF",
     phone: "2250XXXXXXXX",
@@ -338,6 +349,7 @@ response = requests.post(
         "Content-Type": "application/json",
     },
     json={
+        "user_id": "VOTRE_USER_ID",
         "amount": 5000,
         "currency": "XOF",
         "phone": "2250XXXXXXXX",
@@ -359,6 +371,7 @@ curl -X POST https://www.ashtechpay.com/v1/collect \
   -H "Authorization: Bearer $ASHTECH_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
+    "user_id": "VOTRE_USER_ID",
     "amount": 5000,
     "currency": "XOF",
     "phone": "2250XXXXXXXX",
@@ -377,6 +390,7 @@ curl -X POST https://www.ashtechpay.com/v1/collect \
 <?php
 
 $payload = [
+    "user_id" => "VOTRE_USER_ID",
     "amount" => 5000,
     "currency" => "XOF",
     "phone" => "2250XXXXXXXX",
@@ -437,4 +451,4 @@ Traitez ces événements de manière idempotente. Répondez rapidement `2xx`, v�
 - N'affichez pas `success` après la réponse initiale `202`.
 - N'exposez jamais votre clé API dans le navigateur.
 - Ne stockez pas les codes OTP plus longtemps que nécessaire.
-- Utilisez le webhook et `GET /v1/transaction/:id` pour confirmer le résultat final.
+- Utilisez le webhook et `GET /v1/transaction/:id?user_id=VOTRE_USER_ID` pour confirmer le résultat final.

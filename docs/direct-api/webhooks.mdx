@@ -58,7 +58,7 @@ app.post("/webhooks/ashtechpay", express.raw({ type: "application/json" }), asyn
 
 ## Ne faites pas confiance au navigateur
 
-Une page de succès peut être fermée, rejouée ou modifiée. Utilisez le webhook ou une vérification serveur de `GET /v1/transaction/:id` pour confirmer le paiement.
+Une page de succès peut être fermée, rejouée ou modifiée. Utilisez le webhook ou une vérification serveur de `GET /v1/transaction/:id?user_id=VOTRE_USER_ID` pour confirmer le paiement.
 
 Les erreurs HTTP, les erreurs réseau et les réponses non-`2xx` sont réessayées avec un délai croissant, jusqu'à huit tentatives avant l'échec permanent. Les notifications restent dédupliquées : rendez votre traitement idempotent.
 

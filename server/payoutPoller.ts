@@ -18,6 +18,7 @@ import {
   isProviderStatusPollDue,
   recoveredStatusPollLastCheckedAt,
 } from "./providerStatusPolicy";
+import { enqueueMerchantWebhook } from "./merchantWebhook";
 
 const POLL_INTERVAL = 10_000; // scheduler tick; provider lookups use progressive backoff
 
@@ -304,6 +305,15 @@ export async function processPayout(payout: PendingPayout, apiStatus: string) {
       }).catch(() => {});
     }
 
+    const settledTransaction = await storage.getTransactionById(payout.transactionId).catch(() => undefined);
+    if (
+      settledTransaction?.source === "api" &&
+      (settledTransaction.status === "completed" || settledTransaction.status === "failed")
+    ) {
+      await enqueueMerchantWebhook(settledTransaction, settledTransaction.status).catch((error) => {
+        console.error("[PayoutPoller] Merchant webhook enqueue failed:", error instanceof Error ? error.message : "unknown error");
+      });
+    }
     removePendingPayout(payout.reference);
   } catch (err: any) {
     console.error(`[PayoutPoller] Error processing payout ${payout.reference}:`, err.message);
