@@ -21,7 +21,7 @@ import {
 } from "./providerStatusPolicy";
 import { enqueueMerchantWebhook } from "./merchantWebhook";
 
-const POLL_INTERVAL = 10_000; // scheduler tick; provider lookups use progressive backoff
+const POLL_INTERVAL = 1_000; // fine-grained scheduler tick; provider lookups use provider-specific intervals
 
 interface PendingPayout {
   transactionId:  string;
@@ -77,9 +77,32 @@ export async function recoverPendingPayouts() {
     for (const t of pending) {
       const internalRef = t.reference ?? "";
       if (!internalRef) continue;
-      const payoutStartedAt = t.createdAt ? new Date(t.createdAt).getTime() : Date.now();
       const operator = t.operatorId ? await storage.getOperator(t.operatorId).catch(() => null) : null;
-      const metadata = ((t as any).metadata || {}) as Record<string, any>;
+      const rawMetadata = (t as any).metadata;
+      let metadata: Record<string, any> = {};
+      if (rawMetadata && typeof rawMetadata === "object" && !Array.isArray(rawMetadata)) {
+        metadata = rawMetadata as Record<string, any>;
+      } else if (typeof rawMetadata === "string") {
+        try {
+          const parsed = JSON.parse(rawMetadata);
+          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+            metadata = parsed as Record<string, any>;
+          }
+        } catch {
+          // Keep recovery on the transaction-created timestamp for legacy metadata.
+        }
+      }
+      const persistedAttemptStart = typeof metadata.payoutAttemptStartedAt === "number"
+        ? metadata.payoutAttemptStartedAt
+        : typeof metadata.payoutAttemptStartedAt === "string"
+          ? (Number(metadata.payoutAttemptStartedAt) || Date.parse(metadata.payoutAttemptStartedAt))
+          : Number.NaN;
+      const createdAt = t.createdAt ? new Date(t.createdAt as any).getTime() : Number.NaN;
+      const payoutStartedAt = Number.isFinite(persistedAttemptStart) && persistedAttemptStart > 0
+        ? persistedAttemptStart
+        : Number.isFinite(createdAt)
+          ? createdAt
+          : Date.now();
       const configuredProvider = resolvePayoutStatusProvider(
         metadata.paymentProvider,
         metadata.pendingPayoutProvider,
@@ -130,8 +153,8 @@ export async function recoverPendingPayouts() {
 
       let pollerRef = provider === "izichange" ? internalRef : (t as any).externalReference || internalRef;
       if (provider === "afribapay") {
-        // For retries, externalReference holds the submitted order_id (retry ref).
-        // For original submissions without an externalReference, fall back to internalRef.
+        // externalReference holds AfribaPay's returned order_id, or the fresh submitted
+        // retry ID only when AfribaPay did not return one.
         pollerRef = (t as any).externalReference || internalRef;
       } else if (provider === "pixpay") {
         pollerRef = (t as any).externalReference || internalRef;
@@ -148,7 +171,12 @@ export async function recoverPendingPayouts() {
         attempts:      0,
         provider,
         startedAt:     payoutStartedAt,
-        lastCheckedAt: recoveredStatusPollLastCheckedAt(pollerRef, payoutStartedAt),
+        lastCheckedAt: recoveredStatusPollLastCheckedAt(
+          pollerRef,
+          payoutStartedAt,
+          Date.now(),
+          provider,
+        ),
         externalReference: provider === "izichange"
           ? iziPayoutId
           : (t as any).externalReference || metadata.iziPayoutId || undefined,
@@ -609,7 +637,12 @@ async function pollPendingPayouts() {
         checkedTransactions.has(payout.transactionId) ||
         pendingPayoutStatusChecks.has(payout.transactionId)
       ) continue;
-      if (!isProviderStatusPollDue(payout.startedAt ?? now, payout.lastCheckedAt ?? 0, now)) continue;
+      if (!isProviderStatusPollDue(
+        payout.startedAt ?? now,
+        payout.lastCheckedAt ?? 0,
+        now,
+        payout.provider,
+      )) continue;
       pendingPayoutStatusChecks.add(payout.transactionId);
       checkedTransactions.add(payout.transactionId);
       try {

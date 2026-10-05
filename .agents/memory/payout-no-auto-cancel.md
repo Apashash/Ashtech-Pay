@@ -81,9 +81,10 @@ For providers whose callback and poller can race, the terminal transaction
 claim and corresponding wallet credit/refund must commit in one database
 transaction.
 
-User requirement (2026-10-05): payout status polling is **infinite** — no attempt
-cap. Check every 3 minutes during the first 10 minutes, then every 30 minutes
-without a duration limit. Never reintroduce a max-attempts bailout.
+User requirement (2026-10-05): AfribaPay payout status polling is **infinite** —
+check every 5 seconds for 5 minutes, every 5 minutes for the next 30 minutes,
+every 30 minutes for the next 5 hours, then every 5 hours until status changes.
+Never add a duration or attempt cap.
 
 **Why:** transient initiation errors and a 60-min poll timeout were
 auto-failing + refunding payouts while the provider still said PENDING —
@@ -102,8 +103,10 @@ generic `ERROR`, timeouts, and ambiguous responses remain pending/pending_manual
 unless provider documentation confirms that exact response is terminal. Persist
 the provider ID before submission, reuse it for every reconciliation, block
 the provider ID for reconciliation, and settle status plus wallet mutation
-atomically. For an admin-requested terminal override, do not resubmit; process
-failure refunds against the original wallet and log the retained provider ID.
+atomically. AfribaPay retries restart the four-stage schedule from their own
+persisted attempt start time. Other providers keep their existing polling policy.
+For an admin-requested terminal override, do not resubmit; process failure
+refunds against the original wallet and log the retained provider ID.
 
 When an admin retry changes providers, every subsequent poll must resolve the
 active provider and lookup reference from the current persisted attempt, not from
@@ -113,8 +116,8 @@ the provider captured in an older in-memory queue entry.
 retry, leaving AshTechPay pending even when the new provider has confirmed.
 
 **How to apply:** read the persisted attempt metadata before each provider lookup
-and keep polling unresolved statuses indefinitely; use the user's current
-three-minute/ten-minute then thirty-minute cadence.
+and keep polling unresolved statuses indefinitely. For AfribaPay, use the
+user's four-stage schedule and reset its start time for every fresh attempt.
 
 For AfribaPay payout retries, use the `order_id` returned by the successful
 initiation response as the active status-lookup reference. Persist the fresh

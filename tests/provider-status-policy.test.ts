@@ -199,7 +199,7 @@ test("payout status lookup uses the current provider reference without unsafe fa
   }), null);
 });
 
-test("provider status polling checks every three minutes for ten minutes, then every thirty minutes forever", () => {
+test("non-AfribaPay provider status polling checks every three minutes for ten minutes, then every thirty minutes forever", () => {
   const minute = 60 * 1000;
   const threeMinutes = 3 * minute;
   const thirtyMinutes = 30 * minute;
@@ -224,6 +224,54 @@ test("provider status polling checks every three minutes for ten minutes, then e
   );
 });
 
+test("AfribaPay payout polling follows the requested four-stage schedule indefinitely", () => {
+  const second = 1000;
+  const minute = 60 * second;
+  const hour = 60 * minute;
+  const startedAt = 1_000_000;
+  const cases = [
+    [0, 5 * second],
+    [5 * minute - 1, 5 * second],
+    [5 * minute, 5 * minute],
+    [35 * minute - 1, 5 * minute],
+    [35 * minute, 30 * minute],
+    [5 * hour + 35 * minute - 1, 30 * minute],
+    [5 * hour + 35 * minute, 5 * hour],
+    [365 * 24 * hour, 5 * hour],
+  ] as const;
+
+  for (const [age, expectedInterval] of cases) {
+    assert.equal(
+      providerStatusPollIntervalMs(startedAt, startedAt + age, "afribapay"),
+      expectedInterval,
+      `wrong interval at age ${age}ms`,
+    );
+  }
+
+  assert.equal(
+    isProviderStatusPollDue(startedAt, startedAt + 4 * minute + 55 * second, startedAt + 5 * minute, "afribapay"),
+    true,
+    "the final 5-second check must not be skipped at the 5-minute boundary",
+  );
+  assert.equal(
+    isProviderStatusPollDue(startedAt, startedAt + 5 * minute, startedAt + 10 * minute - 1, "afribapay"),
+    false,
+  );
+  assert.equal(
+    isProviderStatusPollDue(startedAt, startedAt + 5 * minute, startedAt + 10 * minute, "afribapay"),
+    true,
+  );
+  assert.equal(
+    isProviderStatusPollDue(startedAt, startedAt + 34 * minute + 55 * second, startedAt + 35 * minute - 1, "afribapay"),
+    false,
+  );
+  assert.equal(
+    isProviderStatusPollDue(startedAt, startedAt + 34 * minute + 55 * second, startedAt + 35 * minute, "afribapay"),
+    true,
+    "the next phase must start with a check at the 35-minute boundary",
+  );
+});
+
 test("recovered provider lookups are deterministically spread over one minute", () => {
   const now = 2_000_000_000_000;
   const startedAt = now - 8 * 24 * 60 * 60 * 1000;
@@ -236,6 +284,15 @@ test("recovered provider lookups are deterministically spread over one minute", 
   );
   assert.ok(now - lastCheckedAt >= interval - 60_000);
   assert.ok(now - lastCheckedAt < interval);
+});
+
+test("recovered AfribaPay lookups are spread by no more than one 5-second check interval", () => {
+  const now = 2_000_000_000_000;
+  const startedAt = now - 2 * 60 * 1000;
+  const lastCheckedAt = recoveredStatusPollLastCheckedAt("afri-recovery", startedAt, now, "afribapay");
+
+  assert.ok(now - lastCheckedAt >= 1);
+  assert.ok(now - lastCheckedAt <= 5_000);
 });
 
 test("async status cache coalesces requests and expires values", async () => {

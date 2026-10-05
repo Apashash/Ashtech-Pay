@@ -1,22 +1,57 @@
+const SECOND = 1000;
+const MINUTE = 60 * SECOND;
+const HOUR = 60 * MINUTE;
+
 export const PROVIDER_STATUS_POLL_INTERVALS = [
-  { maxAgeMs: 10 * 60 * 1000, intervalMs: 3 * 60 * 1000 },
-  { maxAgeMs: Number.POSITIVE_INFINITY, intervalMs: 30 * 60 * 1000 },
+  { maxAgeMs: 10 * MINUTE, intervalMs: 3 * MINUTE },
+  { maxAgeMs: Number.POSITIVE_INFINITY, intervalMs: 30 * MINUTE },
 ] as const;
 
-/** Pending transactions are polled every three minutes for 10 minutes, then every 30 minutes forever. */
-export function providerStatusPollIntervalMs(startedAt: number, now = Date.now()): number {
+export const AFRIBAPAY_PAYOUT_STATUS_POLL_INTERVALS = [
+  { maxAgeMs: 5 * MINUTE, intervalMs: 5 * SECOND },
+  { maxAgeMs: 35 * MINUTE, intervalMs: 5 * MINUTE },
+  { maxAgeMs: 335 * MINUTE, intervalMs: 30 * MINUTE },
+  { maxAgeMs: Number.POSITIVE_INFINITY, intervalMs: 5 * HOUR },
+] as const;
+
+/** AfribaPay payouts use the requested fast-to-slow schedule; other providers keep the shared schedule. */
+export function providerStatusPollIntervalMs(
+  startedAt: number,
+  now = Date.now(),
+  provider?: string,
+): number {
   const ageMs = Math.max(0, now - startedAt);
-  return PROVIDER_STATUS_POLL_INTERVALS.find(({ maxAgeMs }) => ageMs < maxAgeMs)?.intervalMs
-    ?? PROVIDER_STATUS_POLL_INTERVALS[PROVIDER_STATUS_POLL_INTERVALS.length - 1].intervalMs;
+  const intervals = provider === "afribapay"
+    ? AFRIBAPAY_PAYOUT_STATUS_POLL_INTERVALS
+    : PROVIDER_STATUS_POLL_INTERVALS;
+  return intervals.find(({ maxAgeMs }) => ageMs < maxAgeMs)?.intervalMs
+    ?? intervals[intervals.length - 1].intervalMs;
 }
 
 export function isProviderStatusPollDue(
   startedAt: number,
   lastCheckedAt: number,
   now = Date.now(),
+  provider?: string,
 ): boolean {
   if (!Number.isFinite(lastCheckedAt) || lastCheckedAt <= 0) return true;
-  return now - lastCheckedAt >= providerStatusPollIntervalMs(startedAt, now);
+  if (lastCheckedAt > now) return false;
+  if (provider !== "afribapay") {
+    return now - lastCheckedAt >= providerStatusPollIntervalMs(startedAt, now, provider);
+  }
+
+  // AfribaPay gets a check at each phase boundary as well as after each interval.
+  // That prevents a last 5-second/5-minute check just before a boundary from
+  // pushing the new phase's first check late.
+  const ageAtLastCheck = Math.max(0, lastCheckedAt - startedAt);
+  const phase = AFRIBAPAY_PAYOUT_STATUS_POLL_INTERVALS.find(
+    ({ maxAgeMs }) => ageAtLastCheck < maxAgeMs,
+  ) ?? AFRIBAPAY_PAYOUT_STATUS_POLL_INTERVALS[AFRIBAPAY_PAYOUT_STATUS_POLL_INTERVALS.length - 1];
+  const intervalDeadline = lastCheckedAt + phase.intervalMs;
+  const phaseBoundaryDeadline = Number.isFinite(phase.maxAgeMs)
+    ? startedAt + phase.maxAgeMs
+    : Number.POSITIVE_INFINITY;
+  return now >= Math.min(intervalDeadline, phaseBoundaryDeadline);
 }
 
 /** Deterministically spreads startup recovery lookups over at most one minute. */
@@ -24,13 +59,14 @@ export function recoveredStatusPollLastCheckedAt(
   key: string,
   startedAt: number,
   now = Date.now(),
+  provider?: string,
 ): number {
   let hash = 2166136261;
   for (let i = 0; i < key.length; i++) {
     hash ^= key.charCodeAt(i);
     hash = Math.imul(hash, 16777619);
   }
-  const intervalMs = providerStatusPollIntervalMs(startedAt, now);
+  const intervalMs = providerStatusPollIntervalMs(startedAt, now, provider);
   const startupSpreadMs = Math.min(60 * 1000, intervalMs - 1);
   const delayMs = (hash >>> 0) % (startupSpreadMs + 1);
   return now - intervalMs + delayMs;

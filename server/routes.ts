@@ -7676,6 +7676,7 @@ export async function registerRoutes(
 
       const withdrawalRef = generateTransactionReference("withdrawal");
       const pawaPayPayoutId = withdrawalProvider === "pawapay" ? createPawaPayId() : undefined;
+      const afribaPayoutStartedAt = withdrawalProvider === "afribapay" ? Date.now() : undefined;
       let pawaPayInitiationAmbiguous = false;
       let withdrawalProviderReference: string | null = null;
       const transaction = await storage.createTransaction({
@@ -7693,11 +7694,16 @@ export async function registerRoutes(
         recipientPhone: data.accountDetails,
         recipientCountry: withdrawalCountryCode,
         operatorId: data.operatorId ? String(data.operatorId) : undefined,
-        ...(pawaPayPayoutId ? { externalReference: pawaPayPayoutId } : {}),
+        ...(pawaPayPayoutId
+          ? { externalReference: pawaPayPayoutId }
+          : withdrawalProvider === "afribapay"
+            ? { externalReference: withdrawalRef }
+            : {}),
          ...(withdrawalProvider ? {
            metadata: {
              paymentProvider: withdrawalProvider,
              walletCurrency: withdrawalCurrency,
+            ...(afribaPayoutStartedAt ? { payoutAttemptStartedAt: afribaPayoutStartedAt } : {}),
              ...(pawaPayPayoutId
                ? { pawaCountry: pawaPayCountry(withdrawalCountryCode) }
                : {}),
@@ -7718,6 +7724,7 @@ export async function registerRoutes(
       let payoutResult: {
         success: boolean;
         transaction_id?: string;
+        order_id?: string;
         message?: string;
         status?: string;
         providerCode?: string;
@@ -7761,9 +7768,9 @@ export async function registerRoutes(
             notify_url: callbackUrl,
           });
           if (afribaResult.success) {
-            // Persist submitted order_id (= withdrawalRef) so restart recovery polls
-            // the right AfribaPay reference (not transaction_id, which status API ignores).
-            await storage.updateTransactionExternalReference(transaction.id, withdrawalRef);
+            // AfribaPay's returned order_id is the authoritative status/webhook reference.
+            const afribaOrderId = resolveAfribaPayPayoutOrderId(afribaResult.order_id, withdrawalRef);
+            await storage.updateTransactionExternalReference(transaction.id, afribaOrderId);
           }
           payoutResult = afribaResult;
 
@@ -7830,7 +7837,7 @@ export async function registerRoutes(
         if (payoutResult.success) {
           console.log(`[Withdrawal] Payout submitted OK: ${withdrawalRef} (ext: ${payoutResult.transaction_id})`);
           const pollerRef = paymentProvider === "afribapay"
-            ? withdrawalRef
+            ? resolveAfribaPayPayoutOrderId(payoutResult.order_id, withdrawalRef)
             : paymentProvider === "pixpay"
               ? (payoutResult.transaction_id || withdrawalRef)
               : (payoutResult.transaction_id || withdrawalRef);
@@ -7845,6 +7852,9 @@ export async function registerRoutes(
             countryCode,
             txType:        "withdrawal",
             txCurrency:    withdrawalCurrency,
+            ...(paymentProvider === "afribapay" && afribaPayoutStartedAt
+              ? { startedAt: afribaPayoutStartedAt, lastCheckedAt: afribaPayoutStartedAt }
+              : {}),
           });
         } else if (isDefinitivePayoutRejection(payoutResult)) {
           console.error(`[Withdrawal] Payout rejected for ${withdrawalRef} (${paymentProvider}): ${payoutResult.message || payoutResult.status}`);
@@ -7887,7 +7897,7 @@ export async function registerRoutes(
             const markedSafe = await markPayoutRetrySafeAfterBalanceRejection(
               transaction.id,
               paymentProvider,
-              payoutResult.transaction_id || withdrawalRef,
+              payoutResult.order_id || payoutResult.transaction_id || withdrawalRef,
               payoutResult,
             );
             if (markedSafe && paymentProvider === "pawapay") pawaPayInitiationAmbiguous = true;
@@ -15940,6 +15950,7 @@ export async function registerRoutes(
             },
           ].slice(-50)
         : priorAttempts.slice(-50);
+      const afribaRetryStartedAt = provider === "afribapay" ? Date.now() : undefined;
       const retryMetadata = {
         ...transactionMetadata,
         paymentProvider: provider,
@@ -15948,6 +15959,7 @@ export async function registerRoutes(
         payoutRetryProvider: provider,
         providerReference: null,
         payoutAttemptHistory,
+        ...(afribaRetryStartedAt ? { payoutAttemptStartedAt: afribaRetryStartedAt } : {}),
       };
 
       // From here the transaction is in "processing" — no other request can enter.
@@ -16107,6 +16119,9 @@ export async function registerRoutes(
           notify_url: callbackUrl,
         });
         if (result.success) {
+          // The provider accepted the payout; subsequent persistence errors must not
+          // make this attempt eligible for another submission.
+          providerSubmitted = true;
           // Prefer AfribaPay's newly returned order_id; never reuse the previous attempt's ID.
           pollerRef = resolveAfribaPayPayoutOrderId(result.order_id, afribaAdminRetryRef);
           await storage.updateTransactionExternalReference(txId, pollerRef);
@@ -16195,6 +16210,9 @@ export async function registerRoutes(
           countryCode,
           txType:        tx.type,
           txCurrency:    tx.currency || "XAF",
+          ...(provider === "afribapay" && afribaRetryStartedAt
+            ? { startedAt: afribaRetryStartedAt, lastCheckedAt: afribaRetryStartedAt }
+            : {}),
         });
         if (
           provider === "izichange" &&
@@ -17837,7 +17855,16 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Missing identifier" });
       }
 
-      const transaction = await storage.getTransactionByReference(ref)
+      // AfribaPay may return a provider-assigned order_id different from the
+      // submitted client reference; current payout attempts persist that ID as
+      // externalReference, so check it before the internal-reference fallback.
+      const transaction = (order_id
+        ? await storage.getTransactionByExternalReference(order_id)
+        : undefined)
+        || (reference_id
+          ? await storage.getTransactionByExternalReference(reference_id)
+          : undefined)
+        || await storage.getTransactionByReference(ref)
         || (reference_id && reference_id !== ref ? await storage.getTransactionByReference(reference_id) : undefined)
         || (transaction_id ? await storage.getTransactionByExternalReference(transaction_id) : undefined)
         || (transaction_id && transaction_id !== ref ? await storage.getTransactionByReference(transaction_id) : undefined);
@@ -17858,7 +17885,7 @@ export async function registerRoutes(
         const metadata = ((transaction as any).metadata || {}) as Record<string, any>;
         await processPayout({
           transactionId: transaction.id,
-          reference: transaction.reference || ref,
+          reference: transaction.externalReference || transaction.reference || ref,
           externalReference: transaction.externalReference || undefined,
           userId: transaction.userId,
           amount: String(transaction.amount),
@@ -22581,6 +22608,7 @@ export async function registerRoutes(
             // pollerRef must match the actual reference submitted to the provider
             // so the poller status check finds the right transaction.
             let telegramPollerRef = txRef;
+            let telegramPollerStartedAt: number | undefined;
 
             if (provider === "afribapay") {
               const afribapayOperatorCode = resolveAfribaPayOperatorCode(operator, operatorName);
@@ -22601,8 +22629,32 @@ export async function registerRoutes(
 
               // Use a unique retry ref so AfribaPay doesn't reject "reference already exists"
               const afribaRetryRef = `${txRef}-R${Date.now().toString(36)}`;
+              const afribaRetryStartedAt = Date.now();
+              telegramPollerStartedAt = afribaRetryStartedAt;
               // Keep recovery on this new attempt if the process stops during submission.
-              await storage.updateTransactionExternalReference(tx.id, afribaRetryRef);
+              let retryMetadata: Record<string, unknown> = {};
+              const rawMetadata = (tx as any).metadata;
+              if (rawMetadata && typeof rawMetadata === "object" && !Array.isArray(rawMetadata)) {
+                retryMetadata = rawMetadata as Record<string, unknown>;
+              } else if (typeof rawMetadata === "string") {
+                try {
+                  const parsed = JSON.parse(rawMetadata);
+                  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+                    retryMetadata = parsed as Record<string, unknown>;
+                  }
+                } catch {
+                  // Preserve the new provider attempt metadata if legacy JSON is malformed.
+                }
+              }
+              await storage.updateTransaction(tx.id, {
+                externalReference: afribaRetryRef,
+                metadata: {
+                  ...retryMetadata,
+                  paymentProvider: "afribapay",
+                  pendingPayoutProvider: "afribapay",
+                  payoutAttemptStartedAt: afribaRetryStartedAt,
+                },
+              } as any);
               const afribaResult = await initiateAfribaPayout({
                 operator: afribapayOperatorCode,
                 country: countryCode,
@@ -22711,6 +22763,9 @@ export async function registerRoutes(
                 txType: tx.type,
                 txCurrency,
                 walletCurrency: (tx.metadata as any)?.walletCurrency || txCurrency,
+                ...(provider === "afribapay" && telegramPollerStartedAt
+                  ? { startedAt: telegramPollerStartedAt, lastCheckedAt: telegramPollerStartedAt }
+                  : {}),
               });
             } else {
               console.error(`[Telegram Approve] Payout failed via ${provider}: ${payoutResult.message}`);
