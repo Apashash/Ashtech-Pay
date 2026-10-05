@@ -106,6 +106,17 @@ the provider ID for reconciliation, and settle status plus wallet mutation
 atomically. For an admin-requested terminal override, do not resubmit; process
 failure refunds against the original wallet and log the retained provider ID.
 
+When an admin retry changes providers, every subsequent poll must resolve the
+active provider and lookup reference from the current persisted attempt, not from
+the provider captured in an older in-memory queue entry.
+
+**Why:** a stale queue entry can keep querying the previous provider after a
+retry, leaving AshTechPay pending even when the new provider has confirmed.
+
+**How to apply:** read the persisted attempt metadata before each provider lookup
+and keep polling unresolved statuses indefinitely; after 30 minutes, poll every
+two minutes.
+
 **Why:** the user explicitly chose immediate refunds for admin-forced payout
 failures after being told a late provider payment could result in a double
 payment. This is an intentional admin-only exception to the automatic

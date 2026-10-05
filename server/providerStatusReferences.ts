@@ -20,6 +20,14 @@ export function normalizePayoutStatusProvider(value: unknown): PayoutStatusProvi
     : null;
 }
 
+export function resolvePayoutStatusProvider(...candidates: unknown[]): PayoutStatusProvider | null {
+  for (const candidate of candidates) {
+    const provider = normalizePayoutStatusProvider(candidate);
+    if (provider) return provider;
+  }
+  return null;
+}
+
 /**
  * A retry is safe only when the provider returned a response that explicitly
  * rejects this attempt for insufficient provider funds. Network/timeout/5xx,

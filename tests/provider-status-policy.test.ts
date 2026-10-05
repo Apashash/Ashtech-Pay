@@ -12,6 +12,7 @@ import {
   isPixPayManualPayoutProcessable,
   isPixPayPayoutProvider,
   normalizePayoutStatusProvider,
+  resolvePayoutStatusProvider,
   resolvePayoutStatusLookupReference,
   shouldUseManualPayoutStatusOverride,
 } from "../server/providerStatusReferences.ts";
@@ -104,6 +105,18 @@ test("admin reconciliation recognizes only supported payout providers", () => {
   assert.equal(normalizePayoutStatusProvider(null), null);
 });
 
+test("the persisted retry provider takes precedence over a stale queued provider", () => {
+  assert.equal(
+    resolvePayoutStatusProvider("pixpay", "afribapay", "pawapay"),
+    "pixpay",
+  );
+  assert.equal(
+    resolvePayoutStatusProvider("unknown", null, "pixpay"),
+    "pixpay",
+  );
+  assert.equal(resolvePayoutStatusProvider("unknown", null), null);
+});
+
 test("admin may override an unresolved payout, but ordinary pending approvals still submit normally", () => {
   assert.equal(shouldUseManualPayoutStatusOverride({
     transactionType: "withdrawal",
@@ -186,16 +199,16 @@ test("payout status lookup uses the current provider reference without unsafe fa
   }), null);
 });
 
-test("provider status polling backs off progressively without expiring transactions", () => {
+test("provider status polling continues forever and switches to two-minute checks after 30 minutes", () => {
   const minute = 60 * 1000;
-  const hour = 60 * minute;
-  const day = 24 * hour;
+  const twoMinutes = 2 * minute;
+  const day = 24 * 60 * minute;
 
   assert.equal(providerStatusPollIntervalMs(0, 0), minute);
-  assert.equal(providerStatusPollIntervalMs(0, 30 * minute), 5 * minute);
-  assert.equal(providerStatusPollIntervalMs(0, 2 * hour), 15 * minute);
-  assert.equal(providerStatusPollIntervalMs(0, day), hour);
-  assert.equal(providerStatusPollIntervalMs(0, 7 * day), 6 * hour);
+  assert.equal(providerStatusPollIntervalMs(0, 30 * minute), twoMinutes);
+  assert.equal(providerStatusPollIntervalMs(0, 2 * 60 * minute), twoMinutes);
+  assert.equal(providerStatusPollIntervalMs(0, day), twoMinutes);
+  assert.equal(providerStatusPollIntervalMs(0, 365 * day), twoMinutes);
 
   const startedAt = 1_000_000;
   const now = startedAt + minute;

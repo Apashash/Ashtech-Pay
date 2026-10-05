@@ -11,6 +11,7 @@ import {
   canRetryPayoutWithProvider,
   isPixPayManualPayoutProcessable,
   normalizePayoutStatusProvider,
+  resolvePayoutStatusProvider,
   resolvePayoutStatusLookupReference,
   type PayoutStatusProvider,
 } from "./providerStatusReferences";
@@ -79,10 +80,11 @@ export async function recoverPendingPayouts() {
       const payoutStartedAt = t.createdAt ? new Date(t.createdAt).getTime() : Date.now();
       const operator = t.operatorId ? await storage.getOperator(t.operatorId).catch(() => null) : null;
       const metadata = ((t as any).metadata || {}) as Record<string, any>;
-      const configuredProvider = normalizePayoutStatusProvider(
-        metadata.paymentProvider ||
-        metadata.pendingPayoutProvider ||
+      const configuredProvider = resolvePayoutStatusProvider(
+        metadata.paymentProvider,
+        metadata.pendingPayoutProvider,
         (operator as any)?.paymentProvider,
+        (operator as any)?.depositPaymentProvider,
       );
       // Trust the transaction's recorded provider first. UUID-looking
       // references are a PawaPay fallback only for legacy rows without one.
@@ -457,20 +459,14 @@ export async function reconcilePayoutAttemptForAdmin(
   const operator = transaction.operatorId
     ? await storage.getOperator(transaction.operatorId).catch(() => null)
     : null;
-  let provider: PayoutStatusProvider | null =
-    transaction.externalReference && isPawaPayUuidV4(transaction.externalReference)
-      ? "pawapay"
-      : null;
-  if (!provider) {
-    for (const candidate of [
-      metadata.pendingPayoutProvider,
-      metadata.paymentProvider,
-      (operator as any)?.paymentProvider,
-      (operator as any)?.depositPaymentProvider,
-    ]) {
-      provider = normalizePayoutStatusProvider(candidate);
-      if (provider) break;
-    }
+  let provider = resolvePayoutStatusProvider(
+    metadata.paymentProvider,
+    metadata.pendingPayoutProvider,
+    (operator as any)?.paymentProvider,
+    (operator as any)?.depositPaymentProvider,
+  );
+  if (!provider && transaction.externalReference && isPawaPayUuidV4(transaction.externalReference)) {
+    provider = "pawapay";
   }
   if (!provider) {
     return {
@@ -627,6 +623,21 @@ async function pollPendingPayouts() {
           continue;
         }
         const metadata = ((transaction as any).metadata || {}) as Record<string, any>;
+        const operator = transaction.operatorId
+          ? await storage.getOperator(transaction.operatorId).catch(() => null)
+          : null;
+        const persistedProvider = resolvePayoutStatusProvider(
+          metadata.paymentProvider,
+          metadata.pendingPayoutProvider,
+          (operator as any)?.paymentProvider,
+          (operator as any)?.depositPaymentProvider,
+          payout.provider,
+        );
+        if (!persistedProvider) continue;
+        // Admin retries can switch the provider. The queue may still contain
+        // the original attempt, so always poll using the provider persisted for
+        // the current attempt rather than the stale provider captured at enqueue.
+        payout.provider = persistedProvider;
         // Resolve every lookup from the current persisted transaction, not
         // the potentially stale identifier held by this process's queue.
         const iziPayoutId = payout.provider === "izichange"
