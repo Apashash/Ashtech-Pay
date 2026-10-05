@@ -290,20 +290,13 @@ export async function processPayout(payout: PendingPayout, apiStatus: string) {
       // handled separately as pending_manual by the route.
       const claimed = payout.provider === "pawapay"
         ? await storage.claimPawaPayoutFailedAndRefund(payout.transactionId, ["pending", "processing", "pending_manual"])
-        : payout.provider === "izichange"
-          ? await storage.claimIziPayPayoutFailedAndRefund(payout.transactionId, ["pending", "processing", "pending_manual"])
-          : payout.provider === "afribapay"
-            ? await storage.claimPayoutFailedAndRefund(payout.transactionId, ["pending", "processing", "pending_manual"])
-            : await storage.claimTransactionStatus(payout.transactionId, "failed", ["pending", "processing", "pending_manual"]);
+        : await storage.claimPayoutFailedAndRefund(payout.transactionId, ["pending", "processing", "pending_manual"]);
       if (!claimed) {
         removePendingPayout(payout.reference);
         return;
       }
       setFailedCooldown(payout.userId);
       const refundAmount = parseFloat(payout.totalDebited || payout.amount);
-      if (payout.provider !== "pawapay" && payout.provider !== "izichange" && payout.provider !== "afribapay") {
-        await storage.refundToOriginalWallet(payout.userId, payout.txType, payout.walletCurrency || payout.txCurrency, refundAmount);
-      }
       await storage.createUserNotification({
         userId:        payout.userId,
         type:          "withdrawal_failed",

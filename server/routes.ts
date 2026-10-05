@@ -6337,11 +6337,11 @@ export async function registerRoutes(
           const cashInServiceId = getPixPayServiceId(operator?.name || "", countryCode, "cash_in");
           if (!cashInServiceId) {
             console.error(`[Transfer] PixPay: no cash_in service_id for ${operator?.name} in ${countryCode}`);
-            await storage.updateTransactionStatus(transaction.id, "failed");
-            if (isPrimaryTransfer) {
-              await storage.updateUserBalance(senderId, totalAmount);
-            } else {
-              await storage.upsertWallet(senderId, walletCurrency, totalAmount);
+            const refunded = await storage.claimPayoutFailedAndRefund(transaction.id, ["pending"]);
+            await releasePayoutOperationLock(senderId, payoutLockUntil);
+            payoutLockUntil = null;
+            if (!refunded) {
+              return res.status(409).json({ message: "Le statut du transfert a changé. Vérifiez son état avant de réessayer." });
             }
             return res.status(400).json({
               message: `Envoi non supporté pour cet opérateur (${operator?.name}) dans ce pays`,
@@ -6440,16 +6440,17 @@ export async function registerRoutes(
           }).catch(() => {});
         } else if (isDefinitivePayoutRejection(payoutResult)) {
           console.error(`[Transfer] Payout rejected for ${reference} (${transferProvider}): ${payoutResult.message || payoutResult.status}`);
-          await storage.updateTransactionStatus(transaction.id, "failed");
-          if (isPrimaryTransfer) {
+          const refunded = await storage.claimPayoutFailedAndRefund(
+            transaction.id,
+            ["pending", "processing", "pending_manual"],
+          );
+          if (!refunded) {
             await releasePayoutOperationLock(senderId, payoutLockUntil);
             payoutLockUntil = null;
-            await storage.updateUserBalance(senderId, totalAmount);
-          } else {
-            await releasePayoutOperationLock(senderId, payoutLockUntil);
-            payoutLockUntil = null;
-            await storage.upsertWallet(senderId, walletCurrency, totalAmount);
+            return res.status(409).json({ message: "Le statut du transfert a changé. Vérifiez son état avant de réessayer." });
           }
+          await releasePayoutOperationLock(senderId, payoutLockUntil);
+          payoutLockUntil = null;
           transaction.status = "failed";
           await storage.createUserNotification({
             userId: senderId,
@@ -7783,8 +7784,10 @@ export async function registerRoutes(
           const cashOutServiceId = getPixPayServiceId(operator?.name || "", countryCode, "cash_in");
           if (!cashOutServiceId) {
             console.error(`[Withdrawal] PixPay: no cash_in service_id for ${operator?.name} in ${countryCode}`);
-            await storage.updateTransactionStatus(transaction.id, "failed");
-            await storage.refundToOriginalWallet(userId, "withdrawal", withdrawalCurrency, totalAmount);
+            const refunded = await storage.claimPayoutFailedAndRefund(transaction.id, ["pending"]);
+            if (!refunded) {
+              return res.status(409).json({ message: "Le statut du retrait a changé. Vérifiez son état avant de réessayer." });
+            }
             return res.status(400).json({
               message: `Retrait non supporté pour cet opérateur (${operator?.name}) dans ce pays`,
             });
@@ -7862,8 +7865,13 @@ export async function registerRoutes(
           });
         } else if (isDefinitivePayoutRejection(payoutResult)) {
           console.error(`[Withdrawal] Payout rejected for ${withdrawalRef} (${paymentProvider}): ${payoutResult.message || payoutResult.status}`);
-          await storage.updateTransactionStatus(transaction.id, "failed");
-          await storage.refundToOriginalWallet(userId, "withdrawal", withdrawalCurrency, totalAmount);
+          const refunded = await storage.claimPayoutFailedAndRefund(
+            transaction.id,
+            ["pending", "processing", "pending_manual"],
+          );
+          if (!refunded) {
+            return res.status(409).json({ message: "Le statut du retrait a changé. Vérifiez son état avant de réessayer." });
+          }
           transaction.status = "failed";
           await storage.createUserNotification({
             userId,
@@ -17998,13 +18006,20 @@ export async function registerRoutes(
         }
 
       } else if (status === "failed") {
-        const claimedTransaction = await storage.claimTransactionStatus(transaction.id, "failed");
+        const claimedTransaction = isPayout
+          ? await storage.claimPayoutFailedAndRefund(
+              transaction.id,
+              ["pending", "processing", "pending_manual"],
+            )
+          : await storage.claimTransactionStatus(
+              transaction.id,
+              "failed",
+              ["pending", "processing", "pending_manual"],
+            );
         if (!claimedTransaction) return res.json({ success: true, message: "already processed" });
 
         if (isPayout) {
-          // Payout failed: refund the full debited amount to the wallet that was originally debited
-          const refundAmount = parseFloat((transaction as any).totalAmount || transaction.amount);
-          await storage.refundToOriginalWallet(transaction.userId, transaction.type, txCurrency, refundAmount);
+          // The payout status claim and full debit refund are atomic in storage.
           removePendingPayout(ref);
           await storage.createUserNotification({
             userId: transaction.userId,
@@ -18032,7 +18047,7 @@ export async function registerRoutes(
               recipientCountry: transaction.recipientCountry || undefined,
             }).catch(() => {});
           }).catch(() => {});
-          console.log(`[AfribaPay Webhook] ✗ Payout FAILED: ${transaction.id} — refunded ${refundAmount} ${txCurrency}`);
+          console.log(`[AfribaPay Webhook] ✗ Payout FAILED: ${transaction.id} — refunded ${(transaction as any).totalAmount || transaction.amount} ${txCurrency}`);
           forwardMerchantWebhook(transaction, "failed").catch(() => {});
         } else {
           if (transaction.paymentIntentId) {
@@ -22853,9 +22868,11 @@ export async function registerRoutes(
             }
             return { userName: txUser.fullName || txUser.username, txType: tx.type };
           }
-          await storage.updateTransactionStatus(tx.id, "failed");
-          const totalDebited = parseFloat(tx.totalAmount || tx.amount);
-          await storage.refundToOriginalWallet(tx.userId, tx.type, tx.currency || "XAF", totalDebited);
+          const refunded = await storage.claimPayoutFailedAndRefund(
+            tx.id,
+            ["pending", "pending_manual", "processing"],
+          );
+          if (!refunded) return null;
 
           const isTransfer = tx.type === "transfer_out";
           await storage.createUserNotification({

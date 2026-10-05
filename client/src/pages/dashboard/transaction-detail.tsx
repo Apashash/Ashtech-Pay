@@ -24,6 +24,7 @@ interface TransactionDetails extends Transaction {
   targetBalanceCurrency?: string;
   targetBalanceBefore?: string;
   targetBalanceAfter?: string;
+  balanceSnapshotUnavailable?: boolean;
 }
 
 function formatDate(date: string | Date | null | undefined): string {
@@ -443,17 +444,23 @@ export default function TransactionDetailPage({ params }: { params: { id: string
             <Row label={td.detailPayer} value={tx.payerName} />
           )}
 
-          {tx.balanceBefore !== undefined && tx.balanceAfter !== undefined && (
+          {(tx.balanceSnapshotUnavailable ||
+            (tx.balanceBefore !== undefined && tx.balanceAfter !== undefined) ||
+            (tx.targetBalanceBefore !== undefined && tx.targetBalanceAfter !== undefined)) && (
             <>
               <SectionLabel>ÉVOLUTION DU SOLDE</SectionLabel>
-              <Row
-                label={`Solde avant (${tx.balanceCurrency || tx.currency || "XAF"})`}
-                value={formatCurrency(tx.balanceBefore, (tx.balanceCurrency || tx.currency || "XAF") as SupportedCurrency)}
-              />
-              <Row
-                label={`Solde après (${tx.balanceCurrency || tx.currency || "XAF"})`}
-                value={formatCurrency(tx.balanceAfter, (tx.balanceCurrency || tx.currency || "XAF") as SupportedCurrency)}
-              />
+              {tx.balanceBefore !== undefined && tx.balanceAfter !== undefined && (
+                <>
+                  <Row
+                    label={`Solde avant (${tx.balanceCurrency || tx.currency || "XAF"})`}
+                    value={formatCurrency(tx.balanceBefore, (tx.balanceCurrency || tx.currency || "XAF") as SupportedCurrency)}
+                  />
+                  <Row
+                    label={`Solde après (${tx.balanceCurrency || tx.currency || "XAF"})`}
+                    value={formatCurrency(tx.balanceAfter, (tx.balanceCurrency || tx.currency || "XAF") as SupportedCurrency)}
+                  />
+                </>
+              )}
               {tx.targetBalanceCurrency && tx.targetBalanceBefore !== undefined && tx.targetBalanceAfter !== undefined && (
                 <>
                   <Row
@@ -465,6 +472,9 @@ export default function TransactionDetailPage({ params }: { params: { id: string
                     value={formatCurrency(tx.targetBalanceAfter, tx.targetBalanceCurrency as SupportedCurrency)}
                   />
                 </>
+              )}
+              {tx.balanceSnapshotUnavailable && (
+                <p className="py-3 text-sm text-muted-foreground">{td.balanceHistoryUnavailable}</p>
               )}
             </>
           )}

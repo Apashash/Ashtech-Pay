@@ -90,12 +90,43 @@ import {
 import { db } from "./db";
 import { pool } from "./db";
 import { eq, desc, sql, and, or, like, ilike, count, inArray, gt, gte, lt, lte } from "drizzle-orm";
+import { isPrimaryWalletCurrency } from "./walletRouting";
 
 const isMysqlDialect = process.env.DB_DIALECT?.toLowerCase() === "mysql";
 const numericSql = (expression: unknown) =>
   isMysqlDialect
     ? sql`CAST(${expression} AS DECIMAL(30, 10))`
     : sql`${expression}::numeric`;
+
+function transactionMetadataRecord(value: unknown): Record<string, unknown> {
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+async function recordPayoutRefund(
+  trx: any,
+  transaction: Transaction,
+  walletCurrency: string,
+  amount: number,
+): Promise<Record<string, unknown>> {
+  const metadata = {
+    ...transactionMetadataRecord(transaction.metadata),
+    walletCurrency,
+    payoutRefundedWalletCurrency: walletCurrency,
+    payoutRefundedAmount: amount.toFixed(2),
+  };
+  await trx.update(transactions).set({ metadata }).where(eq(transactions.id, transaction.id));
+  return metadata;
+}
 
 async function mysqlInsertAndRead<T>(
   table: any,
@@ -599,12 +630,9 @@ export class DatabaseStorage implements IStorage {
 
   async refundToOriginalWallet(userId: string, txType: string, txCurrency: string, amount: number): Promise<void> {
     // Always refund to the exact wallet the transaction was debited from.
-    // Use sameCfaFamily to handle cases where the wallet was stored under a generic code
-    // (e.g. "XOF") while txCurrency is a country-specific variant (e.g. "XOFB") — both are 1:1 CFA.
-    const { sameCfaFamily } = await import("./walletHelper");
     const user = await this.getUser(userId);
     const userPrimary = user?.preferredCurrency || "XAF";
-    if (sameCfaFamily(txCurrency, userPrimary)) {
+    if (isPrimaryWalletCurrency(txCurrency, userPrimary)) {
       await this.updateUserBalance(userId, amount);
     } else {
       await this.upsertWallet(userId, txCurrency, amount);
@@ -1290,9 +1318,8 @@ export class DatabaseStorage implements IStorage {
         .limit(1);
       if (!user) throw new Error("Transaction user not found");
 
-      const { sameCfaFamily } = await import("./walletHelper");
       const primaryCurrency = user.preferredCurrency || "XAF";
-      const usesPrimaryWallet = sameCfaFamily(walletCurrency, primaryCurrency);
+      const usesPrimaryWallet = isPrimaryWalletCurrency(walletCurrency, primaryCurrency);
       const balanceExpression = usesPrimaryWallet ? users.balance : wallets.balance;
       const debitCondition = isMysqlDialect
         ? sql`CAST(${balanceExpression} AS DECIMAL(30, 10)) >= ${amount}`
@@ -1396,38 +1423,56 @@ export class DatabaseStorage implements IStorage {
       let transaction: Transaction | undefined;
       if (isMysqlDialect) {
         const updateResult = await trx.update(transactions).set({ status: "failed" })
-          .where(and(eq(transactions.id, id), inArray(transactions.status, allowedFrom)));
-        if ((updateResult as any).rowCount === 0) return undefined;
+          .where(and(
+            eq(transactions.id, id),
+            inArray(transactions.status, allowedFrom),
+            inArray(transactions.type, ["withdrawal", "transfer_out"]),
+          ));
+        const header = Array.isArray(updateResult) ? updateResult[0] : updateResult;
+        const affectedRows = Number(
+          (header as any)?.affectedRows ??
+          (header as any)?.rowsAffected ??
+          (header as any)?.rowCount ??
+          (header as any)?.changes,
+        );
+        if (!Number.isFinite(affectedRows)) throw new Error("PAYOUT_REFUND_CLAIM_UNCONFIRMED");
+        if (affectedRows === 0) return undefined;
         [transaction] = await trx.select().from(transactions).where(eq(transactions.id, id)).limit(1);
       } else {
         [transaction] = await trx.update(transactions).set({ status: "failed" })
-          .where(and(eq(transactions.id, id), inArray(transactions.status, allowedFrom))).returning();
+          .where(and(
+            eq(transactions.id, id),
+            inArray(transactions.status, allowedFrom),
+            inArray(transactions.type, ["withdrawal", "transfer_out"]),
+          )).returning();
       }
       if (!transaction) return undefined;
       const [user] = await trx.select({ preferredCurrency: users.preferredCurrency })
         .from(users).where(eq(users.id, transaction.userId)).limit(1);
       if (!user) throw new Error("Transaction user not found");
-      const metadata = (transaction.metadata || {}) as Record<string, unknown>;
+      const metadata = transactionMetadataRecord(transaction.metadata);
       const currency = typeof metadata.walletCurrency === "string" ? metadata.walletCurrency : (transaction.currency || "XAF");
-      const amount = transaction.totalAmount || transaction.amount;
-      if ((user.preferredCurrency || "XAF") === currency) {
-        await trx.update(users).set({ balance: sql`${users.balance} + ${amount}` }).where(eq(users.id, transaction.userId));
+      const amount = Number.parseFloat(transaction.totalAmount || transaction.amount);
+      if (!Number.isFinite(amount) || amount <= 0) throw new Error("PAYOUT_REFUND_AMOUNT_INVALID");
+      const refundMetadata = await recordPayoutRefund(trx, transaction, currency, amount);
+      if (isPrimaryWalletCurrency(currency, user.preferredCurrency || "XAF")) {
+        await trx.update(users).set({ balance: sql`${users.balance} + ${amount.toFixed(2)}` }).where(eq(users.id, transaction.userId));
       } else {
         if (isMysqlDialect) {
           await (trx as any).insert(wallets)
-            .values({ id: randomUUID(), userId: transaction.userId, currency, balance: amount })
+            .values({ id: randomUUID(), userId: transaction.userId, currency, balance: amount.toFixed(2) })
             .onDuplicateKeyUpdate({
-              set: { balance: sql`${wallets.balance} + ${amount}`, updatedAt: new Date() },
+              set: { balance: sql`${wallets.balance} + ${amount.toFixed(2)}`, updatedAt: new Date() },
             });
         } else {
-          await trx.insert(wallets).values({ userId: transaction.userId, currency, balance: amount })
+          await trx.insert(wallets).values({ userId: transaction.userId, currency, balance: amount.toFixed(2) })
             .onConflictDoUpdate({
               target: [wallets.userId, wallets.currency],
-              set: { balance: sql`${wallets.balance} + ${amount}`, updatedAt: new Date() },
+              set: { balance: sql`${wallets.balance} + ${amount.toFixed(2)}`, updatedAt: new Date() },
             });
         }
       }
-      return transaction;
+      return { ...transaction, metadata: refundMetadata } as Transaction;
     });
     if (claimed) invalidateUserCache(claimed.userId);
     return claimed;
@@ -1465,15 +1510,15 @@ export class DatabaseStorage implements IStorage {
         .where(eq(users.id, transaction.userId))
         .limit(1);
       if (!user) throw new Error("PAYOUT_REFUND_USER_NOT_FOUND");
-      const { sameCfaFamily } = await import("./walletHelper");
-      const metadata = (transaction.metadata || {}) as Record<string, unknown>;
+      const metadata = transactionMetadataRecord(transaction.metadata);
       const walletCurrency = typeof metadata.walletCurrency === "string"
         ? metadata.walletCurrency
         : transaction.currency || "XAF";
       const amount = Number.parseFloat(transaction.totalAmount || transaction.amount);
       if (!Number.isFinite(amount) || amount <= 0) throw new Error("PAYOUT_REFUND_AMOUNT_INVALID");
 
-      if (sameCfaFamily(walletCurrency, user.preferredCurrency || "XAF")) {
+      const refundMetadata = await recordPayoutRefund(trx, transaction, walletCurrency, amount);
+      if (isPrimaryWalletCurrency(walletCurrency, user.preferredCurrency || "XAF")) {
         await trx.update(users)
           .set({ balance: sql`${users.balance} + ${amount.toFixed(2)}` })
           .where(eq(users.id, transaction.userId));
@@ -1491,7 +1536,7 @@ export class DatabaseStorage implements IStorage {
             set: { balance: sql`${wallets.balance} + ${amount.toFixed(2)}`, updatedAt: new Date() },
           });
       }
-      return transaction;
+      return { ...transaction, metadata: refundMetadata } as Transaction;
     });
     if (refunded) invalidateUserCache(refunded.userId);
     return refunded;
@@ -1515,7 +1560,12 @@ export class DatabaseStorage implements IStorage {
       if (isMysqlDialect) {
         const result = await trx.update(transactions).set({ status: "failed" }).where(claimWhere);
         const header = Array.isArray(result) ? result[0] : result;
-        const affectedRows = Number((header as any)?.affectedRows ?? (header as any)?.rowCount);
+        const affectedRows = Number(
+          (header as any)?.affectedRows ??
+          (header as any)?.rowsAffected ??
+          (header as any)?.rowCount ??
+          (header as any)?.changes,
+        );
         if (!Number.isFinite(affectedRows)) throw new Error("PAYOUT_REFUND_CLAIM_UNCONFIRMED");
         if (affectedRows === 0) return undefined;
         [transaction] = await trx.select().from(transactions).where(eq(transactions.id, id)).limit(1);
@@ -1533,8 +1583,7 @@ export class DatabaseStorage implements IStorage {
         .limit(1);
       if (!user) throw new Error("PAYOUT_REFUND_USER_NOT_FOUND");
 
-      const { sameCfaFamily } = await import("./walletHelper");
-      const metadata = (transaction.metadata || {}) as Record<string, unknown>;
+      const metadata = transactionMetadataRecord(transaction.metadata);
       const walletCurrency = typeof metadata.walletCurrency === "string"
         ? metadata.walletCurrency
         : transaction.currency || "XAF";
@@ -1542,7 +1591,8 @@ export class DatabaseStorage implements IStorage {
       const amount = Number.parseFloat(transaction.totalAmount || transaction.amount);
       if (!Number.isFinite(amount) || amount <= 0) throw new Error("PAYOUT_REFUND_AMOUNT_INVALID");
 
-      if (sameCfaFamily(walletCurrency, primaryCurrency)) {
+      const refundMetadata = await recordPayoutRefund(trx, transaction, walletCurrency, amount);
+      if (isPrimaryWalletCurrency(walletCurrency, primaryCurrency)) {
         await trx.update(users)
           .set({ balance: sql`${users.balance} + ${amount}` })
           .where(eq(users.id, transaction.userId));
@@ -1560,7 +1610,7 @@ export class DatabaseStorage implements IStorage {
             set: { balance: sql`${wallets.balance} + ${amount}`, updatedAt: new Date() },
           });
       }
-      return transaction;
+      return { ...transaction, metadata: refundMetadata } as Transaction;
     });
 
     if (refunded) invalidateUserCache(refunded.userId);
