@@ -11,6 +11,7 @@
 - [Plesk dist commits](plesk-dist-build-commit.md) — when payout UI changes are requested, rebuild dist and commit the generated assets with their source changes.
 - [Plesk Nginx upload limit](plesk-nginx-upload-limit.md) — Plesk/Nginx can reject multipart uploads above ~2 MB with 413 before Node; compress KYC images client-side or raise the proxy limit.
 - [Plesk npm registry](plesk-npm-registry.md) — package-lock may contain Replit firewall URLs; project .npmrc must force the public registry host for installs outside Replit.
+- [Replit package firewall misses patched tarballs](replit-package-firewall-missing-tarballs.md) — do not bypass managed installs when a patched version returns 404; report blocked updates.
 - [Admin path injection](admin-path-injection.md) — .htaccess must use passthrough (not static index.html) so Node.js injects window.__ADMIN_PATH__; server/index.ts now loads .env manually at startup because Passenger may not pass Plesk env vars to process.env.
 - [Admin private document access](admin-private-document-access.md) — protected KYC images/PDFs need authenticated fetches and object URLs; direct browser resource links omit the Bearer token.
 - [Country wallet currency codes](countries-table-currency-codes.md) — destination country mappings must preserve distinct wallets (GA→XAFG, CG→XAFC, etc.), not collapse them into generic XAF/XOF.
