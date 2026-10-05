@@ -24,7 +24,6 @@ import {
   Phone,
   ArrowDownCircle,
   ArrowUpCircle,
-  Send,
   Clock,
   UserCheck,
   ArrowLeftRight,
@@ -106,7 +105,6 @@ const menuItems: MenuItem[] = [
     subItems: [
       { icon: ArrowDownCircle, label: "Dépôts", href: `${ADMIN}/transactions/deposits` },
       { icon: ArrowUpCircle, label: "Retraits", href: `${ADMIN}/transactions/withdrawals` },
-      { icon: Send, label: "Envois", href: `${ADMIN}/transactions/transfers` },
     ]
   },
   { icon: Clock, label: "Paiements en attente", href: `${ADMIN}/pending-payouts` },
@@ -116,8 +114,7 @@ const menuItems: MenuItem[] = [
     label: "Frais",
     subItems: [
       { icon: ArrowDownCircle, label: "Frais Dépôt", href: `${ADMIN}/fees/deposits` },
-      { icon: ArrowUpCircle, label: "Frais Retrait", href: `${ADMIN}/fees/withdrawals` },
-      { icon: Send, label: "Frais Envoi", href: `${ADMIN}/fees/transfers` },
+      { icon: ArrowLeftRight, label: "Frais Retrait & Envoi", href: `${ADMIN}/fees/withdrawals` },
     ]
   },
   { icon: ArrowLeftRight, label: "Conversions", href: `${ADMIN}/conversions` },
@@ -135,6 +132,19 @@ const menuItems: MenuItem[] = [
   { icon: Smartphone, label: "Diagnostic Sessions", href: `${ADMIN}/session-debug` },
   { icon: Settings, label: "Paramètres", href: `${ADMIN}/settings` },
 ];
+
+const ADMIN_NAV_ALIASES: Record<string, string[]> = {
+  [`${ADMIN}/transactions/withdrawals`]: [`${ADMIN}/transactions/transfers`],
+  [`${ADMIN}/fees/withdrawals`]: [`${ADMIN}/fees/transfers`],
+};
+
+function isAdminNavRouteActive(location: string, href: string): boolean {
+  return location === href
+    || location.startsWith(`${href}/`)
+    || (ADMIN_NAV_ALIASES[href] || []).some(alias =>
+      location === alias || location.startsWith(`${alias}/`)
+    );
+}
 
 export function AdminLayout({ children }: AdminLayoutProps) {
   const [location, setLocation] = useLocation();
@@ -291,8 +301,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
 
   const pendingCounts: Record<string, number> = {
     [`${ADMIN}/transactions/deposits`]: layoutStats?.pendingDeposits || 0,
-    [`${ADMIN}/transactions/withdrawals`]: layoutStats?.pendingWithdrawals || 0,
-    [`${ADMIN}/transactions/transfers`]: layoutStats?.pendingTransfers || 0,
+    [`${ADMIN}/transactions/withdrawals`]: (layoutStats?.pendingWithdrawals || 0) + (layoutStats?.pendingTransfers || 0),
     [`${ADMIN}/pending-payouts`]: layoutStats?.pendingManualPayouts || 0,
     [`${ADMIN}/kyc`]: layoutStats?.kycPending || 0,
     [`${ADMIN}/support`]: layoutStats?.ticketUnread || 0,
@@ -309,11 +318,11 @@ export function AdminLayout({ children }: AdminLayoutProps) {
   }, [location]);
 
   useEffect(() => {
-    const transactionSubItem = menuItems.find(item => item.subItems)?.subItems?.find(
-      sub => location.startsWith(sub.href)
+    const activeSubmenu = menuItems.find(item =>
+      item.subItems?.some(sub => isAdminNavRouteActive(location, sub.href))
     );
-    if (transactionSubItem) {
-      setOpenSubmenu("Transactions");
+    if (activeSubmenu) {
+      setOpenSubmenu(activeSubmenu.label);
     }
   }, [location]);
 
@@ -422,7 +431,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
           <nav className="space-y-1">
             {menuItems.map((item) => {
               if (item.subItems) {
-                const isSubmenuActive = item.subItems.some(sub => location.startsWith(sub.href));
+                const isSubmenuActive = item.subItems.some(sub => isAdminNavRouteActive(location, sub.href));
                 const isOpen = openSubmenu === item.label;
                 const totalPending = item.label === "Transactions" 
                   ? (layoutStats?.pendingDeposits || 0) + (layoutStats?.pendingWithdrawals || 0) + (layoutStats?.pendingTransfers || 0)
@@ -463,7 +472,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                     </CollapsibleTrigger>
                     <CollapsibleContent className="pl-4 space-y-1 mt-1">
                       {item.subItems.map((subItem) => {
-                        const isSubActive = location === subItem.href || location.startsWith(subItem.href);
+                        const isSubActive = isAdminNavRouteActive(location, subItem.href);
                         const pendingCount = pendingCounts[subItem.href] || 0;
                         return (
                           <Link key={subItem.href} href={subItem.href}>
@@ -495,8 +504,9 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                 );
               }
               
-              const isActive = location === item.href || 
-                (item.href !== ADMIN && item.href && location.startsWith(item.href));
+              const isActive = item.href === ADMIN
+                ? location === ADMIN
+                : !!item.href && isAdminNavRouteActive(location, item.href);
               const itemPendingCount = pendingCounts[item.href || ""] || 0;
               return (
                 <Link key={item.href || item.label} href={item.href || "#"}>

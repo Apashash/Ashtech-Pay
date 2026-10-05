@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { AdminLayout } from "../layout";
+import { AdminSectionTabs } from "@/components/admin/AdminSectionTabs";
 const A = getAdminPath();
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -32,6 +33,7 @@ import {
   XCircle, 
   Clock,
   AlertTriangle,
+  ArrowUpCircle,
   Send,
   Eye,
   Copy,
@@ -191,6 +193,14 @@ export default function AdminTransfers() {
             </Card>
           </div>
         </div>
+
+        <AdminSectionTabs
+          label="Historique des retraits et envois"
+          items={[
+            { href: `${A}/transactions/withdrawals`, label: "Retraits", icon: ArrowUpCircle },
+            { href: `${A}/transactions/transfers`, label: "Envois", icon: Send },
+          ]}
+        />
 
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="relative flex-1">

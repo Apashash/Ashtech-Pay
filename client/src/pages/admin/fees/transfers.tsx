@@ -1,6 +1,8 @@
 import { useState, useMemo, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { AdminLayout } from "../layout";
+import { AdminSectionTabs } from "@/components/admin/AdminSectionTabs";
+import { getAdminPath } from "@/lib/adminPath";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,13 +16,15 @@ import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Pencil, Send, Info, ChevronDown, ChevronRight, Zap, Globe } from "lucide-react";
+import { Pencil, ArrowUpCircle, Send, Info, ChevronDown, ChevronRight, Zap, Globe } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { isProviderAvailable } from "@/lib/providerCountries";
 import { ProviderCountryCoverage } from "@/components/admin/ProviderCountryCoverage";
 import type { Fee, Country, Operator } from "@shared/schema";
 import { getOperatorDisplayName } from "@/lib/operator-logos";
+
+const A = getAdminPath();
 
 interface EditState {
   fee: Fee | null;
@@ -280,6 +284,14 @@ export default function AdminFeesTransfers() {
             <p className="text-muted-foreground">Par pays et opérateur actif — frais + minimum de charge</p>
           </div>
         </div>
+
+        <AdminSectionTabs
+          label="Configuration des frais de retrait et d’envoi"
+          items={[
+            { href: `${A}/fees/withdrawals`, label: "Retraits", icon: ArrowUpCircle },
+            { href: `${A}/fees/transfers`, label: "Envois", icon: Send },
+          ]}
+        />
 
         <Card className="border-blue-500/20 bg-blue-500/5">
           <CardContent className="pt-4 pb-3">

@@ -2,7 +2,7 @@ import { getAdminPath } from "@/lib/adminPath";
 import { Link } from "wouter";
 import { AdminLayout } from "./layout";
 import { Card, CardContent } from "@/components/ui/card";
-import { ArrowDownCircle, ArrowUpCircle, Send, ChevronRight } from "lucide-react";
+import { ArrowDownCircle, ArrowLeftRight, ChevronRight } from "lucide-react";
 
 function getFeesSections() {
   const A = getAdminPath();
@@ -17,19 +17,11 @@ function getFeesSections() {
     },
     {
       href: `${A}/fees/withdrawals`,
-      icon: ArrowUpCircle,
-      color: "text-red-500",
-      bg: "bg-red-500/10",
-      title: "Frais de Retrait",
-      description: "Configurez les frais par opérateur pour les retraits.",
-    },
-    {
-      href: `${A}/fees/transfers`,
-      icon: Send,
+      icon: ArrowLeftRight,
       color: "text-blue-500",
       bg: "bg-blue-500/10",
-      title: "Frais d'Envoi",
-      description: "Configurez les frais par opérateur pour les transferts entre utilisateurs.",
+      title: "Frais Retrait et Envoi",
+      description: "Configurez séparément les frais de retrait et d’envoi au même endroit.",
     },
   ];
 }
@@ -45,7 +37,7 @@ export default function AdminFees() {
           </p>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2">
           {getFeesSections().map(({ href, icon: Icon, color, bg, title, description }) => (
             <Link key={href} href={href}>
               <Card className="cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-all group">
