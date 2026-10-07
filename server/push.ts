@@ -260,13 +260,7 @@ async function deliverPushToSubscription(
   formatted: { title: string; body: string; url: string },
   payload: BrowserPushPayload,
 ): Promise<PushDeliveryOutcome> {
-  let subscription: PushSubscription | null;
-  try {
-    subscription = decryptSubscription(stored);
-  } catch (error: any) {
-    console.error(`[Push] Could not decrypt subscription ${stored.id}:`, error?.message || error);
-    return "failed";
-  }
+  const subscription = decryptSubscription(stored);
   if (!subscription) return "failed";
 
   try {
@@ -284,22 +278,14 @@ async function deliverPushToSubscription(
       }),
       { TTL: 300 },
     );
-    try {
-      await db.update(pushSubscriptions)
-        .set({ updatedAt: new Date() })
-        .where(eq(pushSubscriptions.id, stored.id));
-    } catch (error: any) {
-      console.error(`[Push] Could not update subscription ${stored.id}:`, error?.message || error);
-    }
+    await db.update(pushSubscriptions)
+      .set({ updatedAt: new Date() })
+      .where(eq(pushSubscriptions.id, stored.id));
     return "sent";
   } catch (error: any) {
     const statusCode = Number(error?.statusCode);
     if (statusCode === 404 || statusCode === 410) {
-      try {
-        await db.delete(pushSubscriptions).where(eq(pushSubscriptions.id, stored.id));
-      } catch (deleteError: any) {
-        console.error(`[Push] Could not remove expired subscription ${stored.id}:`, deleteError?.message || deleteError);
-      }
+      await db.delete(pushSubscriptions).where(eq(pushSubscriptions.id, stored.id));
       return "removed";
     }
     console.error(`[Push] Delivery failed for subscription ${stored.id}:`, error?.message || error);

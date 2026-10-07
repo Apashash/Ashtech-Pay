@@ -80,7 +80,6 @@ const AdminPendingPayouts = React.lazy(() => import("@/pages/admin/pending-payou
 const AdminAfribaPay = React.lazy(() => import("@/pages/admin/afribapay"));
 const AdminPixPay = React.lazy(() => import("@/pages/admin/pixpay"));
 const AdminEmailCampaigns = React.lazy(() => import("@/pages/admin/email-campaigns"));
-const AdminPushCampaigns = React.lazy(() => import("@/pages/admin/push-campaigns"));
 const AdminApiManagement = React.lazy(() => import("@/pages/admin/api-management"));
 const AdminMerchants = React.lazy(() => import("@/pages/admin/merchants"));
 const AdminBlockedIps = React.lazy(() => import("@/pages/admin/blocked-ips"));
@@ -273,7 +272,6 @@ function Router() {
       <Route path={`${A}/afribapay`} component={AdminAfribaPay} />
       <Route path={`${A}/pixpay`} component={AdminPixPay} />
       <Route path={`${A}/email-campaigns`} component={AdminEmailCampaigns} />
-      <Route path={`${A}/push-campaigns`} component={AdminPushCampaigns} />
       <Route path={`${A}/api-management`} component={AdminApiManagement} />
       <Route path={`${A}/merchants`} component={AdminMerchants} />
       <Route path={`${A}/blocked-ips`} component={AdminBlockedIps} />
