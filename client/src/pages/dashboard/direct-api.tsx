@@ -261,12 +261,6 @@ export default function DirectApiPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-sm leading-6 text-muted-foreground">
-              {copy.webhookSecretDescription}
-            </p>
-            <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-sm leading-6 text-foreground">
-              {copy.webhookSecretEnvHint}
-            </div>
             {webhookSecretIsError && !webhookSecret && (
               <p role="alert" className="rounded-lg border border-destructive/20 bg-destructive/5 p-3 text-sm text-destructive">
                 {copy.webhookSecretLoadError}
