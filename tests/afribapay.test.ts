@@ -11,7 +11,6 @@ import {
   parseAfribaPayWebhook,
   resolveAfribaPayPayoutOrderId,
   resolveAfribaPayPayinTransactionId,
-  shouldCheckAfribaPayOrderIdFallback,
   validateAfribaPayinAmount,
   verifyAfribaPayWebhookSignature,
 } from "../server/afribapay";
@@ -110,17 +109,6 @@ test("AfribaPay status uses only a distinct provider transaction ID", () => {
   assert.equal(resolveAfribaPayPayinTransactionId(" ashtech-order ", "ashtech-order"), null);
   assert.equal(resolveAfribaPayPayinTransactionId("   ", "ashtech-order"), null);
   assert.equal(resolveAfribaPayPayinTransactionId(undefined, "ashtech-order"), null);
-});
-
-test("AfribaPay AshTech order_id fallback is only checked after 24h while still pending", () => {
-  const dayMs = 24 * 60 * 60 * 1000;
-  const now = 2_000_000_000_000;
-
-  assert.equal(shouldCheckAfribaPayOrderIdFallback("pending", now - dayMs + 1, now), false);
-  assert.equal(shouldCheckAfribaPayOrderIdFallback("pending", now - dayMs, now), true);
-  assert.equal(shouldCheckAfribaPayOrderIdFallback("pending", now - dayMs - 1, now), true);
-  assert.equal(shouldCheckAfribaPayOrderIdFallback("completed", now - dayMs - 1, now), false);
-  assert.equal(shouldCheckAfribaPayOrderIdFallback("failed", now - dayMs - 1, now), false);
 });
 
 test("AfribaPay payin amount validation uses the conservative documented range", () => {

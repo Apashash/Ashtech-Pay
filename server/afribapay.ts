@@ -602,12 +602,16 @@ export async function initiateAfribaPayout(params: AfribaPayoutParams): Promise<
 
 // ─── Check payin status (deposits / payment links) ────────────────────────────
 export async function checkAfribaPayStatus(
-  identifier: string,
-  type: "order_id" | "transaction_id" = "order_id"
+  transactionId: string,
 ): Promise<{ status: "completed" | "failed" | "pending"; raw?: any }> {
   try {
-    const param = type === "transaction_id" ? `transaction_id=${identifier}` : `order_id=${identifier}`;
-    const url = `${AFRIBAPAY_PAYIN_URL}/v1/status?${param}`;
+    const normalizedTransactionId = transactionId.trim();
+    if (!normalizedTransactionId) {
+      console.warn("[AfribaPay PayinStatus] Lookup skipped: missing provider transaction_id");
+      return { status: "pending" };
+    }
+    const param = `transaction_id=${normalizedTransactionId}`;
+    const url = buildAfribaPayStatusUrl(normalizedTransactionId, "transaction_id");
     const { res, data } = await fetchAfribaPayJson(url);
 
     const d = data.data;
@@ -644,17 +648,6 @@ export function resolveAfribaPayPayinTransactionId(
 ): string | null {
   const normalized = providerReference?.trim();
   return normalized && normalized !== ashtechReference ? normalized : null;
-}
-
-const AFRIBAPAY_ORDER_ID_FALLBACK_AFTER_MS = 24 * 60 * 60 * 1000;
-
-export function shouldCheckAfribaPayOrderIdFallback(
-  transactionIdStatus: "completed" | "failed" | "pending",
-  startedAt: number,
-  now = Date.now(),
-): boolean {
-  return transactionIdStatus === "pending"
-    && now - startedAt >= AFRIBAPAY_ORDER_ID_FALLBACK_AFTER_MS;
 }
 
 export function classifyAfribaPayoutStatus(

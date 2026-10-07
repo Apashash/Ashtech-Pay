@@ -4,7 +4,6 @@ import {
   isAfribaPayCircuitOpen,
   isAfribaPayConfigured,
   resolveAfribaPayPayinTransactionId,
-  shouldCheckAfribaPayOrderIdFallback,
 } from "./afribapay";
 import { checkPixPayStatus } from "./pixpay";
 import { getPawaPayDeposit, isPawaPayUuidV4 } from "./pawapay";
@@ -136,32 +135,20 @@ async function checkPaymentStatus(payment: PendingPayment): Promise<"pending" | 
         payment.externalReference,
         payment.reference,
       );
-      const hasProviderReference = Boolean(providerReference);
-      let transactionIdStatus: "pending" | "completed" | "failed" = "pending";
-      if (hasProviderReference) {
-        const providerResult = await checkAfribaPayStatus(providerReference!, "transaction_id");
-        transactionIdStatus = providerResult.status;
-        // The AshTech order_id is a fallback only after 24 hours of pending status.
-        if (transactionIdStatus !== "pending") {
-          console.log(
-            `[PaymentPoller] AfribaPay status for ${payment.reference}: transaction_id=${transactionIdStatus}, order_id=not_checked`,
-          );
-          return transactionIdStatus;
-        }
-      }
-
-      if (!shouldCheckAfribaPayOrderIdFallback(transactionIdStatus, payment.startedAt)) {
-        console.log(
-          `[PaymentPoller] AfribaPay status for ${payment.reference}: transaction_id=${hasProviderReference ? transactionIdStatus : "unavailable"}, order_id=deferred_until_24h`,
+      if (!providerReference) {
+        // AfribaPay says order_id lookups are valid only for existing provider
+        // transactions with an attached PIM/POM; age alone is not evidence.
+        console.info(
+          `[PaymentPoller] AfribaPay status lookup skipped for ${payment.reference}: no confirmed provider transaction_id; awaiting webhook`,
         );
         return "pending";
       }
 
-      const orderResult = await checkAfribaPayStatus(payment.reference, "order_id");
+      const providerResult = await checkAfribaPayStatus(providerReference);
       console.log(
-        `[PaymentPoller] AfribaPay 24h order_id fallback for ${payment.reference}: transaction_id=${hasProviderReference ? transactionIdStatus : "unavailable"}, order_id=${orderResult.status}`,
+        `[PaymentPoller] AfribaPay status for ${payment.reference}: transaction_id=${providerResult.status}, order_id=not_checked`,
       );
-      return orderResult.status;
+      return providerResult.status;
     } else if (payment.provider === "pixpay") {
       const result = await checkPixPayStatus(
         payment.externalReference || payment.reference,
