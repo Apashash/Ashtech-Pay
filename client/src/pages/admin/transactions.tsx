@@ -214,6 +214,7 @@ export default function AdminTransactions() {
     transfer_in: "Reçu",
     transfer_out: "Envoyé",
     payment_link: "Lien de paiement",
+    sandbox_test: "Sandbox test",
   };
 
   const paymentMethodLabels: Record<string, string> = {
@@ -241,6 +242,9 @@ export default function AdminTransactions() {
   };
 
   const getStatusBadge = (status: string) => {
+    if (status === "sandbox_test") {
+      return <Badge variant="secondary">Sandbox test</Badge>;
+    }
     switch (status) {
       case "completed":
         return <Badge className="bg-green-500 gap-1"><CheckCircle className="w-3 h-3" /> Complété</Badge>;
@@ -437,7 +441,7 @@ export default function AdminTransactions() {
                           ? (isIncoming(tx.type) ? "text-green-500" : "text-red-500")
                           : "text-muted-foreground"
                       }`}>
-                        {isIncoming(tx.type) ? "+" : "-"}{formatCurrency(parseFloat(tx.amount), tx.currency as SupportedCurrency)}
+                        {tx.type === "sandbox_test" ? "" : isIncoming(tx.type) ? "+" : "-"}{formatCurrency(parseFloat(tx.amount), tx.currency as SupportedCurrency)}
                       </TableCell>
                       <TableCell>{getStatusBadge(tx.status)}</TableCell>
                       <TableCell className="text-sm">

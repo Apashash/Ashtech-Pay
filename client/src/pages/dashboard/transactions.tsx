@@ -39,6 +39,7 @@ function exportToCSV(transactions: Transaction[], user: User | undefined, tObj: 
     transfer_out: tObj.transactions.typeTransferOut,
     payment_link: tObj.transactions.typePaymentLink,
     conversion: tObj.transactions.typeConversion,
+    sandbox_test: "Sandbox test",
   };
   const headers = [tObj.transactions.csvDate, tObj.transactions.csvType, tObj.transactions.csvAmount, tObj.transactions.csvCurrency, tObj.transactions.csvStatus, tObj.transactions.csvReference, tObj.transactions.csvDescription];
   const rows = transactions.map(tx => [
@@ -46,7 +47,9 @@ function exportToCSV(transactions: Transaction[], user: User | undefined, tObj: 
     tl[tx.type] || tx.type,
     tx.amount,
     tx.currency || currency,
-    getTransactionStatusCategory(tx.status) === "completed"
+    tx.type === "sandbox_test"
+      ? "Sandbox test"
+      : getTransactionStatusCategory(tx.status) === "completed"
       ? tObj.transactions.csvStatusCompleted
       : getTransactionStatusCategory(tx.status) === "pending"
         ? tObj.transactions.csvStatusPending
@@ -87,10 +90,12 @@ export default function TransactionsPage() {
     transfer_out: t.transactions.typeTransferOut,
     payment_link: t.transactions.typePaymentLink,
     conversion: t.transactions.typeConversion,
+    sandbox_test: "Sandbox test",
   };
 
   const typeFilters = [
     { value: "all", label: t.transactions.allTypes },
+    { value: "sandbox_test", label: "Sandbox test" },
     { value: "deposit", label: t.transactions.typeDeposits },
     { value: "withdrawal", label: t.transactions.typeWithdrawals },
     { value: "transfer_in", label: t.transactions.typeReceived },
@@ -188,6 +193,9 @@ export default function TransactionsPage() {
   };
 
   const getStatusBadge = (status: string) => {
+    if (status === "sandbox_test") {
+      return <Badge className="text-[10px] px-1.5 py-0 bg-sky-500/10 text-sky-700 border-sky-500/30 font-medium">Sandbox test</Badge>;
+    }
     switch (getTransactionStatusCategory(status)) {
       case "completed":
         return <Badge className="text-[10px] px-1.5 py-0 bg-green-500/20 text-green-600 border-green-500/30 font-medium">{t.transactions.statusCompleted}</Badge>;
@@ -223,6 +231,9 @@ export default function TransactionsPage() {
 
   const getApiBadge = (tx: Transaction) => {
     const t = tx as any;
+    if (t.source === "sandbox" || t.type === "sandbox_test") {
+      return <Badge className="text-[10px] px-1.5 py-0 bg-sky-500/10 text-sky-700 border-sky-500/30">Sandbox</Badge>;
+    }
     if (t.type === "payment_link") return null;
     if (t.source === "hosted_page") return <Badge className="text-[10px] px-1.5 py-0 gap-1 bg-amber-500/10 text-amber-600 border-amber-500/30"><Globe className="w-2.5 h-2.5" />Hosted</Badge>;
     if (t.source === "api") return <Badge className="text-[10px] px-1.5 py-0 gap-1 bg-sky-500/10 text-sky-600 border-sky-500/30"><Code2 className="w-2.5 h-2.5" />API</Badge>;
@@ -230,6 +241,7 @@ export default function TransactionsPage() {
   };
 
   const getTxIcon = (tx: Transaction) => {
+    if (tx.type === "sandbox_test") return <HistoryIcon src="/sidebar-icons/transactions.png" />;
     if (tx.type === "conversion") return <HistoryIcon src="/sidebar-icons/transactions.png" />;
     if (tx.type === "payment_link") return <HistoryIcon src="/sidebar-icons/links.png" />;
     if (["deposit", "transfer_in"].includes(tx.type)) return <HistoryIcon src="/sidebar-icons/deposit.png" />;
@@ -237,12 +249,14 @@ export default function TransactionsPage() {
   };
 
   const getTxIconBg = (tx: Transaction) => {
+    if (tx.type === "sandbox_test") return "bg-sky-500/10";
     if (tx.type === "conversion") return "bg-blue-500/10";
     if (tx.type === "payment_link") return "bg-primary/10";
     return ["deposit", "transfer_in", "payment_link"].includes(tx.type) ? "bg-green-500/10" : "bg-red-500/10";
   };
 
   const getAmountColor = (tx: Transaction) => {
+    if (tx.type === "sandbox_test") return "text-muted-foreground";
     if (tx.type === "conversion") return "text-blue-500";
     if (isTransactionCompletedStatus(tx.status)) return ["deposit", "transfer_in", "payment_link"].includes(tx.type) ? "text-green-500" : "text-red-500";
     if (isTransactionOpenStatus(tx.status)) return "text-amber-500";
@@ -250,6 +264,7 @@ export default function TransactionsPage() {
   };
 
   const getAmountPrefix = (tx: Transaction) => {
+    if (tx.type === "sandbox_test") return "";
     if (tx.type === "conversion") return "⇄ ";
     return ["deposit", "transfer_in", "payment_link"].includes(tx.type) ? "+" : "-";
   };

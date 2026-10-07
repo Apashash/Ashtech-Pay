@@ -61,7 +61,7 @@ Le même numéro local est utilisable avec tous les opérateurs du pays. Vous po
 | `...000000004` | HTTP `400`, `error: "otp_required"` ; relancez avec `otp: "000000"` pour obtenir `status: "pending"` |
 | `...000000005` | HTTP `200`, `status: "cancelled"` |
 
-Toutes ces réponses contiennent `sandbox: true` et `simulation: true`. Elles ne créent pas de transaction, n'envoient pas de webhook et n'appellent ni AfribaPay, ni PixPay, ni PawaPay.
+Toutes ces réponses contiennent `sandbox: true` et `simulation: true`. Après un scénario accepté, une ligne apparaît dans l'historique AshTech Pay sous **Sandbox test** avec le statut `sandbox_test`. Cette ligne sert uniquement à consulter le test : aucun solde n'est modifié, aucun webhook n'est envoyé et aucun fournisseur (AfribaPay, PixPay ou PawaPay) n'est appelé. Les montants `credited_amount` et `fee_amount` sont simulés; `wallet_credited_amount` reste à `0`. La demande OTP initiale et un OTP invalide ne créent pas de ligne; le test est enregistré après la saisie de l'OTP correct.
 
 ### OTP fictif
 
@@ -85,7 +85,7 @@ Le premier appel avec un numéro `...000000004` répond :
 }
 ```
 
-Renvoyez ensuite exactement la même requête avec `otp: "000000"`. La réponse sera `HTTP 202` avec `status: "pending"`. Aucun SMS, code USSD réel, transaction ou appel fournisseur n'est déclenché. Tout autre OTP retourne `error: "invalid_otp"`.
+Renvoyez ensuite exactement la même requête avec `otp: "000000"`. La réponse sera `HTTP 202` avec `status: "pending"` et une ligne **Sandbox test** sera ajoutée à l'historique. Aucun SMS, code USSD réel, dépôt, crédit du wallet, webhook ou appel fournisseur n'est déclenché. Tout autre OTP retourne `error: "invalid_otp"` sans créer de ligne d'historique.
 
 ### Exemple
 
@@ -109,16 +109,24 @@ Réponse :
 {
   "sandbox": true,
   "simulation": true,
+  "transaction_id": "ID_DE_LA_TRACE_SANDBOX",
+  "history_status": "sandbox_test",
+  "reference": "sandbox_cm_success_UUID",
+  "merchant_reference": "sandbox-success-001",
   "status": "success",
   "amount": 1000,
-    "credited_amount": 950,
-    "fee_amount": 50,
+  "credited_amount": 950,
+  "wallet_credited_amount": 0,
+  "wallet_updated": false,
+  "webhook_sent": false,
+  "fee_amount": 50,
   "currency": "XAF",
   "country_code": "CM",
   "operator": "MTN Money",
   "phone": "+237000000001",
-  "message": "Paiement confirmé immédiatement"
+  "message": "Paiement confirmé immédiatement",
+  "note": "Résultat simulé; aucun solde n'a été modifié."
 }
 ```
 
-Le scénario `pending` est uniquement une réponse initiale de démonstration : aucune transaction n'est créée et aucun statut réel ne sera ensuite disponible à interroger.
+`transaction_id` identifie la trace affichée dans l'historique. Le scénario `pending` reste simulé : son statut d'historique demeure `sandbox_test`, sans confirmation réelle ultérieure ni interrogation d'un fournisseur.

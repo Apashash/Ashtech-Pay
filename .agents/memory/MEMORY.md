@@ -38,6 +38,7 @@
 - [Transaction metadata typing](transaction-metadata-typing.md) — JSON transaction metadata needs an explicit shared record type for TypeScript inserts.
 - [Historical balance snapshots](historical-balance-snapshots.md) — reverse-reconstructed balances are not audit truth when a rejected payout refund lands in a different wallet.
 - [API reference separation](api-reference-separation.md) — API merchant references are idempotency metadata; only AshTech-generated references go to providers.
+- [Sandbox collection history](sandbox-collect-history.md) — accepted fake collections are visible for review but never settle, alter balances, call providers, or send webhooks.
 - [Legacy provider removal](legacy-provider-removal.md) — removed provider data must be normalized/fail-closed idempotently; legacy schema columns require reviewed publish-time removal.
 - [Admin transaction history search](admin-history-search.md) — search must run server-side across retained records; phone input accepts +237, 237, or local digits, with a 30-day retention boundary.
 - [Admin status persistence](admin-status-persistence.md) — confirm requested transaction/KYC state in readbacks, guard transaction writes against concurrent changes, and label HTTP 202 as in progress.

@@ -2,9 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   getSandboxCollectScenario,
+  isSandboxTestTransaction,
   sandboxLocalPhoneForStatus,
   sandboxPhoneForStatus,
 } from "../server/sandboxTestNumbers";
+import { buildTransactionBalanceSnapshots } from "../server/transactionBalances";
 
 test("sandbox numbers resolve by country dial code", () => {
   assert.equal(getSandboxCollectScenario("+237000000001", "+237"), "success");
@@ -21,4 +23,34 @@ test("sandbox number builders expose local and international forms", () => {
 
 test("sandbox OTP accepts only the documented fake code", () => {
   assert.equal(getSandboxCollectScenario("+237000000004", "+237"), "otp_required");
+});
+
+test("sandbox history records are identified even when metadata is stored as JSON text", () => {
+  assert.equal(isSandboxTestTransaction({
+    type: "sandbox_test",
+    source: "sandbox",
+    metadata: JSON.stringify({ sandboxTest: true }),
+  }), true);
+  assert.equal(isSandboxTestTransaction({ type: "deposit", source: "api" }), false);
+});
+
+test("sandbox history records never receive reconstructed wallet balance snapshots", () => {
+  const snapshots = buildTransactionBalanceSnapshots(
+    [{
+      id: "sandbox-test-1",
+      userId: "user-1",
+      type: "sandbox_test",
+      amount: "5000.00",
+      currency: "XAF",
+      status: "sandbox_test",
+      source: "sandbox",
+      metadata: { sandboxTest: true },
+      createdAt: new Date(),
+    } as any],
+    "XAF",
+    10000,
+    [],
+  );
+
+  assert.equal(snapshots.has("sandbox-test-1"), false);
 });

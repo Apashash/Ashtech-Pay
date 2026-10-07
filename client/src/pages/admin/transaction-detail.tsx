@@ -59,6 +59,7 @@ const typeLabels: Record<string, string> = {
   transfer_in: "Transfert reçu",
   transfer_out: "Transfert envoyé",
   payment_link: "Lien de paiement",
+  sandbox_test: "Sandbox test",
 };
 
 const paymentMethodLabels: Record<string, string> = {
@@ -70,6 +71,9 @@ const paymentMethodLabels: Record<string, string> = {
 };
 
 function getStatusBadge(status: string) {
+  if (status === "sandbox_test") {
+    return <Badge className="bg-sky-500/20 text-sky-300 border-sky-500/30">Sandbox test</Badge>;
+  }
   switch (status) {
     case "completed":
       return <Badge className="bg-green-500/20 text-green-400 border-green-500/30 gap-1"><CheckCircle className="w-3.5 h-3.5" />Validé</Badge>;
@@ -210,7 +214,12 @@ export default function AdminTransactionDetail() {
     );
   }
 
-  const amountColor = tx.status === "completed"
+  const isSandboxTest = tx.type === "sandbox_test" ||
+    tx.source === "sandbox" ||
+    tx.metadata?.sandboxTest === true;
+  const amountColor = isSandboxTest
+    ? "text-muted-foreground"
+    : tx.status === "completed"
     ? (isIncoming(tx.type) ? "text-green-400" : "text-red-400")
     : tx.status === "pending" ? "text-amber-400" : "text-muted-foreground";
 
@@ -271,7 +280,7 @@ export default function AdminTransactionDetail() {
               {cryptoMeta ? (
                 <>
                   <p className={`text-4xl font-bold ${amountColor}`}>
-                    {isIncoming(tx.type) ? "+" : "-"}{cryptoMeta.credited.toFixed(4)} USDT
+                    {isSandboxTest ? "" : isIncoming(tx.type) ? "+" : "-"}{cryptoMeta.credited.toFixed(4)} USDT
                   </p>
                   {cryptoMeta.assetCode && (
                     <p className="text-xs text-amber-500 font-mono mt-0.5">{cryptoMeta.assetCode}</p>
@@ -297,7 +306,7 @@ export default function AdminTransactionDetail() {
               ) : (
                 <>
                   <p className={`text-4xl font-bold ${amountColor}`}>
-                    {isIncoming(tx.type) ? "+" : "-"}{formatCurrency(parseFloat(tx.amount), (tx.currency || "XAF") as SupportedCurrency)}
+                    {isSandboxTest ? "" : isIncoming(tx.type) ? "+" : "-"}{formatCurrency(parseFloat(tx.amount), (tx.currency || "XAF") as SupportedCurrency)}
                   </p>
                   {tx.feeAmount && parseFloat(tx.feeAmount) > 0 && (
                     <div className="mt-2 space-y-1 text-sm text-muted-foreground">
@@ -310,6 +319,22 @@ export default function AdminTransactionDetail() {
             </div>
           </CardContent>
         </Card>
+
+        {isSandboxTest && (
+          <Card className="border-sky-500/30 bg-sky-500/5">
+            <CardContent className="pt-4 text-sm">
+              <p className="font-semibold text-sky-700">Sandbox test</p>
+              <p className="mt-1 text-muted-foreground">
+                Simulation uniquement : aucun solde n’a été modifié, aucun fournisseur appelé et aucun webhook envoyé.
+              </p>
+              {tx.metadata?.simulatedStatus && (
+                <p className="mt-1 text-muted-foreground">
+                  Résultat simulé : <span className="font-medium">{String(tx.metadata.simulatedStatus)}</span>
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader className="pb-2">

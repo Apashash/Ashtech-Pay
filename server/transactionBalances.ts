@@ -1,4 +1,5 @@
 import type { Transaction, Wallet } from "@shared/schema-runtime";
+import { isSandboxTestTransaction } from "./sandboxTestNumbers";
 
 export interface TransactionBalanceSnapshot {
   balanceCurrency?: string;
@@ -123,6 +124,10 @@ export function buildTransactionBalanceSnapshots(
   const unavailableCurrencies = new Set<string>();
 
   for (const transaction of ordered) {
+    // Sandbox history entries are audit records only; they never represent a
+    // wallet movement and must not receive reconstructed before/after balances.
+    if (isSandboxTestTransaction(transaction)) continue;
+
     const isPayout = transaction.type === "withdrawal" || transaction.type === "transfer_out";
     const sourceCurrency = isPayout
       ? payoutWalletCurrency(transaction, transaction.currency || primaryCurrency)

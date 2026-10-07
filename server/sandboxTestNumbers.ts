@@ -71,3 +71,28 @@ export function getSandboxCollectScenario(
 export function sandboxStatusLabel(status: SandboxCollectStatus): string {
   return STATUS_LABELS[status];
 }
+
+export function isSandboxTestTransaction(
+  transaction: {
+    type?: unknown;
+    source?: unknown;
+    metadata?: unknown;
+  } | null | undefined,
+): boolean {
+  if (!transaction) return false;
+  if (transaction.type === "sandbox_test" || transaction.source === "sandbox") return true;
+
+  let metadata = transaction.metadata;
+  if (typeof metadata === "string") {
+    try {
+      metadata = JSON.parse(metadata);
+    } catch {
+      return false;
+    }
+  }
+
+  return !!metadata &&
+    typeof metadata === "object" &&
+    !Array.isArray(metadata) &&
+    (metadata as Record<string, unknown>).sandboxTest === true;
+}

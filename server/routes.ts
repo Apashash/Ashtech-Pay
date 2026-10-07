@@ -93,6 +93,7 @@ import {
 } from "./directCrypto";
 import {
   getSandboxCollectScenario,
+  isSandboxTestTransaction,
   sandboxStatusLabel,
   type SandboxCollectStatus,
 } from "./sandboxTestNumbers";
@@ -5789,6 +5790,19 @@ export async function registerRoutes(
       const latestTransaction = await storage.getTransactionByReference(reference);
       if (!latestTransaction) {
         return res.status(404).json({ message: "Transaction non trouvée", status: "not_found" });
+      }
+      if (isSandboxTestTransaction(latestTransaction)) {
+        return res.json({
+          sandbox: true,
+          simulation: true,
+          status: "sandbox_test",
+          state: "sandbox_test",
+          reference: latestTransaction.reference,
+          wallet_credited_amount: 0,
+          wallet_updated: false,
+          webhook_sent: false,
+          message: "Transaction de test Sandbox : aucun solde n'a été modifié.",
+        });
       }
       // The browser must only read our local transaction state. The background
       // poller is the single component that talks to PawaPay, so a temporary
@@ -14094,6 +14108,11 @@ export async function registerRoutes(
       if (!existingTx) {
         return res.status(404).json({ message: "Transaction non trouvée" });
       }
+      if (isSandboxTestTransaction(existingTx)) {
+        return res.status(409).json({
+          message: "Une transaction Sandbox est une trace de test : elle ne peut pas être validée, rejetée ni modifier un solde.",
+        });
+      }
 
       const payoutTransaction = existingTx.type === "withdrawal" || existingTx.type === "transfer_out";
       const manualPayoutStatusOverride = shouldUseManualPayoutStatusOverride({
@@ -19373,13 +19392,12 @@ export async function registerRoutes(
       }
 
        // ── Sandbox test numbers ─────────────────────────────────────────────
-       // These exact fictional numbers return deterministic responses without
-       // creating a transaction or calling a payment provider. They are
-       // documented on doc.ashtechpay.com/docs/sandbox and are matched only
-       // after country/operator/currency validation has succeeded.
+        // These exact fictional numbers return simulated responses without
+        // calling a payment provider or changing a wallet balance. Final test
+        // outcomes are stored only as sandbox_test history records.
        const sandboxStatus = getSandboxCollectScenario(phone, (country as any).dialCode);
        if (sandboxStatus) {
-         const sandboxReference = `sandbox_${country.code.toLowerCase()}_${sandboxStatus}`;
+          const sandboxReference = `sandbox_${country.code.toLowerCase()}_${sandboxStatus}_${crypto.randomUUID()}`;
          const sandboxFeeAmount = Number((amountNum * 0.05).toFixed(2));
          const sandboxCreditedAmount = Number((amountNum - sandboxFeeAmount).toFixed(2));
          const sandboxBaseResponse: Record<string, any> = {
@@ -19391,13 +19409,16 @@ export async function registerRoutes(
            status: sandboxStatus === "success" ? "success" : sandboxStatus,
            amount: amountNum,
            credited_amount: sandboxCreditedAmount,
+            wallet_credited_amount: 0,
+            wallet_updated: false,
+            webhook_sent: false,
            fee_amount: sandboxFeeAmount,
            currency: expectedIso,
            operator: getOperatorDisplayName(operatorName),
            phone,
            country_code: country.code,
            message: sandboxStatusLabel(sandboxStatus),
-           note: "Réponse simulée : aucun fournisseur n'a été appelé et aucune transaction n'a été créée.",
+            note: "Montants simulés uniquement : aucun fournisseur appelé, aucun webhook envoyé et aucun solde modifié.",
          };
 
          if (sandboxStatus === "otp_required" && !otp) {
@@ -19422,6 +19443,38 @@ export async function registerRoutes(
            sandboxBaseResponse.status = "pending";
            sandboxBaseResponse.message = "OTP de démonstration accepté. Paiement en attente de confirmation.";
          }
+
+          const sandboxTransaction = await storage.createTransaction({
+            userId: merchant.id,
+            type: "sandbox_test",
+            amount: amountNum.toFixed(2),
+            currency: expectedIso,
+            status: "sandbox_test",
+            description: `Sandbox test — collecte Mobile Money (${sandboxStatus})`,
+            recipientPhone: phone,
+            recipientCountry: country.code,
+            operatorId: operatorRecord.id,
+            paymentMethod: "mobile_money",
+            reference: sandboxReference,
+            source: "sandbox",
+            metadata: {
+              sandboxTest: true,
+              simulation: true,
+              operation: "collect",
+              scenario: sandboxStatus,
+              simulatedStatus: sandboxBaseResponse.status,
+              merchantReference,
+              simulatedFeeAmount: sandboxFeeAmount,
+              simulatedCreditedAmount: sandboxCreditedAmount,
+              walletUpdated: false,
+              providerCalled: false,
+              webhookSent: false,
+            },
+          });
+          sandboxBaseResponse.transaction_id = sandboxTransaction.id;
+          sandboxBaseResponse.history_status = "sandbox_test";
+          sandboxBaseResponse.reference = sandboxTransaction.reference;
+          sandboxBaseResponse.note = "Résultat simulé. Une entrée « Sandbox test » est visible dans l'historique, mais aucun fournisseur n'a été appelé, aucun webhook envoyé et aucun solde modifié.";
 
          const responseStatus: Record<SandboxCollectStatus, number> = {
            success: 200,
@@ -21155,6 +21208,7 @@ export async function registerRoutes(
 
       const isoStatus = latestTx.status === "completed" ? "success" : latestTx.status;
       const latestMetadata = readTransactionMetadata((latestTx as any).metadata);
+      const sandboxTest = isSandboxTestTransaction(latestTx);
 
       const responseBody: Record<string, any> = {
         transaction_id: latestTx.id,
@@ -21163,8 +21217,8 @@ export async function registerRoutes(
         type: latestTx.type,
         status: isoStatus,
         amount: parseFloat((latestTx as any).totalAmount || latestTx.amount),
-        credited_amount: parseFloat(latestTx.amount),
-        fee_amount: parseFloat((latestTx as any).feeAmount || "0"),
+        credited_amount: sandboxTest ? 0 : parseFloat(latestTx.amount),
+        fee_amount: sandboxTest ? 0 : parseFloat((latestTx as any).feeAmount || "0"),
         currency: normalizeApiCurrency(latestTx.currency),
         wallet_currency: latestMetadata.walletCurrency || latestTx.currency,
         payment_method: latestTx.paymentMethod || null,
@@ -21172,6 +21226,16 @@ export async function registerRoutes(
         operator: operatorName,
         created_at: latestTx.createdAt,
         confirmed_at: (latestTx as any).confirmedAt || null,
+        ...(sandboxTest ? {
+          sandbox: true,
+          simulation: true,
+          history_status: "sandbox_test",
+          simulated_status: latestMetadata.simulatedStatus || null,
+          simulated_credited_amount: Number(latestMetadata.simulatedCreditedAmount || 0),
+          wallet_credited_amount: 0,
+          wallet_updated: false,
+          webhook_sent: false,
+        } : {}),
       };
       if (
         latestTx.status === "pending" &&

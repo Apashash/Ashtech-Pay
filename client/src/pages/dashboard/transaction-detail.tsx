@@ -3,7 +3,7 @@ import { DashboardLayout } from "@/components/dashboard-layout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { Transaction, User, SupportedCurrency } from "@shared/schema";
-import { TrendingUp, TrendingDown, ArrowLeftRight, Link2, Copy, X, Loader2, ChevronLeft } from "lucide-react";
+import { TrendingUp, TrendingDown, ArrowLeftRight, Link2, Copy, X, Loader2, ChevronLeft, Code2 } from "lucide-react";
 import { format } from "date-fns";
 import { useMemo } from "react";
 import { formatCurrency } from "@/lib/currency";
@@ -70,6 +70,9 @@ export default function TransactionDetailPage({ params }: { params: { id: string
   });
 
   const depositLabel = tx?.paymentMethod === "crypto" ? td.typeDepositCrypto : td.typeDeposit;
+  const isSandboxTest = tx?.type === "sandbox_test" ||
+    (tx as any)?.source === "sandbox" ||
+    tx?.metadata?.sandboxTest === true;
   const typeLabels: Record<string, string> = {
     deposit: depositLabel,
     withdrawal: td.typeWithdrawal,
@@ -77,6 +80,7 @@ export default function TransactionDetailPage({ params }: { params: { id: string
     transfer_out: td.typeTransferOut,
     payment_link: td.typePaymentLink,
     conversion: td.typeConversion,
+    sandbox_test: "Sandbox test",
   };
 
   const operatorMap = useMemo<Record<string, { name: string; country: string; countryCode: string }>>(() => {
@@ -121,7 +125,7 @@ export default function TransactionDetailPage({ params }: { params: { id: string
   const isConversion = tx.type === "conversion";
   const isPaymentLink = tx.type === "payment_link";
 
-  const amountPrefix = isConversion ? "⇄ " : (isIncoming ? "+" : "-");
+  const amountPrefix = isSandboxTest ? "" : isConversion ? "⇄ " : (isIncoming ? "+" : "-");
   const statusCategory = getTransactionStatusCategory(tx.status);
   const isSuccessful = statusCategory === "completed";
   const isPending = statusCategory === "pending";
@@ -136,6 +140,8 @@ export default function TransactionDetailPage({ params }: { params: { id: string
           ? "bg-blue-500"
       : statusTone === "failed"
         ? "bg-red-600"
+        : isSandboxTest
+          ? "bg-sky-700"
         : isConversion
           ? "bg-blue-500"
           : isIncoming
@@ -153,10 +159,13 @@ export default function TransactionDetailPage({ params }: { params: { id: string
           : isIncoming
             ? "bg-white/20"
             : "bg-white/20";
-  const TxIcon = isConversion ? ArrowLeftRight : isPaymentLink ? Link2 : isIncoming ? TrendingUp : TrendingDown;
+  const TxIcon = isSandboxTest ? Code2 : isConversion ? ArrowLeftRight : isPaymentLink ? Link2 : isIncoming ? TrendingUp : TrendingDown;
   const iconColor = "text-white";
 
   const statusBadge = () => {
+    if (isSandboxTest) {
+      return <Badge className="bg-white/20 text-white border-white/30 font-semibold">Sandbox test</Badge>;
+    }
     switch (statusCategory) {
       case "completed":
         return <Badge className="bg-white/20 text-white border-white/30 font-semibold">{td.detailStatusCompleted}</Badge>;
@@ -265,6 +274,20 @@ export default function TransactionDetailPage({ params }: { params: { id: string
             </p>
           </div>
         </div>
+
+        {isSandboxTest && (
+          <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 mb-4">
+            <p className="text-sm font-semibold text-sky-700">Sandbox test</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Résultat simulé : aucun solde n’a été modifié, aucun fournisseur appelé et aucun webhook envoyé.
+            </p>
+            {tx.metadata?.simulatedStatus && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Résultat simulé : <span className="font-semibold">{String(tx.metadata.simulatedStatus)}</span>
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="bg-card border border-border rounded-2xl px-4 pb-4">
           {(tx.reference || merchantReference) && (

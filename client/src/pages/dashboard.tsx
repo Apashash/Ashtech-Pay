@@ -28,6 +28,7 @@ import {
   Clock,
   CheckCircle,
   XCircle,
+  Code2,
   Copy,
   Loader2,
   Plus,
@@ -121,7 +122,8 @@ function QuickActions({ onAction }: { onAction: (action: string) => void }) {
 }
 
 function TransactionItem({ transaction }: { transaction: Transaction }) {
-  const isIncoming = transaction.type === "deposit" || transaction.type === "transfer_in" || transaction.type === "payment_link";
+  const isSandboxTest = transaction.type === "sandbox_test" || (transaction as any).source === "sandbox";
+  const isIncoming = !isSandboxTest && (transaction.type === "deposit" || transaction.type === "transfer_in" || transaction.type === "payment_link");
   const statusIcons = {
     pending: <Clock className="w-4 h-4 text-yellow-500" />,
     completed: <CheckCircle className="w-4 h-4 text-green-500" />,
@@ -135,13 +137,16 @@ function TransactionItem({ transaction }: { transaction: Transaction }) {
     transfer_in: "Reçu",
     transfer_out: "Envoyé",
     payment_link: "Lien de paiement",
+    sandbox_test: "Sandbox test",
   };
 
   return (
     <div className="flex items-center justify-between py-3 border-b border-border last:border-0">
       <div className="flex items-center gap-3">
-        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isIncoming ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
-          {isIncoming ? (
+        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isSandboxTest ? 'bg-sky-500/10' : isIncoming ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
+          {isSandboxTest ? (
+            <Code2 className="w-5 h-5 text-sky-600" />
+          ) : isIncoming ? (
             <TrendingUp className="w-5 h-5 text-green-500" />
           ) : (
             <TrendingDown className="w-5 h-5 text-red-500" />
@@ -155,10 +160,12 @@ function TransactionItem({ transaction }: { transaction: Transaction }) {
         </div>
       </div>
       <div className="flex items-center gap-2">
-        <span className={`font-semibold ${isIncoming ? 'text-green-500' : 'text-red-500'}`}>
-          {isIncoming ? '+' : '-'}{formatCurrency(transaction.amount)}
+        <span className={`font-semibold ${isSandboxTest ? 'text-muted-foreground' : isIncoming ? 'text-green-500' : 'text-red-500'}`}>
+          {isSandboxTest ? "" : isIncoming ? '+' : '-'}{formatCurrency(transaction.amount)}
         </span>
-        {statusIcons[transaction.status as keyof typeof statusIcons]}
+        {isSandboxTest
+          ? <span className="text-xs text-sky-700">Sandbox test</span>
+          : statusIcons[transaction.status as keyof typeof statusIcons]}
       </div>
     </div>
   );

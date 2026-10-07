@@ -1045,6 +1045,8 @@ export default function DashboardHome() {
                       {txs.map((tx) => {
                         const apiBadge = tx.type === "payment_link"
                           ? null
+                          : tx.type === "sandbox_test" || (tx as any).source === "sandbox"
+                            ? <Badge className="text-[10px] px-1.5 py-0 gap-1 bg-sky-500/10 text-sky-700 border-sky-500/30">Sandbox</Badge>
                           : (tx as any).source === "hosted_page"
                             ? <Badge className="text-[10px] px-1.5 py-0 gap-1 bg-amber-500/10 text-amber-600 border-amber-500/30"><Globe className="w-2.5 h-2.5" />Hosted</Badge>
                             : (tx as any).source === "api"
@@ -1058,7 +1060,9 @@ export default function DashboardHome() {
                           transfer_out: t.transactions.typeTransferOut,
                           payment_link: t.transactions.typePaymentLink,
                           conversion: t.transactions.typeConversion,
+                          sandbox_test: "Sandbox test",
                         };
+                        const isSandboxTest = tx.type === "sandbox_test" || (tx as any).source === "sandbox";
                         const isIncoming = ["deposit", "transfer_in", "payment_link"].includes(tx.type);
                         const statusCategory = getTransactionStatusCategory(tx.status);
                         const isSuccessful = statusCategory === "completed";
@@ -1071,18 +1075,24 @@ export default function DashboardHome() {
                             : statusCategory === "failed" || statusCategory === "cancelled"
                               ? "border-l-4 border-red-500 bg-red-500/10 hover:bg-red-500/15"
                               : "hover:bg-muted/40";
-                        const iconBg = tx.type === "conversion"
+                        const iconBg = isSandboxTest
+                          ? "bg-sky-500/10"
+                          : tx.type === "conversion"
                           ? "bg-blue-500/10"
                           : tx.type === "payment_link"
                             ? "bg-primary/10"
                             : isIncoming ? "bg-green-500/10" : "bg-red-500/10";
-                        const amountColor = tx.type === "conversion"
+                        const amountColor = isSandboxTest
+                          ? "text-muted-foreground"
+                          : tx.type === "conversion"
                           ? "text-blue-500"
                           : isSuccessful
                             ? isIncoming ? "text-green-500" : "text-red-500"
                             : isPending || isProcessing ? "text-amber-500" : "text-muted-foreground";
-                        const amountPrefix = tx.type === "conversion" ? "⇄ " : isIncoming ? "+" : "-";
-                        const statusBadge = isSuccessful
+                        const amountPrefix = isSandboxTest ? "" : tx.type === "conversion" ? "⇄ " : isIncoming ? "+" : "-";
+                        const statusBadge = isSandboxTest
+                          ? <Badge className="text-[10px] px-1.5 py-0 bg-sky-500/10 text-sky-700 border-sky-500/30 font-medium">Sandbox test</Badge>
+                          : isSuccessful
                           ? <Badge className="text-[10px] px-1.5 py-0 bg-green-500/20 text-green-600 border-green-500/30 font-medium">{t.transactions.statusCompleted}</Badge>
                           : isPending
                             ? <Badge className="text-[10px] px-1.5 py-0 bg-amber-500/20 text-amber-600 border-amber-500/30 font-medium">{t.transactions.statusPending}</Badge>
@@ -1103,7 +1113,9 @@ export default function DashboardHome() {
                           >
                             <div className={`w-9 h-9 shrink-0 rounded-full flex items-center justify-center ${iconBg}`}>
                               <DashboardHistoryIcon
-                                src={tx.type === "conversion"
+                                src={isSandboxTest
+                                  ? "/sidebar-icons/transactions.png"
+                                  : tx.type === "conversion"
                                   ? "/sidebar-icons/transactions.png"
                                   : tx.type === "payment_link"
                                     ? "/sidebar-icons/links.png"
