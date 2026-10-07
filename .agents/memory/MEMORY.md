@@ -34,7 +34,7 @@
 - [Crypto pending expiry](crypto-pending-expiry.md) — show 35s in crypto screens but enforce a persisted 15min server timeout only for crypto, never Mobile Money.
 - [Crypto fee display](crypto-fee-display.md) — calculate provider and AshTechPay fees separately, but show users only their combined total.
 - [Crypto country required](crypto-country-required.md) — country selection is mandatory in public crypto links and authenticated crypto deposits, with server-side validation.
-- [Merchant API identity and wallets](merchant-payout-api.md) — require matching `user_id` on all merchant API calls; expose wallet balances and preserve country-specific wallets.
+- [Merchant API identity and wallets](merchant-payout-api.md) — require matching `user_id`, preserve country-specific wallets, and keep deposit versus payout country catalogs distinct.
 - [Transaction metadata typing](transaction-metadata-typing.md) — JSON transaction metadata needs an explicit shared record type for TypeScript inserts.
 - [Historical balance snapshots](historical-balance-snapshots.md) — reverse-reconstructed balances are not audit truth when a rejected payout refund lands in a different wallet.
 - [API reference separation](api-reference-separation.md) — API merchant references are idempotency metadata; only AshTech-generated references go to providers.
