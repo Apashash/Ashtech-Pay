@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { encryptField, decryptField, hmacField } from "./fieldEncryption";
+import { encryptField, decryptField, hmacField, hmacFieldCandidates } from "./fieldEncryption";
 import { userKycStateFromSubmissionStatus } from "./kycStatusPolicy";
 
 /**
@@ -1915,8 +1915,7 @@ export class DatabaseStorage implements IStorage {
 
   async getUserByApiKey(apiKey: string): Promise<User | undefined> {
     // Primary: look up by HMAC hash (api_key_hash) — constant-time, no cleartext in DB
-    const hash = hmacField(apiKey);
-    if (hash) {
+    for (const hash of hmacFieldCandidates(apiKey)) {
       const [byHash] = await db.select().from(users).where(eq(users.apiKeyHash, hash));
       if (byHash) return byHash;
     }
@@ -1928,18 +1927,23 @@ export class DatabaseStorage implements IStorage {
   async setUserApiKey(userId: string, apiKey: string): Promise<User | undefined> {
     const encryptedKey = encryptField(apiKey);
     const keyHash = hmacField(apiKey);
+    invalidateUserCache(userId);
     const user = isMysqlDialect
       ? await mysqlUpdateAndRead(
           users,
           eq(users.id, userId),
           { apiKey: encryptedKey, ...(keyHash ? { apiKeyHash: keyHash } : {}) },
-          () => this.getUser(userId),
+          () => {
+            invalidateUserCache(userId);
+            return this.getUser(userId);
+          },
         )
       : (await db
           .update(users)
           .set({ apiKey: encryptedKey, ...(keyHash ? { apiKeyHash: keyHash } : {}) })
           .where(eq(users.id, userId))
           .returning())[0];
+    if (!isMysqlDialect) invalidateUserCache(userId);
     // Return with decrypted key for immediate display
     if (user) return { ...user, apiKey };
     return undefined;

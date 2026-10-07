@@ -4,8 +4,9 @@
  * Covers: sk_live, pk_live (hosted_page_configs)
  * Lookup key hp_live uses HMAC-SHA256 for searchable hashing.
  *
- * Env var required: FIELD_ENCRYPTION_KEY (any string ≥ 16 chars)
- * Key is derived to 32 bytes via SHA-256 so any string length works.
+ * FIELD_ENCRYPTION_KEY encrypts new values; FIELD_ENCRYPTION_KEY_PREVIOUS is
+ * optional and only lets reads/HMAC lookups continue after a deliberate rotation.
+ * Keys are derived to 32 bytes via SHA-256.
  *
  * Ciphertext format (base64): "<iv_hex>:<authTag_hex>:<ciphertext_hex>"
  * Prefix "enc:" distinguishes encrypted values from legacy plaintext.
@@ -24,6 +25,16 @@ function getDerivedKey(): Buffer | null {
   const raw = process.env.FIELD_ENCRYPTION_KEY;
   if (!raw || raw.trim().length < 8) return null;
   return crypto.createHash("sha256").update(raw).digest();
+}
+
+function getDerivedDecryptionKeys(): Buffer[] {
+  const rawKeys = [
+    process.env.FIELD_ENCRYPTION_KEY,
+    process.env.FIELD_ENCRYPTION_KEY_PREVIOUS,
+  ].filter((raw): raw is string => Boolean(raw && raw.trim().length >= 8));
+  return [...new Set(rawKeys)].map((raw) =>
+    crypto.createHash("sha256").update(raw).digest(),
+  );
 }
 
 function getHmacKey(): Buffer | null {
@@ -58,25 +69,57 @@ export function encryptField(plaintext: string | null | undefined): string | nul
 export function decryptField(value: string | null | undefined): string | null {
   if (value === null || value === undefined) return null;
   if (!value.startsWith(ENCRYPTION_PREFIX)) return value; // legacy plaintext — pass through
-  const key = getDerivedKey();
-  if (!key) {
+  const keys = getDerivedDecryptionKeys();
+  if (keys.length === 0) {
     console.warn("[FieldEncryption] FIELD_ENCRYPTION_KEY not set — cannot decrypt field");
     return value; // return raw (non-functional but won't crash)
   }
-  try {
-    const payload = value.slice(ENCRYPTION_PREFIX.length);
-    const [ivHex, authTagHex, ciphertextHex] = payload.split(":");
-    if (!ivHex || !authTagHex || !ciphertextHex) throw new Error("Invalid format");
-    const iv = Buffer.from(ivHex, "hex");
-    const authTag = Buffer.from(authTagHex, "hex");
-    const ciphertext = Buffer.from(ciphertextHex, "hex");
-    const decipher = crypto.createDecipheriv(ALGO, key, iv, { authTagLength: 16 }) as crypto.DecipherGCM;
-    decipher.setAuthTag(authTag);
-    return decipher.update(ciphertext).toString("utf8") + decipher.final("utf8");
-  } catch (err: any) {
-    console.error("[FieldEncryption] Decryption failed:", err?.message);
+
+  const payload = value.slice(ENCRYPTION_PREFIX.length);
+  const [ivHex, authTagHex, ciphertextHex] = payload.split(":");
+  if (!ivHex || !authTagHex || !ciphertextHex) {
+    console.error("[FieldEncryption] Decryption failed: invalid encrypted field format");
     return null;
   }
+
+  for (const key of keys) {
+    try {
+      const iv = Buffer.from(ivHex, "hex");
+      const authTag = Buffer.from(authTagHex, "hex");
+      const ciphertext = Buffer.from(ciphertextHex, "hex");
+      const decipher = crypto.createDecipheriv(ALGO, key, iv, { authTagLength: 16 }) as crypto.DecipherGCM;
+      decipher.setAuthTag(authTag);
+      return decipher.update(ciphertext).toString("utf8") + decipher.final("utf8");
+    } catch {
+      // Try the previous configured key without revealing which key failed.
+    }
+  }
+
+  console.error("[FieldEncryption] Decryption failed with the configured encryption keys");
+  return null;
+}
+
+/**
+ * HMAC candidates let Direct API requests keep working while an operator
+ * temporarily retains a previous FIELD_ENCRYPTION_KEY during key rotation.
+ */
+export function hmacFieldCandidates(value: string | null | undefined): string[] {
+  if (!value) return [];
+
+  const rawKeys = [
+    process.env.FIELD_ENCRYPTION_KEY,
+    process.env.FIELD_ENCRYPTION_KEY_PREVIOUS,
+  ].filter((raw): raw is string => Boolean(raw));
+  const candidates = rawKeys.map((raw) =>
+    crypto.createHmac("sha256", crypto.createHash("sha256").update("hmac:" + raw).digest())
+      .update(value)
+      .digest("hex"),
+  );
+
+  // Preserve API keys hashed before field encryption was configured.
+  candidates.push(crypto.createHash("sha256").update(value).digest("hex"));
+
+  return [...new Set(candidates)];
 }
 
 /**

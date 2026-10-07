@@ -79,6 +79,7 @@ import {
   isSupabaseStorageConfigured,
 } from "./supabase";
 import { decryptField, encryptField, isFieldEncryptionConfigured } from "./fieldEncryption";
+import { resolveStoredDirectApiKey } from "./directApiKey";
 import { isAdminPinProtectionEnabled, requireAdminPin, verifyAdminPinCode } from "./adminPin";
 import { createPaymentIntent, createDirectCharge, createIziPayout, validateWebhook, getIziPayWebhookSecret, toIziPayCurrency, isIziPayConfigured, extractIziPayProviderReference } from "./izichange";
 import { fetchCryptoAssets, filterCryptoAssets, parseDisabledCryptoAssets, getStaticCryptoAssets } from "./cryptoAssets";
@@ -5591,17 +5592,29 @@ export async function registerRoutes(
       let user = await storage.getUser(userId);
       if (!user) return res.status(404).json({ message: "Utilisateur non trouvé" });
 
-      // Auto-generate key on first access
-      if (!user.apiKey) {
+      const storedKey = resolveStoredDirectApiKey(user.apiKey, user.apiKeyHash);
+      if (storedKey.kind === "unavailable") {
+        console.error(
+          `[Direct API] Stored key cannot be recovered for user ${userId}; verify FIELD_ENCRYPTION_KEY and FIELD_ENCRYPTION_KEY_PREVIOUS. No replacement was generated.`,
+        );
+        return res.status(503).json({
+          error: "api_key_unavailable",
+          message: "La clé API enregistrée ne peut pas être déchiffrée. Aucune nouvelle clé n'a été créée.",
+        });
+      }
+
+      // Generate only when there is no existing key or hash to preserve.
+      if (storedKey.kind === "missing") {
         const { randomBytes } = await import("crypto");
         const key = `ak_${randomBytes(24).toString("hex")}`;
         user = (await storage.setUserApiKey(userId, key)) || user;
-        // setUserApiKey returns the plaintext key directly — use as-is
+        if (!user.apiKey) {
+          return res.status(500).json({ error: "api_key_generation_failed" });
+        }
         return res.json({ apiKey: user.apiKey });
       }
 
-      // Decrypt existing key before returning to client
-      res.json({ apiKey: decryptField(user.apiKey) });
+      res.json({ apiKey: storedKey.apiKey });
     } catch (error) {
       console.error("Get API key error:", error);
       res.status(500).json({ message: "Erreur serveur" });

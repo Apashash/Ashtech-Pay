@@ -1,7 +1,7 @@
 - [Admin TOTP mandatory](admin-totp-mandatory.md) — TOTP now enforced server-side in requireAdmin AND at login; no bypass possible; both OTP pages had disabled redirects that were removed.
 - [Operator fee availability](operator-fee-disable-priority.md) — inactive operator fees keep operators visible as unavailable while blocking initiation before fee fallback.
 - [KYC guard trigger pgBouncer bug](kyc-guard-trigger.md) — sensitive-column guard trigger blocked is_verified updates on pgBouncer/Supavisor (application_name reset); fix: removed is_verified from blocked columns.
-- [MySQL mutation readbacks](mysql-returning-readback.md) — Drizzle MySQL mutations need explicit insert/update then SELECT readbacks instead of PostgreSQL-style returning results.
+- [MySQL mutation readbacks](mysql-returning-readback.md) — MySQL updates need explicit SELECT readbacks; invalidate user caches before callback reads to avoid stale results.
 - [MySQL aggregate result shape](mysql-aggregate-result-shape.md) — Drizzle MySQL `db.execute()` returns selected rows directly; PostgreSQL uses a `{ rows }` result wrapper.
 - [MySQL KYC update readback](kyc-mysql-returning.md) — admin status changes must update the latest dossier first, then synchronize both account KYC flags without reviving explicit rejections.
 - [botGuard/ipBlocker IP-ban design](botguard-ip-ban-design.md) — no whole-IP bans/lockouts from a single bad request or one account's failed logins (CGNAT collateral damage); honeypot paths must never prefix a real route; auth lockouts must be per-account first, IP-wide only at a much higher threshold.

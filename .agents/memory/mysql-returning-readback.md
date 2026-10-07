@@ -9,6 +9,12 @@ Use explicit update/insert followed by a SELECT readback for MySQL storage metho
 
 **How to apply:** When adding or repairing a MySQL-backed mutation that must return data, generate an ID for inserts when needed, execute the mutation, read by a stable key, and fail explicitly if the readback is missing.
 
+Invalidate any short-lived cache before a MySQL readback callback calls a cached getter. PostgreSQL mutation branches must also invalidate cached rows after the write.
+
+**Why:** The SQL update can succeed while the callback returns a stale cached row, causing old API keys or flags to be shown and even triggering an unintended replacement.
+
+**How to apply:** For user mutations that read back through `getUser`, invalidate that user's cache before the MySQL SELECT and after PostgreSQL `.returning()` writes.
+
 Keep PostgreSQL-only syntax and modules behind explicit dialect branches; placeholder normalization alone does not make JSON operators, casts, aggregates, date functions, `RETURNING`, or PostgreSQL watchdog code compatible with MySQL.
 
 **Why:** The shared MySQL pool can translate `$1` placeholders, but it cannot translate PostgreSQL SQL grammar or PostgreSQL-specific runtime modules.

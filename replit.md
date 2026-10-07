@@ -104,7 +104,10 @@ previews do not contact a payment provider or move funds.
 ## Security and operations
 
 - `SESSION_SECRET` is required for production and multi-worker sessions.
-- Sensitive fields can be encrypted with `FIELD_ENCRYPTION_KEY`.
+- Keep `FIELD_ENCRYPTION_KEY` stable across restarts and deployments. During a
+  rotation, set `FIELD_ENCRYPTION_KEY_PREVIOUS` to the old value so encrypted
+  fields and existing Direct API key hashes remain readable. Do not remove the
+  previous value until old records and API keys have been migrated or replaced.
 - Admin actions require authentication, authorization, and the configured
   admin TOTP protections.
 - Webhook endpoints are explicitly exempted from browser CSRF checks and are

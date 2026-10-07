@@ -42,7 +42,7 @@ export default function DirectApiPage() {
   const [webhookSecretVisible, setWebhookSecretVisible] = useState(false);
   const [webhookSecretCopied, setWebhookSecretCopied] = useState(false);
 
-  const { data, isLoading, isError } = useQuery<ApiKeyResponse>({
+  const { data, isLoading, isError, error: apiKeyQueryError } = useQuery<ApiKeyResponse>({
     queryKey: ["/api/user/api-key"],
     refetchOnWindowFocus: false,
   });
@@ -105,6 +105,12 @@ export default function DirectApiPage() {
   });
 
   const apiKey = data?.apiKey ?? "";
+  const apiKeyErrorCode = (apiKeyQueryError as (Error & { error?: string }) | null)?.error;
+  const apiKeyLoadErrorMessage = apiKeyErrorCode === "api_key_unavailable"
+    ? copy.sdkKeyUnavailable
+    : copy.sdkLoadError;
+  const canRegenerateUnavailableKey = apiKeyErrorCode === "api_key_unavailable" ||
+    (!isError && !isLoading && !apiKey);
   const webhookSecret = webhookSecretData?.webhookSecret ?? "";
 
   async function copyApiKey() {
@@ -201,10 +207,22 @@ export default function DirectApiPage() {
                 <RefreshCw className="h-4 w-4 animate-spin" />
                 {copy.sdkLoading}
               </div>
-            ) : isError ? (
-              <p className="rounded-lg border border-destructive/20 bg-destructive/5 p-3 text-sm text-destructive">
-                Impossible de charger votre clé API. Veuillez réessayer.
-              </p>
+            ) : isError || !apiKey ? (
+              <div role="alert" className="space-y-3 rounded-lg border border-destructive/20 bg-destructive/5 p-3 text-sm text-destructive">
+                <p>{isError ? apiKeyLoadErrorMessage : copy.sdkKeyUnavailable}</p>
+                {canRegenerateUnavailableKey && (
+                  <Button
+                    variant="outline"
+                    onClick={regenerateApiKey}
+                    disabled={regenerateMutation.isPending}
+                    className="gap-2 text-destructive hover:text-destructive"
+                    data-testid="button-regenerate-unavailable-direct-api-key"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${regenerateMutation.isPending ? "animate-spin" : ""}`} />
+                    {copy.sdkRegenerate}
+                  </Button>
+                )}
+              </div>
             ) : (
               <>
                 <div className="flex items-center gap-2 rounded-lg border bg-muted/40 p-3">
