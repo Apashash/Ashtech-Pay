@@ -3,17 +3,24 @@
   "skills": [
     {
       "name": "ashtech",
-      "description": "Complete AshTech Pay integration guidance for Hosted Checkout, Direct API, Mobile Money, crypto, webhooks, and transaction verification.",
+      "description": "Complete AshTech Pay integration guidance for Hosted Checkout, Direct API, Mobile Money and USDT payouts, crypto, webhooks, and transaction verification.",
       "type": "skill-md",
       "url": "/skill.md",
-      "digest": "sha256:a4384eea90ce007756644a7fc0e61d8f63fdb53861b630b3ba4e70b5eb5d2ab9"
+      "digest": "sha256:1d01779f589f13141bcc0364659a929fa6998244ae6f3e73581a461d247327b4"
     },
     {
       "name": "ashtech-direct-api",
       "description": "Integrate AshTech Pay Direct API payments with server-side authentication, catalogues, transaction verification, and idempotent fulfillment.",
       "type": "skill-md",
       "url": "/.well-known/skills/ashtech-direct-api/SKILL.md",
-      "digest": "sha256:fd12d494d71f698820507e2d8831ac67b0230a5e9cf4267fc447e28d3b411b3c"
+      "digest": "sha256:8fae96cfe7e4a20899fec50a9d59d925500ea97f4bcdbc63b39736b4691fdad3"
+    },
+    {
+      "name": "ashtech-payouts",
+      "description": "Integrate AshTech Pay Mobile Money and USDT payouts with country/operator discovery, correct wallet selection, idempotency, and final-status verification.",
+      "type": "skill-md",
+      "url": "/.well-known/skills/ashtech-payouts/SKILL.md",
+      "digest": "sha256:15a5fb4bf15f1c41de1e6008066e01d3ca13a58f4afd2076a67db3962630466c"
     },
     {
       "name": "ashtech-checkout",

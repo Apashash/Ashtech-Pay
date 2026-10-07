@@ -1,8 +1,8 @@
 ---
 name: ashtech
-description: Use when integrating AshTech Pay Mobile Money or cryptocurrency payments, hosted checkout, payment webhooks, transaction verification, or payment troubleshooting.
+description: Use when integrating AshTech Pay Hosted Checkout, Direct API payments, Mobile Money or USDT payouts, payment webhooks, transaction verification, or payment troubleshooting.
 metadata:
-  version: "1.0"
+  version: "1.1"
   homepage: https://doc.ashtechpay.com
 ---
 
@@ -20,7 +20,7 @@ When a developer asks for an AshTech Pay integration:
    convention.
 2. Ask only the questions needed to choose the integration. Use Hosted Checkout
    for a hosted payment page, Direct API for a custom payment form, and the
-   Mobile Money, crypto, or webhooks instructions for those specific flows.
+   Mobile Money, crypto, payout, or webhook instructions for those specific flows.
 3. Read the relevant pages on `https://doc.ashtechpay.com` before writing
    requests. The documentation is the authority for endpoint names, fields,
    response shapes, statuses, and provider catalogues.
@@ -65,6 +65,7 @@ Use this Skill when:
 - handling the documented Mobile Money flows: USSD Push, Wave, OTP SMS, and
   OTP USSD;
 - accepting cryptocurrency payments;
+- sending Mobile Money or USDT payouts;
 - implementing payment webhooks;
 - verifying transaction status;
 - handling OTP, pending, failed, expired, or duplicate payment states;
@@ -117,6 +118,11 @@ Use this Skill when:
 - Do not blindly retry an initiation after a timeout; check the transaction
   status first.
 - Make order fulfillment idempotent.
+- A payout request accepted with HTTP `202` is not by itself proof that funds
+  reached the recipient. Confirm the final status using the documented
+  transaction-status endpoint or a verified webhook.
+- Never retry an uncertain payout with a new reference. Keep it pending until
+  an authoritative result is available.
 
 ## Documented endpoint selection
 
@@ -128,7 +134,10 @@ provider or network assumptions. The currently documented Direct API includes:
 - `POST /v1/collect` — Mobile Money collection;
 - `GET /v1/transaction/:id` — transaction status;
 - `GET /v1/crypto/assets` — active crypto assets and networks;
-- `POST /v1/crypto/collect` — crypto payment creation.
+- `POST /v1/crypto/collect` — crypto payment creation;
+- `GET /v1/countries?operation=payout` — active payout countries and withdrawal operators;
+- `POST /v1/payouts/mobile-money` — Mobile Money payout;
+- `POST /v1/payouts/crypto` — crypto payout, including USDT.
 
 Hosted Checkout endpoints and fields must be taken from the current Hosted
 Checkout documentation.
@@ -150,6 +159,47 @@ and OTP USSD request and retry rules. Do not reuse an OTP reference or retry
 an expired payment unless the current documentation explicitly allows it.
 
 Never hardcode a provider code when the live catalogue provides it.
+
+## Merchant payouts
+
+Before implementing payouts, read the current documentation:
+
+- https://doc.ashtechpay.com/docs/direct-api/payouts
+- https://doc.ashtechpay.com/docs/reference/countries
+
+### Mobile Money payout
+
+- Create payouts with `POST /v1/payouts/mobile-money`; do not use the collection
+  endpoint for a withdrawal.
+- Load destinations and withdrawal operators from
+  `GET /v1/countries?operation=payout`. Send the returned country `code` as
+  `country_code` and the exact active withdrawal operator name. Do not send a
+  country name or an internal wallet currency code.
+- `wallet_currency` in the payout catalogue is informational. AshTech Pay
+  resolves the wallet to debit on the server from `country_code`; it never
+  silently converts another wallet to cover the payout.
+- Require `user_id` to match the profile that owns the Bearer API key. Require
+  a stable `reference`; reuse it only for the same request parameters.
+- Respect the documented `fee_bearer` values and optional public HTTPS
+  `notify_url`. An insufficient wallet balance returns `409` before provider
+  submission.
+- Treat uncertain results such as `pending_manual` as unresolved. Do not create
+  another payout or a new reference to work around them.
+
+### USDT and other crypto payouts
+
+- Crypto payouts use the separate `POST /v1/payouts/crypto` endpoint. Do not
+  confuse it with the pay-in endpoint `POST /v1/crypto/collect`.
+- Load active assets and networks from `GET /v1/crypto/assets`; use the exact
+  returned `asset_code`, destination address, and `destination_memo` when the
+  network requires a memo or tag.
+- Require the matching `user_id` and a stable `reference`. The account must
+  meet the documented verification requirements; active crypto fees and limits
+  apply. Do not silently convert a different wallet to fund the payout.
+- Use the returned transaction ID with
+  `GET /v1/transaction/{transaction_id}?user_id=...` and/or validate the
+  documented payout webhook before treating the result as final. Verify the
+  webhook signature and deduplicate events.
 
 ## Cryptocurrency payments
 
@@ -224,6 +274,9 @@ After implementation:
 - verify timeout behavior without blind retries;
 - verify crypto asset/network validation when crypto is selected;
 - verify customer fields required by the crypto API;
+- verify payout country/operator selection, wallet resolution, idempotency,
+  final-status handling, and crypto payout network/memo validation when payouts
+  are selected;
 - verify that existing payment functionality still works.
 
 Use the current official documentation for every exact request and response:

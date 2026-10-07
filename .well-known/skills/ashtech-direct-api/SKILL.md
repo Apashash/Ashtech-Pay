@@ -18,6 +18,9 @@ https://doc.ashtechpay.com/direct-api/overview
 - Inspect the existing project before editing it.
 - Keep the `ak_...` Direct API key on the server.
 - Load `GET /v1/countries` and use the active operator and currency values.
+- The default country catalogue is for deposits. For withdrawals, use
+  `GET /v1/countries?operation=payout` and follow the dedicated payout Skill:
+  https://doc.ashtechpay.com/.well-known/skills/ashtech-payouts/SKILL.md
 - Load `GET /v1/fees` when the integration needs fee details.
 - Create Mobile Money payments with `POST /v1/collect`.
 - Create crypto payments with `POST /v1/crypto/collect`.
