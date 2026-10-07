@@ -90,7 +90,12 @@ export MYSQL_DATABASE_URL="mysql://root@127.0.0.1:${MYSQL_PORT}/${DB_NAME}"
       mariadb --no-defaults --protocol=socket --socket="${SOCKET}" -uroot "${DB_NAME}" < "${SCHEMA_DUMP}"
     else
       echo "[LocalMySQL] Schema snapshot unavailable; applying shared/schema.mysql.ts"
-      npx drizzle-kit push
+      DRIZZLE_KIT_BIN="${ROOT_DIR}/node_modules/.bin/drizzle-kit"
+      if [[ ! -x "${DRIZZLE_KIT_BIN}" ]]; then
+        echo "[LocalMySQL] drizzle-kit is declared but not installed locally; restore project dependencies before initializing the schema" >&2
+        exit 1
+      fi
+      "${DRIZZLE_KIT_BIN}" push
     fi
     table_count="$(
       mariadb --no-defaults --protocol=socket --socket="${SOCKET}" -uroot "${DB_NAME}" -N \
