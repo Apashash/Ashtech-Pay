@@ -3,7 +3,7 @@ title: "Flux de paiement Mobile Money"
 description: "Gérez les flux USSD Push, Wave, OTP SMS et OTP USSD."
 ---
 
-Une collecte Mobile Money n'a pas toujours le même parcours. Le flux dépend du pays, de l'opérateur et du fournisseur actif pour cet opérateur.
+Une collecte Mobile Money n'a pas toujours le même parcours. Le flux dépend du pays, de l'opérateur et de la configuration active pour cet opérateur.
 
 Ne codez pas le flux à partir du nom de la marque. Chargez [`GET /v1/countries`](/docs/reference/countries), utilisez l'opérateur retourné par le catalogue, puis inspectez la réponse de `POST /v1/collect`.
 
@@ -18,7 +18,7 @@ Toutes les collectes et confirmations OTP exigent `user_id` dans le JSON. Utilis
 | OTP SMS | `400` avec `error: "otp_required"` et `reference` | Lire le code reçu par SMS et relancer la requête avec `otp` et `reference` |
 | OTP USSD | `400` avec `error: "otp_required"`, `reference` et `ussd_code` | Composer `ussd_code`, saisir le code obtenu, puis relancer avec le même `reference` et `otp` |
 
-Dans tous les cas, la transaction reste `pending` jusqu'à la confirmation du fournisseur. Ne livrez jamais une commande uniquement parce que la requête initiale a répondu `202`.
+Dans tous les cas, la transaction reste `pending` jusqu'à la confirmation du paiement. Ne livrez jamais une commande uniquement parce que la requête initiale a répondu `202`.
 
 ## 1. USSD Push
 
@@ -48,7 +48,7 @@ L'application cliente doit afficher un état d'attente et permettre au client de
 
 ## 2. Wave et autres redirections
 
-Pour Wave, le fournisseur renvoie une URL de validation. La réponse contient :
+Pour Wave, la réponse de collecte contient une URL de validation :
 
 ```json
 {
@@ -68,7 +68,7 @@ Le flux Wave est actuellement détecté notamment pour Wave en Côte d'Ivoire et
 
 ## 3. OTP envoyé par SMS
 
-Certains opérateurs ou fournisseurs déclenchent l'envoi d'un OTP par SMS. La première requête ne finalise pas le paiement :
+Selon le parcours configuré, un OTP peut être envoyé par SMS. La première requête ne finalise pas le paiement :
 
 ```json
 {
@@ -130,7 +130,7 @@ Exemples de familles de flux actuellement configurées :
 | Burkina Faso | Moov / Flooz | USSD Push | Aucun — valider la notification |
 | Cameroun | MTN, Orange | USSD Push | Aucun — valider la notification |
 | Congo RDC | Orange, Airtel, M-Pesa, Afrimoney | USSD Push | Aucun — valider la notification |
-| Autres opérateurs actifs | Selon le catalogue et le fournisseur | USSD Push, OTP ou redirection | Utiliser `ussd_code` ou l'URL retournée |
+| Autres opérateurs actifs | Selon le catalogue et la configuration active | USSD Push, OTP ou redirection | Utiliser `ussd_code` ou l'URL retournée |
 
 Cette matrice décrit le routage actuellement configuré pour les opérateurs concernés. Le statut actif peut changer. La réponse de [`GET /v1/countries`](/docs/reference/countries) reste la source de vérité pour votre formulaire.
 
@@ -420,7 +420,7 @@ curl_close($ch);
 
 Ne remplacez pas la référence de session OTP par votre référence de commande. Une session expirée renvoie `400 otp_expired` : recommencez alors une nouvelle collecte sans réutiliser l'ancien OTP.
 
-Après avoir affiché le code, demandez au client de saisir le code OTP reçu, puis relancez la collecte avec exactement les mêmes `amount`, `currency`, `phone`, `operator` et `country_code`, ainsi que le `reference` de session renvoyé par `otp_required` et le champ `otp`. Le serveur réserve atomiquement la session pendant la confirmation : une seconde confirmation concurrente renvoie `409 otp_confirmation_in_progress`. Un OTP explicitement invalide renvoie `400 invalid_otp` et peut être réessayé avec la même session. Si le fournisseur ne donne pas de résultat certain, l'API renvoie `202 pending` : ne renvoyez pas le code et consultez le statut ou attendez le webhook.
+Après avoir affiché le code, demandez au client de saisir le code OTP reçu, puis relancez la collecte avec exactement les mêmes `amount`, `currency`, `phone`, `operator` et `country_code`, ainsi que le `reference` de session renvoyé par `otp_required` et le champ `otp`. Le serveur réserve atomiquement la session pendant la confirmation : une seconde confirmation concurrente renvoie `409 otp_confirmation_in_progress`. Un OTP explicitement invalide renvoie `400 invalid_otp` et peut être réessayé avec la même session. Si le résultat de la confirmation reste incertain, l'API renvoie `202 pending` : ne renvoyez pas le code et consultez le statut ou attendez le webhook.
 
 ## Gestion des réponses et des erreurs
 
@@ -434,7 +434,7 @@ Le paiement attend une action du client. Vérifiez si la réponse contient :
 
 - `reference` : OTP envoyé par SMS ou session OTP nécessitant une référence ;
 - `ussd_code` : code à composer pour obtenir l'OTP ;
-- les deux champs selon le fournisseur.
+- les deux champs selon le parcours.
 
 ### `400 otp_expired`
 

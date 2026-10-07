@@ -37,7 +37,7 @@ Content-Type: application/json
 - `fee_bearer` vaut `sender` (frais ajoutés au débit) ou `recipient` (frais retranchés au montant envoyé). La valeur par défaut est `sender`.
 - `notify_url` est facultative et doit être une URL HTTPS publique.
 
-Un solde insuffisant renvoie `409 insufficient_balance` avant tout appel au fournisseur. Un payout accepté renvoie `202` avec `status: "pending"`. Si la réponse du fournisseur est incertaine, le statut peut être `pending_manual`; le montant reste réservé, sans nouvel envoi automatique. N'envoyez pas une autre demande pour contourner cet état : vérifiez la transaction ou contactez l'équipe AshTech Pay.
+Un solde insuffisant renvoie `409 insufficient_balance` avant l'envoi de la demande. Un payout accepté renvoie `202` avec `status: "pending"`. Si le résultat initial est incertain, le statut peut être `pending_manual`; le montant reste réservé, sans nouvel envoi automatique. N'envoyez pas une autre demande pour contourner cet état : vérifiez la transaction ou contactez l'équipe AshTech Pay.
 
 ## Payout USDT
 
