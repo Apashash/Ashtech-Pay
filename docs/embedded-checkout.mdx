@@ -15,6 +15,8 @@ Pour ce flux :
 
 Pour une simple redirection vers une page Hosted Checkout, **seule `hp_live_...` est nécessaire**. Le navigateur reçoit uniquement le `payment_link`, jamais une clé secrète.
 
+Pour recevoir et vérifier les webhooks, trouvez le secret dans le tableau de bord : **Clé API → Direct API → Secret webhook → Afficher ou générer le secret**. L'accès nécessite un KYC validé et Direct API activée. Stockez-le sur votre serveur sous `ASHTECH_WEBHOOK_SECRET`, jamais dans le navigateur. Sa régénération invalide l'ancienne valeur.
+
 La clé `hp_live_...` doit appartenir à un compte existant, vérifié et non suspendu. Une clé absente, inconnue, révoquée ou mal formée renvoie `401`; un compte non vérifié ou suspendu renvoie `403`. La clé Checkout est indépendante de la clé Direct API.
 
 ## Flux complet

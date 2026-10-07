@@ -5,6 +5,12 @@ description: "Synchronisez vos commandes avec les événements AshTech Pay."
 
 Configurez un `notify_url` HTTPS public lors de la création de votre paiement ou dans la configuration Hosted Checkout. Utilisez une URL stable, sans localhost, adresse privée ou destination interne : ces destinations sont bloquées au moment de la livraison.
 
+## Où trouver le secret webhook ?
+
+Dans votre tableau de bord, ouvrez **Clé API → Direct API → Secret webhook**, puis cliquez sur **Afficher ou générer le secret**. S'il n'existe pas encore, il est créé à ce moment-là. Cette section nécessite un compte KYC validé et l'accès Direct API activé.
+
+Copiez la valeur `whsec_...` dans la variable d'environnement `ASHTECH_WEBHOOK_SECRET` de votre serveur. Ne l'envoyez pas à votre agent dans un message et ne l'ajoutez jamais au code navigateur ou à Git. Si vous le régénérez, l'ancien secret est immédiatement invalide : mettez à jour la variable sur votre serveur avant de traiter les prochaines notifications.
+
 AshTech Pay envoie les notifications avec ces headers :
 
 ```http
@@ -38,7 +44,7 @@ app.post("/webhooks/ashtechpay", express.raw({ type: "application/json" }), asyn
   const signature = req.header("X-Ashtech-Signature") || "";
 
   // Vérifier HMAC-SHA256(secret, timestamp + "." + rawBody)
-  if (!isValidAshtechSignature(rawBody, timestamp, signature, process.env.WHSEC)) {
+  if (!isValidAshtechSignature(rawBody, timestamp, signature, process.env.ASHTECH_WEBHOOK_SECRET)) {
     return res.sendStatus(401);
   }
 

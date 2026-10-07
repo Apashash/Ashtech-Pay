@@ -11,10 +11,19 @@ https://doc.ashtechpay.com/skill.md
 
 Read the current webhook documentation:
 
-https://doc.ashtechpay.com/direct-api/webhooks
+https://doc.ashtechpay.com/docs/direct-api/webhooks
 
 ## Rules
 
+- Tell the merchant to open **Clé API → Direct API → Secret webhook** in the
+  AshTech Pay dashboard and select **Afficher ou générer le secret**. The
+  first request creates a secret if none exists; the account needs verified
+  KYC and Direct API access.
+- Store the value as `ASHTECH_WEBHOOK_SECRET` on the merchant's server. Never
+  ask the merchant to paste the secret into chat, browser code, or Git.
+- Regenerating the secret immediately invalidates the previous value. Warn the
+  merchant to update the server environment variable before processing more
+  webhooks.
 - Expose an HTTPS webhook endpoint.
 - Read the raw request body before JSON parsing when signature verification
   requires it.

@@ -103,6 +103,10 @@ Use this Skill when:
 - Keep Direct API keys in a server environment variable.
 - Keep Hosted Checkout keys on the server.
 - Keep `whsec_...` webhook secrets on the server.
+- Tell merchants to reveal or generate the webhook secret in the dashboard at
+  **Clé API → Direct API → Secret webhook**. Their KYC must be verified and
+  Direct API access enabled. Store it as `ASHTECH_WEBHOOK_SECRET` on their
+  server; never ask them to paste it into chat or browser code.
 - Never expose credentials in browser JavaScript, mobile apps, logs, or Git.
 - Never commit real production credentials.
 - Use only the key type documented for the selected integration.
@@ -237,6 +241,10 @@ counts, expiry rules, memo/tag formats, addresses, or webhook payloads.
 If the selected integration uses webhooks:
 
 - create the documented HTTPS endpoint;
+- tell the merchant where to get the signing secret: dashboard →
+  **Clé API → Direct API → Secret webhook**. The first reveal creates it if
+  none exists. Store it in the merchant server's `ASHTECH_WEBHOOK_SECRET`
+  environment variable and never ask the merchant to send the value in chat;
 - read the raw request body before JSON parsing when signature verification
   requires it;
 - verify `X-Ashtech-Timestamp`, `X-Ashtech-Signature`, and the webhook secret
