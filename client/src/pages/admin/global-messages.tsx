@@ -28,6 +28,10 @@ import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { Plus, Pencil, Trash2, MessageSquare, Calendar } from "lucide-react";
+import {
+  GLOBAL_MESSAGE_PUSH_AUDIENCES,
+  type GlobalMessagePushAudience,
+} from "@shared/global-message-audiences";
 
 interface GlobalMessage {
   id: string;
@@ -39,6 +43,14 @@ interface GlobalMessage {
   createdAt: string | null;
 }
 
+interface PushAudienceStats {
+  targetAccounts: number;
+  subscribedAccounts: number;
+  subscribedDevices: number;
+  pushConfigured: boolean;
+  deliveryStarted?: boolean;
+}
+
 export default function GlobalMessagesPage() {
   const { toast } = useToast();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -47,21 +59,51 @@ export default function GlobalMessagesPage() {
     title: "",
     message: "",
     expiresAt: "",
+    pushAudience: "all_active" as GlobalMessagePushAudience,
   });
 
   const { data: messages = [], isLoading } = useQuery<GlobalMessage[]>({
     queryKey: ["/api/admin/global-messages"],
   });
 
+  const pushAudienceUrl = `/api/admin/global-messages/push-audience?audience=${encodeURIComponent(formData.pushAudience)}`;
+  const {
+    data: pushAudienceStats,
+    isLoading: isPushAudienceLoading,
+    isError: isPushAudienceError,
+  } = useQuery<PushAudienceStats>({
+    queryKey: [pushAudienceUrl],
+    enabled: isCreateOpen,
+  });
+
   const createMutation = useMutation({
-    mutationFn: async (data: { title: string; message: string; expiresAt?: string }) => {
-      return await apiRequest("POST", "/api/admin/global-messages", data);
+    mutationFn: async (data: {
+      title: string;
+      message: string;
+      expiresAt?: string;
+      pushAudience: GlobalMessagePushAudience;
+    }) => {
+      const response = await apiRequest("POST", "/api/admin/global-messages", data);
+      return await response.json() as { pushAudienceStats?: PushAudienceStats };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/global-messages"] });
       setIsCreateOpen(false);
-      setFormData({ title: "", message: "", expiresAt: "" });
-      toast({ title: "Message créé", description: "Le message global a été envoyé à tous les utilisateurs." });
+      setFormData({ title: "", message: "", expiresAt: "", pushAudience: "all_active" });
+
+      const selected = GLOBAL_MESSAGE_PUSH_AUDIENCES.find(
+        (audience) => audience.value === formData.pushAudience,
+      );
+      const stats = result.pushAudienceStats;
+      let description = "Le message reste visible dans le centre de notifications de tous les utilisateurs.";
+      if (stats && !stats.pushConfigured) {
+        description += " Le push n'a pas été lancé : Web Push n'est pas configuré.";
+      } else if (stats && !stats.deliveryStarted) {
+        description += " Aucun utilisateur de ce groupe n'a d'abonnement push actif.";
+      } else if (stats) {
+        description += ` Push lancé pour ${stats.subscribedAccounts.toLocaleString("fr-FR")} compte(s) abonné(s) — ${selected?.label ?? "groupe choisi"}.`;
+      }
+      toast({ title: "Message global créé", description });
     },
     onError: (error: Error) => {
       toast({ title: "Erreur", description: error.message, variant: "destructive" });
@@ -109,6 +151,7 @@ export default function GlobalMessagesPage() {
         title: formData.title,
         message: formData.message,
         expiresAt: formData.expiresAt || undefined,
+        pushAudience: formData.pushAudience,
       });
     }
   };
@@ -119,6 +162,7 @@ export default function GlobalMessagesPage() {
       title: msg.title,
       message: msg.message,
       expiresAt: msg.expiresAt ? new Date(msg.expiresAt).toISOString().slice(0, 16) : "",
+      pushAudience: "all_active",
     });
   };
 
@@ -128,16 +172,24 @@ export default function GlobalMessagesPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold" data-testid="text-page-title">Messages Globaux</h1>
-            <p className="text-muted-foreground">Envoyez des messages à tous les utilisateurs</p>
+            <p className="text-muted-foreground">Le message reste global; choisissez le groupe qui recevra le push.</p>
           </div>
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+          <Dialog
+            open={isCreateOpen}
+            onOpenChange={(open) => {
+              setIsCreateOpen(open);
+              if (open) {
+                setFormData({ title: "", message: "", expiresAt: "", pushAudience: "all_active" });
+              }
+            }}
+          >
             <DialogTrigger asChild>
               <Button data-testid="button-create-message">
                 <Plus className="w-4 h-4 mr-2" />
                 Nouveau message
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
               <DialogHeader>
                 <DialogTitle>Créer un message global</DialogTitle>
               </DialogHeader>
@@ -175,8 +227,56 @@ export default function GlobalMessagesPage() {
                     data-testid="input-message-expires"
                   />
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="push-audience">Groupe qui recevra la notification push</Label>
+                  <select
+                    id="push-audience"
+                    value={formData.pushAudience}
+                    onChange={(event) => setFormData({
+                      ...formData,
+                      pushAudience: event.target.value as GlobalMessagePushAudience,
+                    })}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    data-testid="select-global-message-push-audience"
+                  >
+                    {GLOBAL_MESSAGE_PUSH_AUDIENCES.map((audience) => (
+                      <option key={audience.value} value={audience.value}>
+                        {audience.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-muted-foreground">
+                    {GLOBAL_MESSAGE_PUSH_AUDIENCES.find(
+                      (audience) => audience.value === formData.pushAudience,
+                    )?.description}
+                    {" "}Le message affiché dans le centre reste accessible à tous.
+                  </p>
+                </div>
+
+                <div
+                  className="space-y-1 rounded-md border bg-muted/30 p-3 text-sm"
+                  aria-live="polite"
+                  data-testid="push-audience-preview"
+                >
+                  <p className="font-medium">Portée estimée du push</p>
+                  {isPushAudienceLoading ? (
+                    <p className="text-muted-foreground">Calcul des destinataires…</p>
+                  ) : isPushAudienceError ? (
+                    <p className="text-destructive">Impossible de calculer la portée pour le moment.</p>
+                  ) : pushAudienceStats ? (
+                    <>
+                      <p>{pushAudienceStats.targetAccounts.toLocaleString("fr-FR")} compte(s) dans le groupe</p>
+                      <p>{pushAudienceStats.subscribedAccounts.toLocaleString("fr-FR")} compte(s) avec un abonnement push</p>
+                      <p>{pushAudienceStats.subscribedDevices.toLocaleString("fr-FR")} appareil(s) inscrit(s)</p>
+                      {!pushAudienceStats.pushConfigured && (
+                        <p className="pt-1 text-destructive">Web Push n'est pas configuré : le message restera visible dans le centre, mais aucun push ne sera envoyé.</p>
+                      )}
+                    </>
+                  ) : null}
+                </div>
+
                 <Button type="submit" className="w-full" disabled={createMutation.isPending} data-testid="button-submit-message">
-                  {createMutation.isPending ? "Envoi..." : "Envoyer à tous les utilisateurs"}
+                  {createMutation.isPending ? "Création..." : "Créer le message et lancer le push ciblé"}
                 </Button>
               </form>
             </DialogContent>

@@ -50,7 +50,10 @@ function audienceSpecificCondition(audience: GlobalMessagePushAudience): SQL | n
     case "all_active":
       return null;
     case "kyc_verified":
-      return or(eq(users.kycStatus, "verified"), eq(users.isVerified, true))!;
+      return or(
+        eq(users.kycStatus, "verified"),
+        and(isNull(users.kycStatus), eq(users.isVerified, true)),
+      )!;
     case "kyc_not_submitted":
       return and(
         or(eq(users.kycStatus, "not_submitted"), isNull(users.kycStatus)),
@@ -66,7 +69,15 @@ function audienceSpecificCondition(audience: GlobalMessagePushAudience): SQL | n
         or(isNotNull(users.apiKeyHash), isNotNull(users.apiKey)),
       )!;
     case "direct_api_disabled":
-      return or(eq(users.apiEnabled, false), isNull(users.apiEnabled))!;
+      return or(
+        eq(users.apiEnabled, false),
+        isNull(users.apiEnabled),
+        and(
+          eq(users.apiEnabled, true),
+          isNull(users.apiKeyHash),
+          isNull(users.apiKey),
+        ),
+      )!;
     case "has_completed_transaction":
       return completedTransactionExists();
     case "no_completed_transaction":

@@ -312,24 +312,6 @@ export async function sendPushNotification(userId: string, payload: BrowserPushP
 }
 
 /**
- * Deliver a broadcast push only to users who have an active browser
- * subscription. Global messages remain backed by the global_messages table,
- * so this function only handles the transient browser delivery.
- */
-export async function sendPushNotificationToAll(payload: BrowserPushPayload): Promise<void> {
-  if (!configureWebPush()) return;
-
-  const subscriptions = await db
-    .select({ userId: pushSubscriptions.userId })
-    .from(pushSubscriptions);
-  const userIds = [...new Set(subscriptions.map(({ userId }) => userId))];
-
-  await Promise.allSettled(
-    userIds.map((userId) => sendPushNotification(userId, payload)),
-  );
-}
-
-/**
  * Deliver a global-message push only to a pre-filtered set of subscribed
  * accounts. Bounded batches keep provider requests from overwhelming the app.
  */
