@@ -36,6 +36,11 @@ activation.
 Choisissez le Skill adapté à votre intégration. Vous pouvez exécuter la commande
 dans le terminal de votre projet ou la transmettre à votre agent IA.
 
+La commande seule s'exécute dans le terminal. Pour demander l'intégration à un
+agent IA, copiez aussi le bloc **Message à copier pour un agent IA** de l'onglet
+correspondant : il contient la commande d'installation et les consignes adaptées
+au Skill choisi.
+
 <Tabs>
   <Tab title="Tous les Skills">
 
@@ -46,11 +51,39 @@ ajoutés plus tard :
 npx skills add https://doc.ashtechpay.com --all
 ```
 
+**Message à copier pour un agent IA :**
+
+```text
+Installe les Skills officiels AshTech Pay et intègre-les à ce projet en suivant strictement leurs instructions.
+
+npx skills add https://doc.ashtechpay.com --all
+
+Après installation, inspecte le projet et utilise les Skills pertinents avec la documentation officielle actuelle comme seule source de vérité. Mets à jour ou remplace toute logique incompatible avec les règles actuelles. Ne fais aucune supposition et n'invente aucun endpoint, paramètre, header, signature, statut ou comportement.
+
+Prends en charge tous les flux requis par le projet : Direct API et pay-in Mobile Money (USSD Push, Wave, OTP SMS et OTP USSD), Hosted Checkout, pay-in crypto, payouts Mobile Money et USDT, vérification des statuts, webhooks signés et sécurisés, idempotence, erreurs et toutes les méthodes documentées. Ne laisse aucun flux requis à moitié implémenté.
+
+Garde les clés et secrets uniquement côté serveur. Implémente l'intégration, exécute les tests et le build, puis corrige les erreurs. Indique les variables d'environnement ou réglages de compte nécessaires sans me demander de secret dans le chat.
+```
+
   </Tab>
   <Tab title="Direct API">
 
 ```bash
 npx skills add https://doc.ashtechpay.com --skill ashtech-direct-api
+```
+
+**Message à copier pour un agent IA :**
+
+```text
+Installe le Skill officiel AshTech Pay Direct API et mets à jour l'intégration Direct API de ce projet en respectant strictement le Skill et la documentation actuelle.
+
+npx skills add https://doc.ashtechpay.com --skill ashtech-direct-api
+
+Inspecte d'abord le projet. Implémente les flux Direct API nécessaires en utilisant les catalogues et valeurs actifs documentés : pay-in Mobile Money, méthodes USSD Push, Wave et OTP SMS/USSD, et pay-in crypto si ce flux est requis. Respecte les endpoints, champs, headers, statuts et erreurs exacts de la documentation.
+
+Vérifie les transactions côté serveur ou par webhook vérifié avant tout crédit ou livraison. Gère les états pending et finaux, l'idempotence, les délais et les erreurs sans relance aveugle. Ne conserve aucune logique ancienne qui contredit le Skill et n'invente aucune méthode ou valeur.
+
+Garde les clés et secrets côté serveur. Si le projet doit aussi envoyer des payouts, utilise le Skill Payouts au lieu de détourner un endpoint pay-in. Exécute les tests et le build, puis résume les changements et les réglages requis sans demander de secret dans le chat.
 ```
 
 Ce Skill couvre les catalogues, les collectes Mobile Money, les paiements
@@ -61,6 +94,20 @@ crypto, les statuts et la vérification serveur.
 
 ```bash
 npx skills add https://doc.ashtechpay.com --skill ashtech-payouts
+```
+
+**Message à copier pour un agent IA :**
+
+```text
+Installe le Skill officiel AshTech Pay Payouts et implémente ou mets à jour les retraits de ce projet selon toutes les règles du Skill et de la documentation actuelle.
+
+npx skills add https://doc.ashtechpay.com --skill ashtech-payouts
+
+Inspecte le projet avant de modifier le code. Prends en charge les payouts Mobile Money et USDT requis par le projet. Charge le catalogue de retrait documenté, utilise uniquement ses codes pays et opérateurs actifs, et respecte la résolution du wallet, les frais, user_id, reference, champs de requête et endpoints exacts.
+
+Vérifie le statut final par la méthode documentée ou par un webhook vérifié. Un résultat pending ou incertain n'est pas un succès : ne crée pas de demande en double et ne relance pas avec une nouvelle référence. Gère les erreurs, les soldes insuffisants, l'idempotence et les webhooks conformément au Skill.
+
+Ne fais aucune supposition et ne conserve aucune logique incompatible. Garde les clés et secrets côté serveur. Exécute les tests et le build, puis résume les changements et les réglages nécessaires sans demander de secret dans le chat.
 ```
 
 Ce Skill couvre les retraits Mobile Money et USDT, le catalogue de pays et
@@ -74,6 +121,20 @@ des statuts finaux.
 npx skills add https://doc.ashtechpay.com --skill ashtech-checkout
 ```
 
+**Message à copier pour un agent IA :**
+
+```text
+Installe le Skill officiel AshTech Pay Hosted Checkout et intègre ou mets à jour le paiement hébergé de ce projet en respectant strictement sa documentation actuelle.
+
+npx skills add https://doc.ashtechpay.com --skill ashtech-checkout
+
+Inspecte le projet avant de modifier le code. Crée les liens de paiement depuis le serveur, garde la clé Checkout côté serveur et utilise une clé d'idempotence stable par commande. Ne crée pas un nouveau lien à chaque clic, ouverture de popup ou redirection.
+
+Gère les confirmations, statuts, erreurs et webhooks documentés. Ne considère jamais une redirection ou une page de succès comme preuve de paiement : vérifie le statut côté serveur ou traite un webhook dont la signature est validée avant de livrer une commande. Rends le traitement des doublons idempotent.
+
+Ne fais aucune supposition et ne conserve pas une ancienne logique incompatible. Exécute les tests et le build, puis indique les changements et la configuration requise sans me demander de clé ou de secret dans le chat.
+```
+
 Ce Skill couvre Hosted Checkout, les clés `hp_live_...`, l'idempotence des
 liens et la confirmation avant livraison.
 
@@ -82,6 +143,20 @@ liens et la confirmation avant livraison.
 
 ```bash
 npx skills add https://doc.ashtechpay.com --skill ashtech-crypto
+```
+
+**Message à copier pour un agent IA :**
+
+```text
+Installe le Skill officiel AshTech Pay Crypto et intègre ou mets à jour les paiements crypto de ce projet selon le Skill et la documentation actuelle.
+
+npx skills add https://doc.ashtechpay.com --skill ashtech-crypto
+
+Inspecte le projet avant de modifier le code. Utilise uniquement les actifs et réseaux retournés par le catalogue officiel. Respecte exactement les endpoints, champs client obligatoires, frais, adresses, réseaux, memo/tag, codes QR, expiration et statuts documentés. Garde l'adresse et le memo/tag séparés.
+
+Vérifie les statuts côté serveur et sécurise les webhooks conformément à la documentation. N'effectue aucun crédit ni livraison avant confirmation. Gère pending, expiration, erreurs et doublons sans inventer de règle ni appliquer aux paiements Mobile Money les délais propres au crypto.
+
+Garde les clés et secrets côté serveur. Si le projet doit aussi effectuer des payouts crypto, utilise le Skill Payouts. Exécute les tests et le build, puis indique les changements et la configuration nécessaire sans demander de secret dans le chat.
 ```
 
 Ce Skill couvre les actifs, réseaux, adresses, `memo/tag`, champs client,
@@ -94,6 +169,20 @@ expiration, vérification et webhooks crypto.
 npx skills add https://doc.ashtechpay.com --skill ashtech-mobile-money
 ```
 
+**Message à copier pour un agent IA :**
+
+```text
+Installe le Skill officiel AshTech Pay Mobile Money et intègre ou mets à jour les paiements Mobile Money de ce projet en suivant strictement le Skill et la documentation actuelle.
+
+npx skills add https://doc.ashtechpay.com --skill ashtech-mobile-money
+
+Inspecte le projet avant toute modification. Charge les catalogues actifs et prends en charge les parcours documentés nécessaires : USSD Push, Wave, OTP par SMS et OTP par USSD. Respecte les codes pays, opérateurs, devises, champs, références de session OTP et réponses exacts du catalogue et de la documentation.
+
+Gère pending, confirmations, échecs, annulations, OTP, délais, statuts, erreurs et webhooks. Vérifie le statut côté serveur ou via un webhook signé avant tout crédit ou livraison. Ne relance pas aveuglément une collecte après un timeout et rends les webhooks et traitements de commande idempotents.
+
+Ne suppose aucune méthode ni valeur et ne garde pas de logique incompatible. Garde les clés et secrets côté serveur. Pour les retraits, utilise le Skill Payouts. Exécute les tests et le build, puis résume les changements sans demander de secret dans le chat.
+```
+
 Ce Skill couvre les catalogues pays/opérateurs, USSD Push, Wave, OTP SMS et
 OTP USSD.
 
@@ -102,6 +191,20 @@ OTP USSD.
 
 ```bash
 npx skills add https://doc.ashtechpay.com --skill ashtech-webhooks
+```
+
+**Message à copier pour un agent IA :**
+
+```text
+Installe le Skill officiel AshTech Pay Webhooks et sécurise ou mets à jour le traitement des webhooks de ce projet selon sa documentation actuelle.
+
+npx skills add https://doc.ashtechpay.com --skill ashtech-webhooks
+
+Inspecte le projet et les événements nécessaires avant de modifier le code. Crée l'endpoint HTTPS adapté, lis le corps brut si la signature l'exige et vérifie exactement la signature, l'horodatage et le secret selon la documentation. Rejette les signatures invalides ou expirées. Ne demande jamais le secret dans le chat et ne l'expose ni au navigateur, ni aux logs, ni à Git.
+
+Enregistre les événements de façon sûre, réponds rapidement, déduplique les livraisons et vérifie le statut côté serveur avant tout crédit ou fulfillment. Gère les doublons, erreurs et nouvelles livraisons de manière idempotente pour tous les flux effectivement utilisés par le projet.
+
+N'invente aucun header, algorithme, événement ou statut. Exécute les tests, notamment ceux des signatures invalides et des doublons, ainsi que le build. Résume les changements et la variable d'environnement à configurer sans demander sa valeur.
 ```
 
 Ce Skill couvre les signatures, les événements, la déduplication et la
