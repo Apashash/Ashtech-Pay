@@ -73,9 +73,9 @@ test("AfribaPay payout HTTP 404 and NOT_FOUND are non-final", () => {
   assert.equal(classifyAfribaPayoutStatus(200, "SUCCESS"), "completed");
 });
 
-test("AfribaPay payout status uses the documented shared API host and safely encodes order_id", () => {
+test("AfribaPay status URL uses the shared API host and an explicit, safely encoded identifier type", () => {
   assert.equal(
-    buildAfribaPayStatusUrl("payout/id 123"),
+    buildAfribaPayStatusUrl("payout/id 123", "order_id"),
     "https://api.afribapay.com/v1/status?order_id=payout%2Fid+123",
   );
   assert.equal(
@@ -104,11 +104,30 @@ test("AfribaPay pay-in lookup errors and missing IDs remain pending", () => {
   assert.equal(classifyAfribaPayinStatus(200, "SUCCESS"), "completed");
 });
 
-test("AfribaPay status uses only a distinct provider transaction ID", () => {
-  assert.equal(resolveAfribaPayPayinTransactionId("provider-tx", "ashtech-order"), "provider-tx");
-  assert.equal(resolveAfribaPayPayinTransactionId(" ashtech-order ", "ashtech-order"), null);
-  assert.equal(resolveAfribaPayPayinTransactionId("   ", "ashtech-order"), null);
-  assert.equal(resolveAfribaPayPayinTransactionId(undefined, "ashtech-order"), null);
+test("AfribaPay payin status accepts only the dedicated persisted provider transaction ID", () => {
+  assert.equal(
+    resolveAfribaPayPayinTransactionId({ afribapayStatusTransactionId: " provider-tx " }),
+    "provider-tx",
+  );
+  assert.equal(
+    resolveAfribaPayPayinTransactionId(JSON.stringify({
+      afribapayStatusTransactionId: "json-provider-tx",
+    })),
+    "json-provider-tx",
+  );
+  assert.equal(
+    resolveAfribaPayPayinTransactionId({ externalReference: "legacy-order-id", providerReference: "legacy-tx" }),
+    null,
+  );
+  assert.equal(
+    resolveAfribaPayPayinTransactionId({ afribapayStatusTransactionId: "   " }),
+    null,
+  );
+  // Use the provider ID even if its value happens to equal our local reference.
+  assert.equal(
+    resolveAfribaPayPayinTransactionId({ afribapayStatusTransactionId: "ashtech-order" }),
+    "ashtech-order",
+  );
 });
 
 test("AfribaPay payin amount validation uses the conservative documented range", () => {

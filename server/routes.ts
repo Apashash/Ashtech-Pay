@@ -2424,14 +2424,42 @@ function readTransactionMetadataRecord(rawMetadata: unknown): Record<string, any
   return {};
 }
 
-async function clearAfribaPayPayoutStatusTransactionId(transactionId: string): Promise<void> {
+async function clearAfribaPayStatusTransactionId(transactionId: string): Promise<void> {
   const transaction = await storage.getTransactionById(transactionId);
-  if (!transaction) throw new Error("AfribaPay payout transaction was not found before submission");
+  if (!transaction) throw new Error("AfribaPay transaction was not found before submission");
   const metadata = readTransactionMetadataRecord((transaction as any).metadata);
   if (metadata.afribapayStatusTransactionId == null) return;
   const nextMetadata = { ...metadata };
   delete nextMetadata.afribapayStatusTransactionId;
   await storage.updateTransactionMetadata(transactionId, nextMetadata);
+}
+
+async function persistAfribaPayStatusTransactionId(
+  transactionId: string,
+  rawTransactionId: unknown,
+): Promise<void> {
+  const transactionIdValue = typeof rawTransactionId === "string"
+    ? rawTransactionId.trim()
+    : "";
+
+  try {
+    const transaction = await storage.getTransactionById(transactionId);
+    if (!transaction) throw new Error("transaction not found");
+    const metadata = readTransactionMetadataRecord((transaction as any).metadata);
+    const nextMetadata = { ...metadata };
+    if (transactionIdValue) {
+      nextMetadata.afribapayStatusTransactionId = transactionIdValue;
+    } else {
+      delete nextMetadata.afribapayStatusTransactionId;
+    }
+    if (metadata.afribapayStatusTransactionId !== (transactionIdValue || undefined)) {
+      await storage.updateTransactionMetadata(transactionId, nextMetadata);
+    }
+  } catch (error) {
+    // Status polling must only use an explicitly returned provider transaction
+    // ID. If persistence fails, leave the transaction callback/manual-only.
+    console.error(`[AfribaPay] Failed to persist status transaction_id for ${transactionId}:`, error);
+  }
 }
 
 async function persistProviderTransactionReference(
@@ -6351,7 +6379,7 @@ export async function registerRoutes(
             toLocalMobileMoneyPhone(recipientPhone, countryCode),
           );
 
-          await clearAfribaPayPayoutStatusTransactionId(transaction.id);
+          await clearAfribaPayStatusTransactionId(transaction.id);
           const afribaResult = await initiateAfribaPayout({
             operator: afribapayOperatorCode,
             country: countryCode,
@@ -7052,6 +7080,7 @@ export async function registerRoutes(
             // /v1/pay/otp WITHOUT otp_code first to initiate, then confirm with code.
             const otpInfo = await getAfribaPayOtpInfo(countryCode, afribapayOperatorCode);
 
+            await clearAfribaPayStatusTransactionId(transaction.id);
             if (otpInfo.required) {
               if (otpInfo.type === "api") {
                 // ── API OTP: AfribaPay sends the code by SMS via /v1/pay/otp ──
@@ -7137,6 +7166,7 @@ export async function registerRoutes(
             });
 
             if (afribaResponse.success) {
+              await persistAfribaPayStatusTransactionId(transaction.id, afribaResponse.transaction_id);
               // Update transaction with AfribaPay reference
               const extRef = afribaResponse.transaction_id || depositRef;
               await storage.updateTransactionExternalReference(transaction.id, extRef);
@@ -7802,7 +7832,7 @@ export async function registerRoutes(
           if (pfx && localPhone.startsWith(pfx)) localPhone = localPhone.slice(pfx.length);
           localPhone = getAfribaPayPayoutPhone(data.accountDetails, countryCode, localPhone);
 
-          await clearAfribaPayPayoutStatusTransactionId(transaction.id);
+          await clearAfribaPayStatusTransactionId(transaction.id);
           const afribaResult = await initiateAfribaPayout({
             operator: afribapayOperatorCode,
             country: countryCode,
@@ -11342,6 +11372,7 @@ export async function registerRoutes(
             // ── Check OTP requirement BEFORE calling payin ────────────────────
             const otpInfo = await getAfribaPayOtpInfo(paymentCountryCode, afribapayOperatorCode);
 
+            await clearAfribaPayStatusTransactionId(paymentTransaction.id);
             if (otpInfo.required) {
               if (otpInfo.type === "api") {
                 // ── API OTP: AfribaPay sends the code by SMS via /v1/pay/otp ──
@@ -11421,23 +11452,23 @@ export async function registerRoutes(
               cancel_url: `${linkAppBase}/pay/${paymentLink.slug}?ref=${reference}&status=cancelled`,
             });
             if (afribaResponse.success) {
-              const linkTransaction = await storage.getTransactionByReference(reference);
-              if (linkTransaction) {
-                const extRef = afribaResponse.transaction_id || reference;
-                await storage.updateTransactionExternalReference(linkTransaction.id, extRef);
-                addPendingPayment({
-                  transactionId: linkTransaction.id,
-                  reference,
-                  externalReference: extRef,
-                  attempts: 0,
-                  userId: paymentLink.userId,
-                  type: "payment_link",
-                  amount: afribaFees.creditedAmount.toFixed(2),
-                  provider: "afribapay",
-                  paymentIntentId: intent.id,
-                  payerName: fullName,
-                });
-              }
+              await persistAfribaPayStatusTransactionId(paymentTransaction.id, afribaResponse.transaction_id);
+            }
+            if (afribaResponse.success) {
+              const extRef = afribaResponse.transaction_id || reference;
+              await storage.updateTransactionExternalReference(paymentTransaction.id, extRef);
+              addPendingPayment({
+                transactionId: paymentTransaction.id,
+                reference,
+                externalReference: extRef,
+                attempts: 0,
+                userId: paymentLink.userId,
+                type: "payment_link",
+                amount: afribaFees.creditedAmount.toFixed(2),
+                provider: "afribapay",
+                paymentIntentId: intent.id,
+                payerName: fullName,
+              });
 
               // Wave/wallet: AfribaPay returns a provider_link the user must open
               if (afribaResponse.provider_link) {
@@ -14364,7 +14395,7 @@ export async function registerRoutes(
             if (pfx && localPhone.startsWith(pfx)) localPhone = localPhone.slice(pfx.length);
             localPhone = getAfribaPayPayoutPhone(transaction.recipientPhone || "", countryCode, localPhone);
 
-            await clearAfribaPayPayoutStatusTransactionId(transaction.id);
+            await clearAfribaPayStatusTransactionId(transaction.id);
             const afribaResult = await initiateAfribaPayout({
               operator:     afribapayOperatorCode,
               country:      countryCode,
@@ -16168,7 +16199,7 @@ export async function registerRoutes(
           },
         } as any);
 
-        await clearAfribaPayPayoutStatusTransactionId(txId);
+        await clearAfribaPayStatusTransactionId(txId);
         const result = await initiateAfribaPayout({
           operator: afribapayOperatorCode,
           country: countryCode,
@@ -18401,6 +18432,7 @@ export async function registerRoutes(
       // Update transaction external reference with AfribaPay's transaction_id and start polling
       const tx = await storage.getTransactionByReference(ref);
       if (tx) {
+        await persistAfribaPayStatusTransactionId(tx.id, result.transaction_id);
         const extRef = result.transaction_id || ref;
         await storage.updateTransactionExternalReference(tx.id, extRef);
         addPendingPayment({
@@ -18479,6 +18511,7 @@ export async function registerRoutes(
       // Update transaction external reference and start polling
       const tx = await storage.getTransactionByReference(ref);
       if (tx) {
+        await persistAfribaPayStatusTransactionId(tx.id, result.transaction_id);
         const extRef = result.transaction_id || ref;
         await storage.updateTransactionExternalReference(tx.id, extRef);
         addPendingPayment({
@@ -19574,6 +19607,7 @@ export async function registerRoutes(
           }));
         }
         await deleteClaimedOtpContext(otpMerchantReference, ctx, claimId);
+        await persistAfribaPayStatusTransactionId(existingTxOtp.id, confirmedResponse.transaction_id);
         const extRefOtp = confirmedResponse.transaction_id || ctx.afribaTransactionId;
         await storage.updateTransactionExternalReference(existingTxOtp.id, extRefOtp);
         addPendingPayment({
@@ -19657,6 +19691,7 @@ export async function registerRoutes(
             throw reservationError;
           }
 
+          await clearAfribaPayStatusTransactionId(txPre.id);
           if (otpInfoPre.type === "api") {
             // SMS-type OTP: AfribaPay sends the code — trigger it now.
             const otpInitResultPre = await initiateAfribaPayOtp({
@@ -19830,6 +19865,7 @@ export async function registerRoutes(
         //   first call  → initiate OTP + cache (returns 400 otp_required + reference)
         //   second call → early-exit via otpContextCache (returns 202 after confirmAfribaPayOtp)
         // This block only executes for non-OTP operators → direct /v1/pay/payin.
+        await clearAfribaPayStatusTransactionId(transaction.id);
         const afribaResponse = await initiateAfribaPayin({
           operator: afribaOpCode,
           country: country.code,
@@ -19843,6 +19879,7 @@ export async function registerRoutes(
           cancel_url: `${process.env.APP_URL}/dashboard/deposit?status=cancelled`,
         });
         if (afribaResponse.success) {
+          await persistAfribaPayStatusTransactionId(transaction.id, afribaResponse.transaction_id);
           const extRef = afribaResponse.transaction_id || depositRef;
           await storage.updateTransactionExternalReference(transaction.id, extRef);
           // Wave (and other redirect-based operators): AfribaPay returns provider_link.
@@ -20574,7 +20611,7 @@ export async function registerRoutes(
         let result: any;
         if (provider === "afribapay") {
           const localPhone = getAfribaPayPayoutPhone(phone, countryCode, toLocalMobileMoneyPhone(phone, countryCode));
-          await clearAfribaPayPayoutStatusTransactionId(transaction.id);
+          await clearAfribaPayStatusTransactionId(transaction.id);
           result = await initiateAfribaPayout({
             operator: resolveAfribaPayOperatorCode(operator, operator.name || ""),
             country: countryCode,
@@ -21795,6 +21832,7 @@ export async function registerRoutes(
              });
            };
            const otpInfo = await getAfribaPayOtpInfo(countryCode, afribapayOperatorCode);
+            await clearAfribaPayStatusTransactionId(tx.id);
            if (otpInfo.required) {
              let ussdCode = otpInfo.ussdCode || "";
              if (ussdCode.toLowerCase().includes("montant")) {
@@ -21833,7 +21871,7 @@ export async function registerRoutes(
                ussd_code: otpType === "ussd" ? ussdCode || null : null,
                extRef: txRef,
              };
-           } else {
+            } else {
              afribapayRequestStarted = true;
              const afribaResponse = await initiateAfribaPayin({
                operator: afribapayOperatorCode,
@@ -21867,7 +21905,8 @@ export async function registerRoutes(
                    providerStatus: afribaResponse.providerStatus,
                  },
                );
-             } else {
+            } else {
+                await persistAfribaPayStatusTransactionId(tx.id, afribaResponse.transaction_id);
                const extRef = afribaResponse.transaction_id || txRef;
                await storage.updateTransactionExternalReference(tx.id, extRef);
                payResult = {
@@ -21992,6 +22031,9 @@ export async function registerRoutes(
       }
 
       await deleteOtpContext(tx.reference);
+      if (result.success) {
+        await persistAfribaPayStatusTransactionId(tx.id, result.transaction_id);
+      }
       const externalReference = result.transaction_id || tx.reference;
       if (result.success) {
         await storage.updateTransactionExternalReference(tx.id, externalReference);
@@ -22726,7 +22768,7 @@ export async function registerRoutes(
                   afribapayStatusTransactionId: null,
                 },
               } as any);
-              await clearAfribaPayPayoutStatusTransactionId(tx.id);
+              await clearAfribaPayStatusTransactionId(tx.id);
               const afribaResult = await initiateAfribaPayout({
                 operator: afribapayOperatorCode,
                 country: countryCode,

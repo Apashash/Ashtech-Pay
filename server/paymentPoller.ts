@@ -32,6 +32,7 @@ interface PendingPayment {
   type: string;
   amount: string;
   provider?: string;
+  afribapayStatusTransactionId?: string | null;
   paymentIntentId?: string | null;
   payerName?: string | null;
   countryCode?: string; // used for PixPay API key selection
@@ -131,13 +132,10 @@ async function checkPaymentStatus(payment: PendingPayment): Promise<"pending" | 
       // If AfribaPay circuit is open (subscription invalid), don't make any HTTP calls.
       // Return "pending" — provider outages do not time out or auto-fail deposits.
       if (isAfribaPayCircuitOpen()) return "pending";
-      const providerReference = resolveAfribaPayPayinTransactionId(
-        payment.externalReference,
-        payment.reference,
-      );
+      const providerReference = payment.afribapayStatusTransactionId?.trim() || null;
       if (!providerReference) {
-        // AfribaPay says order_id lookups are valid only for existing provider
-        // transactions with an attached PIM/POM; age alone is not evidence.
+        // Never infer a provider transaction ID from externalReference/order_id.
+        // Without the explicitly persisted transaction_id, wait for the webhook.
         console.info(
           `[PaymentPoller] AfribaPay status lookup skipped for ${payment.reference}: no confirmed provider transaction_id; awaiting webhook`,
         );
@@ -439,9 +437,13 @@ async function pollPendingPayments() {
           removePendingPayment(reference);
           continue;
         }
-        // Always use the provider reference currently persisted on this exact
-        // local transaction; never poll a stale in-memory or merchant reference.
+        // Refresh references from this exact local transaction, never from stale
+        // in-memory data. AfribaPay status lookups use a separate, provider-only ID.
         payment.externalReference = transaction.externalReference || transaction.reference;
+        if (payment.provider === "afribapay") {
+          payment.afribapayStatusTransactionId =
+            resolveAfribaPayPayinTransactionId((transaction as any).metadata);
+        }
         if (payment.provider === "pawapay" && !isPawaPayUuidV4(payment.externalReference)) {
           continue;
         }
@@ -503,9 +505,40 @@ export async function recoverPendingDeposits() {
         continue;
       }
 
+      let transactionMetadata: Record<string, unknown> = {};
+      const rawTransactionMetadata = (tx as any).metadata;
+      if (typeof rawTransactionMetadata === "string") {
+        try {
+          const parsed = JSON.parse(rawTransactionMetadata);
+          if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+            transactionMetadata = parsed as Record<string, unknown>;
+          }
+        } catch {
+          // Keep malformed legacy metadata from becoming a provider lookup ID.
+        }
+      } else if (
+        rawTransactionMetadata &&
+        typeof rawTransactionMetadata === "object" &&
+        !Array.isArray(rawTransactionMetadata)
+      ) {
+        transactionMetadata = rawTransactionMetadata as Record<string, unknown>;
+      }
+      const afribapayStatusTransactionId =
+        resolveAfribaPayPayinTransactionId(transactionMetadata);
+
       // Detect provider early so we can auto-fail broken-provider transactions
       let txProvider: "afribapay" | "pixpay" | "pawapay" | null =
         tx.externalReference && isPawaPayUuidV4(tx.externalReference) ? "pawapay" : null;
+      if (
+        !txProvider &&
+        (
+          transactionMetadata.paymentProvider === "afribapay" ||
+          transactionMetadata.provider === "afribapay" ||
+          Boolean(afribapayStatusTransactionId)
+        )
+      ) {
+        txProvider = "afribapay";
+      }
       if (!txProvider && tx.operatorId) {
         try {
           const op = await storage.getOperator(tx.operatorId);
@@ -565,6 +598,9 @@ export async function recoverPendingDeposits() {
           type: tx.type,
           amount: tx.amount,
           provider: txProvider,
+          afribapayStatusTransactionId: txProvider === "afribapay"
+            ? afribapayStatusTransactionId
+            : undefined,
           countryCode: recoveredCountryCode,
           paymentIntentId: tx.paymentIntentId,
           startedAt: createdAt,

@@ -642,12 +642,21 @@ export function classifyAfribaPayinStatus(
   return "pending";
 }
 
-export function resolveAfribaPayPayinTransactionId(
-  providerReference: string | null | undefined,
-  ashtechReference: string,
-): string | null {
-  const normalized = providerReference?.trim();
-  return normalized && normalized !== ashtechReference ? normalized : null;
+export function resolveAfribaPayPayinTransactionId(metadata: unknown): string | null {
+  let record: unknown = metadata;
+  if (typeof record === "string") {
+    try {
+      record = JSON.parse(record);
+    } catch {
+      return null;
+    }
+  }
+  if (!record || typeof record !== "object" || Array.isArray(record)) return null;
+
+  const value = (record as Record<string, unknown>).afribapayStatusTransactionId;
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  return normalized || null;
 }
 
 export function classifyAfribaPayoutStatus(
@@ -677,7 +686,7 @@ export function classifyAfribaPayoutStatus(
  */
 export function buildAfribaPayStatusUrl(
   identifier: string,
-  type: "order_id" | "transaction_id" = "order_id",
+  type: "order_id" | "transaction_id",
 ): string {
   const url = new URL(`${AFRIBAPAY_API_URL}/v1/status`);
   url.searchParams.set(type, identifier);
