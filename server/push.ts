@@ -3,7 +3,7 @@ import webpush from "web-push";
 import { db } from "./db";
 import { pushSubscriptions, transactions, type PushSubscription } from "@shared/schema-runtime";
 import { decryptField } from "./fieldEncryption";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 export interface BrowserPushPayload {
   title: string;
@@ -253,6 +253,46 @@ function decryptSubscription(subscription: PushSubscription): PushSubscription |
   return { ...subscription, endpoint, p256dh, auth };
 }
 
+type PushDeliveryOutcome = "sent" | "failed" | "removed";
+
+async function deliverPushToSubscription(
+  stored: PushSubscription,
+  formatted: { title: string; body: string; url: string },
+  payload: BrowserPushPayload,
+): Promise<PushDeliveryOutcome> {
+  const subscription = decryptSubscription(stored);
+  if (!subscription) return "failed";
+
+  try {
+    await webpush.sendNotification(
+      {
+        endpoint: subscription.endpoint,
+        keys: { p256dh: subscription.p256dh, auth: subscription.auth },
+      },
+      JSON.stringify({
+        title: formatted.title,
+        body: formatted.body,
+        type: payload.type || "notification",
+        transactionId: payload.transactionId || null,
+        url: formatted.url,
+      }),
+      { TTL: 300 },
+    );
+    await db.update(pushSubscriptions)
+      .set({ updatedAt: new Date() })
+      .where(eq(pushSubscriptions.id, stored.id));
+    return "sent";
+  } catch (error: any) {
+    const statusCode = Number(error?.statusCode);
+    if (statusCode === 404 || statusCode === 410) {
+      await db.delete(pushSubscriptions).where(eq(pushSubscriptions.id, stored.id));
+      return "removed";
+    }
+    console.error(`[Push] Delivery failed for subscription ${stored.id}:`, error?.message || error);
+    return "failed";
+  }
+}
+
 export async function sendPushNotification(userId: string, payload: BrowserPushPayload): Promise<void> {
   if (payload.type && PUSH_DISABLED_NOTIFICATION_TYPES.has(payload.type)) {
     return;
@@ -266,37 +306,85 @@ export async function sendPushNotification(userId: string, payload: BrowserPushP
     .from(pushSubscriptions)
     .where(eq(pushSubscriptions.userId, userId));
 
-  await Promise.all(subscriptions.map(async (stored) => {
-    const subscription = decryptSubscription(stored);
-    if (!subscription) return;
+  await Promise.all(subscriptions.map((stored) =>
+    deliverPushToSubscription(stored, formatted, payload)
+  ));
+}
 
-    try {
-      await webpush.sendNotification(
-        {
-          endpoint: subscription.endpoint,
-          keys: { p256dh: subscription.p256dh, auth: subscription.auth },
-        },
-        JSON.stringify({
-          title: formatted.title,
-          body: formatted.body,
-          type: payload.type || "notification",
-          transactionId: payload.transactionId || null,
-          url: formatted.url,
-        }),
-        { TTL: 300 },
-      );
-      await db.update(pushSubscriptions)
-        .set({ updatedAt: new Date() })
-        .where(eq(pushSubscriptions.id, stored.id));
-    } catch (error: any) {
-      const statusCode = Number(error?.statusCode);
-      if (statusCode === 404 || statusCode === 410) {
-        await db.delete(pushSubscriptions).where(eq(pushSubscriptions.id, stored.id));
-        return;
-      }
-      console.error(`[Push] Delivery failed for subscription ${stored.id}:`, error?.message || error);
+export interface PushCampaignDeliveryResult {
+  targetUsers: number;
+  subscribedUsers: number;
+  attemptedDevices: number;
+  deliveredDevices: number;
+  failedDevices: number;
+  removedSubscriptions: number;
+  usersReached: number;
+}
+
+/**
+ * Sends an admin campaign in bounded batches so a large audience cannot
+ * overwhelm the Node process or the browser push providers.
+ */
+export async function sendPushNotificationToUsers(
+  userIds: string[],
+  payload: BrowserPushPayload,
+): Promise<PushCampaignDeliveryResult> {
+  if (payload.type && PUSH_DISABLED_NOTIFICATION_TYPES.has(payload.type)) {
+    throw new Error("This push notification type is disabled");
+  }
+  if (!configureWebPush()) {
+    throw new Error("Les notifications push ne sont pas configurées sur ce serveur.");
+  }
+
+  const uniqueUserIds = [...new Set(userIds.filter((userId) => typeof userId === "string" && userId.length > 0))];
+  const pushPayload = await hydrateIncomingPaymentPayload(payload);
+  const formatted = formatPushNotification(pushPayload);
+  const subscribedUserIds = new Set<string>();
+  const reachedUserIds = new Set<string>();
+  let attemptedDevices = 0;
+  let deliveredDevices = 0;
+  let failedDevices = 0;
+  let removedSubscriptions = 0;
+
+  for (let userOffset = 0; userOffset < uniqueUserIds.length; userOffset += 250) {
+    const userBatch = uniqueUserIds.slice(userOffset, userOffset + 250);
+    const subscriptions = await db.select()
+      .from(pushSubscriptions)
+      .where(inArray(pushSubscriptions.userId, userBatch));
+
+    for (const subscription of subscriptions) {
+      subscribedUserIds.add(subscription.userId);
     }
-  }));
+    attemptedDevices += subscriptions.length;
+
+    for (let deviceOffset = 0; deviceOffset < subscriptions.length; deviceOffset += 20) {
+      const deviceBatch = subscriptions.slice(deviceOffset, deviceOffset + 20);
+      const outcomes = await Promise.all(deviceBatch.map((subscription) =>
+        deliverPushToSubscription(subscription, formatted, pushPayload)
+      ));
+
+      outcomes.forEach((outcome, index) => {
+        if (outcome === "sent") {
+          deliveredDevices += 1;
+          reachedUserIds.add(deviceBatch[index].userId);
+        } else if (outcome === "removed") {
+          removedSubscriptions += 1;
+        } else {
+          failedDevices += 1;
+        }
+      });
+    }
+  }
+
+  return {
+    targetUsers: uniqueUserIds.length,
+    subscribedUsers: subscribedUserIds.size,
+    attemptedDevices,
+    deliveredDevices,
+    failedDevices,
+    removedSubscriptions,
+    usersReached: reachedUserIds.size,
+  };
 }
 
 /**
