@@ -8,6 +8,7 @@ import {
   isNotNull,
   isNull,
   lt,
+  ne,
   notExists,
   or,
 } from "drizzle-orm";
@@ -44,6 +45,27 @@ function atLeastTenCompletedTransactionsExists() {
   );
 }
 
+function verifiedKycCondition(): SQL {
+  return or(
+    eq(users.kycStatus, "verified"),
+    and(isNull(users.kycStatus), eq(users.isVerified, true)),
+  )!;
+}
+
+function hasDirectApiKeyCondition(): SQL {
+  return or(
+    and(isNotNull(users.apiKeyHash), ne(users.apiKeyHash, "")),
+    and(isNotNull(users.apiKey), ne(users.apiKey, "")),
+  )!;
+}
+
+function noDirectApiKeyCondition(): SQL {
+  return and(
+    or(isNull(users.apiKeyHash), eq(users.apiKeyHash, "")),
+    or(isNull(users.apiKey), eq(users.apiKey, "")),
+  )!;
+}
+
 function segmentCondition(segment: AdminPushCampaignSegment): SQL {
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
@@ -53,7 +75,7 @@ function segmentCondition(segment: AdminPushCampaignSegment): SQL {
         or(eq(users.isBanned, false), isNull(users.isBanned)),
       )!;
     case "kyc_verified":
-      return or(eq(users.kycStatus, "verified"), eq(users.isVerified, true))!;
+      return verifiedKycCondition();
     case "kyc_not_submitted":
       return and(
         or(eq(users.kycStatus, "not_submitted"), isNull(users.kycStatus)),
@@ -65,7 +87,7 @@ function segmentCondition(segment: AdminPushCampaignSegment): SQL {
       return eq(users.kycStatus, "rejected");
     case "kyc_verified_no_transactions":
       return and(
-        or(eq(users.kycStatus, "verified"), eq(users.isVerified, true)),
+        verifiedKycCondition(),
         notExists(
           db.select({ id: transactions.id })
             .from(transactions)
@@ -78,13 +100,12 @@ function segmentCondition(segment: AdminPushCampaignSegment): SQL {
     case "direct_api_active":
       return and(
         eq(users.apiEnabled, true),
-        or(isNotNull(users.apiKeyHash), isNotNull(users.apiKey)),
+        hasDirectApiKeyCondition(),
       )!;
     case "direct_api_enabled_no_key":
       return and(
         eq(users.apiEnabled, true),
-        isNull(users.apiKeyHash),
-        isNull(users.apiKey),
+        noDirectApiKeyCondition(),
       )!;
     case "direct_api_disabled":
       return or(eq(users.apiEnabled, false), isNull(users.apiEnabled))!;
