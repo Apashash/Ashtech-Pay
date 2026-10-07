@@ -43,7 +43,7 @@ import heroPaymentImage from "@assets/file_00000000b290820e8318daa118934236_1788
 import marketPaymentImage from "@assets/images_(1)~2_1788747988443.jpeg";
 import commercePaymentImage from "@assets/barkapay-african-payment-hub-for-e-commerce_1788747792967.webp";
 import { useState, useEffect, useRef, type PointerEvent, type RefObject } from "react";
-import { PUBLIC_API_DOCS_URL, PUBLIC_CHECKOUT_DOCS_URL } from "@/lib/public-links";
+import { PUBLIC_API_DOCS_URL, PUBLIC_CHECKOUT_DOCS_URL, PUBLIC_DOCS_INTRO_URL } from "@/lib/public-links";
 import { useTheme } from "@/components/theme-provider";
 import { useScrollAnimation } from "@/hooks/use-scroll-animation";
 import { useLanguage } from "@/lib/language";
@@ -772,7 +772,7 @@ function ApiDeveloperSection() {
               ))}
             </ul>
             <div className="flex flex-col sm:flex-row gap-3">
-              <a href={PUBLIC_API_DOCS_URL}>
+              <a href={PUBLIC_DOCS_INTRO_URL}>
                 <Button size="lg" className="gap-2" data-testid="button-api-docs">
                   <BookOpen className="w-4 h-4" />
                   {t.landing.apiBtn1}
