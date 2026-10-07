@@ -144,7 +144,12 @@ import {
   validateMobileMoneyPhone,
 } from "@shared/mobile-money-phone";
 import { parsePhoneInput, parseUserPhoneInput } from "@shared/user-phone";
-import { getVapidPublicKey, sendPushNotificationToAll } from "./push";
+import { getVapidPublicKey, sendPushNotificationToUserIds } from "./push";
+import {
+  getGlobalMessagePushAudienceStats,
+  getGlobalMessagePushRecipientIds,
+} from "./globalMessageAudience";
+import { isGlobalMessagePushAudience } from "@shared/global-message-audiences";
 import { buildTransactionBalanceSnapshots } from "./transactionBalances";
 import { formatDebugError, shouldExposeDebugErrors } from "./errorDiagnostics";
 import {
@@ -16788,45 +16793,91 @@ export async function registerRoutes(
     }
   });
 
-  // Create global message
-  app.post("/api/admin/global-messages", requireAuth, requireAdmin, async (req, res) => {
+  // Preview the actual push reach for the selected global-message audience.
+  app.get("/api/admin/global-messages/push-audience", requireAuth, requireAdmin, async (req, res) => {
     try {
-      const { title, message, expiresAt } = req.body;
-      
-      if (!title || !message) {
+      const audience = req.query.audience ?? "all_active";
+      if (!isGlobalMessagePushAudience(audience)) {
+        return res.status(400).json({ message: "Type de compte invalide." });
+      }
+      res.setHeader("Cache-Control", "no-store");
+      const stats = await getGlobalMessagePushAudienceStats(audience);
+      res.json({
+        ...stats,
+        pushConfigured: Boolean(getVapidPublicKey()),
+      });
+    } catch (error: any) {
+      console.error("[Admin Global Message] Push audience preview failed:", error?.message || error);
+      res.status(500).json({ message: "Impossible de calculer les destinataires du push." });
+    }
+  });
+
+  // Create global message
+  app.post("/api/admin/global-messages", requireAuth, requireAdmin, adminActionLimiter, async (req, res) => {
+    try {
+      const { title, message, expiresAt } = req.body ?? {};
+      const pushAudience = req.body?.pushAudience ?? "all_active";
+
+      if (typeof title !== "string" || !title.trim() || typeof message !== "string" || !message.trim()) {
         return res.status(400).json({ message: "Titre et message requis" });
       }
-      
+
+      if (!isGlobalMessagePushAudience(pushAudience)) {
+        return res.status(400).json({ message: "Type de compte invalide." });
+      }
+
+      const [pushAudienceStats, recipientIds] = await Promise.all([
+        getGlobalMessagePushAudienceStats(pushAudience),
+        getGlobalMessagePushRecipientIds(pushAudience),
+      ]);
+      const pushConfigured = Boolean(getVapidPublicKey());
+
       const globalMessage = await storage.createGlobalMessage({
         adminId: req.userId!,
-        title,
-        message,
+        title: title.trim(),
+        message: message.trim(),
         isActive: true,
         expiresAt: expiresAt ? new Date(expiresAt) : null,
       });
 
-      // Global messages are also delivered to every currently subscribed
-      // browser. The persisted global message remains the source of truth
-      // for users who are offline or subscribe after publication.
-      void sendPushNotificationToAll({
-        title,
-        body: message,
-        type: "global_message",
-        url: "/dashboard/notifications",
-      }).catch((error) => {
-        console.error("[Push] Global message broadcast failed:", error?.message || error);
-      });
+      // The saved message remains visible in the global notification center.
+      // The browser push itself is limited to the selected, opted-in audience.
+      if (pushConfigured && recipientIds.length > 0) {
+        void sendPushNotificationToUserIds(recipientIds, {
+          title: title.trim(),
+          body: message.trim(),
+          type: "global_message",
+          url: "/dashboard/notifications",
+        }).catch((error) => {
+          console.error("[Push] Targeted global-message delivery failed:", error?.message || error);
+        });
+      }
       
       await storage.createAdminLog({
         adminId: req.userId!,
         action: "create_global_message",
         targetType: "global_message",
         targetId: globalMessage.id,
-        details: JSON.stringify({ title }),
+        details: JSON.stringify({
+          title: title.trim(),
+          pushAudience,
+          targetAccounts: pushAudienceStats.targetAccounts,
+          subscribedAccounts: pushAudienceStats.subscribedAccounts,
+          subscribedDevices: pushAudienceStats.subscribedDevices,
+          pushConfigured,
+        }),
         ipAddress: req.ip || null,
       });
       
-      res.json(globalMessage);
+      res.json({
+        ...globalMessage,
+        pushAudience,
+        pushAudienceStats: {
+          ...pushAudienceStats,
+          pushConfigured,
+          deliveryStarted: pushConfigured && recipientIds.length > 0,
+        },
+      });
     } catch (error) {
       console.error("Create global message error:", error);
       res.status(500).json({ message: "Erreur serveur" });

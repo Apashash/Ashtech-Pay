@@ -328,3 +328,26 @@ export async function sendPushNotificationToAll(payload: BrowserPushPayload): Pr
     userIds.map((userId) => sendPushNotification(userId, payload)),
   );
 }
+
+/**
+ * Deliver a global-message push only to a pre-filtered set of subscribed
+ * accounts. Bounded batches keep provider requests from overwhelming the app.
+ */
+export async function sendPushNotificationToUserIds(
+  userIds: string[],
+  payload: BrowserPushPayload,
+): Promise<void> {
+  if (!configureWebPush()) return;
+  const uniqueUserIds = [...new Set(userIds.filter((userId) => typeof userId === "string" && userId.length > 0))];
+
+  for (let offset = 0; offset < uniqueUserIds.length; offset += 20) {
+    const batch = uniqueUserIds.slice(offset, offset + 20);
+    const results = await Promise.allSettled(
+      batch.map((userId) => sendPushNotification(userId, payload)),
+    );
+    const failed = results.filter((result) => result.status === "rejected").length;
+    if (failed > 0) {
+      console.error(`[Push] ${failed} targeted global-message delivery task(s) failed.`);
+    }
+  }
+}
