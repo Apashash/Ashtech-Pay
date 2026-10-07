@@ -2407,36 +2407,74 @@ function getProviderTransactionReference(result: unknown): string | null {
   ) ?? null;
 }
 
+function readTransactionMetadataRecord(rawMetadata: unknown): Record<string, any> {
+  if (rawMetadata && typeof rawMetadata === "object" && !Array.isArray(rawMetadata)) {
+    return rawMetadata as Record<string, any>;
+  }
+  if (typeof rawMetadata === "string") {
+    try {
+      const parsed = JSON.parse(rawMetadata);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as Record<string, any>;
+      }
+    } catch {
+      // Keep legacy malformed metadata intact where possible.
+    }
+  }
+  return {};
+}
+
+async function clearAfribaPayPayoutStatusTransactionId(transactionId: string): Promise<void> {
+  const transaction = await storage.getTransactionById(transactionId);
+  if (!transaction) throw new Error("AfribaPay payout transaction was not found before submission");
+  const metadata = readTransactionMetadataRecord((transaction as any).metadata);
+  if (metadata.afribapayStatusTransactionId == null) return;
+  const nextMetadata = { ...metadata };
+  delete nextMetadata.afribapayStatusTransactionId;
+  await storage.updateTransactionMetadata(transactionId, nextMetadata);
+}
+
 async function persistProviderTransactionReference(
   transactionId: string,
   result: unknown,
+  provider?: string,
 ): Promise<string | null> {
   const providerReference = getProviderTransactionReference(result);
-  if (!providerReference) return null;
+  const record = result && typeof result === "object"
+    ? result as Record<string, unknown>
+    : undefined;
+  const afribapayStatusTransactionId = provider === "afribapay" &&
+    typeof record?.transaction_id === "string" &&
+    record.transaction_id.trim()
+    ? record.transaction_id.trim()
+    : null;
+  if (!providerReference && provider !== "afribapay") return null;
 
   try {
     const transaction = await storage.getTransactionById(transactionId);
     if (!transaction) return providerReference;
+    const metadata = readTransactionMetadataRecord((transaction as any).metadata);
+    const nextMetadata = { ...metadata };
+    let changed = false;
 
-    const rawMetadata = (transaction as any).metadata;
-    let metadata: Record<string, any> = {};
-    if (rawMetadata && typeof rawMetadata === "object" && !Array.isArray(rawMetadata)) {
-      metadata = rawMetadata as Record<string, any>;
-    } else if (typeof rawMetadata === "string") {
-      try {
-        const parsed = JSON.parse(rawMetadata);
-        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-          metadata = parsed as Record<string, any>;
-        }
-      } catch {
-        // Preserve the payout state even if legacy metadata cannot be parsed.
+    if (providerReference && metadata.providerReference !== providerReference) {
+      nextMetadata.providerReference = providerReference;
+      changed = true;
+    }
+    if (
+      provider === "afribapay" &&
+      metadata.afribapayStatusTransactionId !== afribapayStatusTransactionId
+    ) {
+      if (afribapayStatusTransactionId) {
+        nextMetadata.afribapayStatusTransactionId = afribapayStatusTransactionId;
+      } else {
+        delete nextMetadata.afribapayStatusTransactionId;
       }
+      changed = true;
     }
 
-    if (metadata.providerReference !== providerReference) {
-      await storage.updateTransaction(transactionId, {
-        metadata: { ...metadata, providerReference },
-      } as any);
+    if (changed) {
+      await storage.updateTransaction(transactionId, { metadata: nextMetadata } as any);
     }
   } catch (error) {
     // Reference persistence must not cause an already-submitted payout to be
@@ -6313,6 +6351,7 @@ export async function registerRoutes(
             toLocalMobileMoneyPhone(recipientPhone, countryCode),
           );
 
+          await clearAfribaPayPayoutStatusTransactionId(transaction.id);
           const afribaResult = await initiateAfribaPayout({
             operator: afribapayOperatorCode,
             country: countryCode,
@@ -6398,12 +6437,13 @@ export async function registerRoutes(
           };
         }
 
-        await persistProviderTransactionReference(transaction.id, payoutResult);
+        await persistProviderTransactionReference(transaction.id, payoutResult, transferProvider);
 
         if (payoutResult.success) {
           console.log(`[Transfer] Payout submitted OK: ${reference} (ext: ${payoutResult.transaction_id})`);
-          // AfribaPay status lookups use the active order_id, never transaction_id.
-          // PixPay: poll by provider transaction_id when available.
+          // AfribaPay's order_id stays on the queue for callback correlation;
+          // the poller only sends the confirmed provider transaction_id.
+          // PixPay polls by its provider transaction_id when available.
           const transferPollerRef = transferProvider === "afribapay"
             ? resolveAfribaPayPayoutOrderId(payoutResult.order_id, reference)
             : (payoutResult.transaction_id || reference);
@@ -7762,6 +7802,7 @@ export async function registerRoutes(
           if (pfx && localPhone.startsWith(pfx)) localPhone = localPhone.slice(pfx.length);
           localPhone = getAfribaPayPayoutPhone(data.accountDetails, countryCode, localPhone);
 
+          await clearAfribaPayPayoutStatusTransactionId(transaction.id);
           const afribaResult = await initiateAfribaPayout({
             operator: afribapayOperatorCode,
             country: countryCode,
@@ -7773,7 +7814,8 @@ export async function registerRoutes(
             notify_url: callbackUrl,
           });
           if (afribaResult.success) {
-            // AfribaPay's returned order_id is the authoritative status/webhook reference.
+            // Retain the returned order_id for callback correlation; status
+            // polling uses AfribaPay's separately persisted transaction_id.
             const afribaOrderId = resolveAfribaPayPayoutOrderId(afribaResult.order_id, withdrawalRef);
             await storage.updateTransactionExternalReference(transaction.id, afribaOrderId);
           }
@@ -7839,7 +7881,11 @@ export async function registerRoutes(
           };
         }
 
-        withdrawalProviderReference = await persistProviderTransactionReference(transaction.id, payoutResult);
+        withdrawalProviderReference = await persistProviderTransactionReference(
+          transaction.id,
+          payoutResult,
+          paymentProvider,
+        );
 
         if (payoutResult.success) {
           console.log(`[Withdrawal] Payout submitted OK: ${withdrawalRef} (ext: ${payoutResult.transaction_id})`);
@@ -14318,6 +14364,7 @@ export async function registerRoutes(
             if (pfx && localPhone.startsWith(pfx)) localPhone = localPhone.slice(pfx.length);
             localPhone = getAfribaPayPayoutPhone(transaction.recipientPhone || "", countryCode, localPhone);
 
+            await clearAfribaPayPayoutStatusTransactionId(transaction.id);
             const afribaResult = await initiateAfribaPayout({
               operator:     afribapayOperatorCode,
               country:      countryCode,
@@ -14332,10 +14379,11 @@ export async function registerRoutes(
               providerPayoutSubmitted = true;
               pollerRef = resolveAfribaPayPayoutOrderId(afribaResult.order_id, payoutRef);
               submittedPayoutReference = pollerRef;
-              // Persist the active provider order_id for both restart recovery and status polling.
+              // Persist the active order_id for callback correlation and restart recovery.
               await storage.updateTransactionExternalReference(transaction.id, pollerRef);
             }
             payoutResult  = afribaResult;
+            await persistProviderTransactionReference(transaction.id, afribaResult, "afribapay");
             pollerProvider = "afribapay";
 
           }
@@ -16116,9 +16164,11 @@ export async function registerRoutes(
             ...retryMetadata,
             paymentProvider: "afribapay",
             pendingPayoutProvider: "afribapay",
+            afribapayStatusTransactionId: null,
           },
         } as any);
 
+        await clearAfribaPayPayoutStatusTransactionId(txId);
         const result = await initiateAfribaPayout({
           operator: afribapayOperatorCode,
           country: countryCode,
@@ -16133,7 +16183,8 @@ export async function registerRoutes(
           // The provider accepted the payout; subsequent persistence errors must not
           // make this attempt eligible for another submission.
           providerSubmitted = true;
-          // Prefer AfribaPay's newly returned order_id; never reuse the previous attempt's ID.
+          // Keep the newly returned order_id for callback correlation; do not
+          // reuse the previous attempt's order ID.
           pollerRef = resolveAfribaPayPayoutOrderId(result.order_id, afribaAdminRetryRef);
           await storage.updateTransactionExternalReference(txId, pollerRef);
         }
@@ -16176,7 +16227,7 @@ export async function registerRoutes(
 
       }
 
-      const retryProviderReference = await persistProviderTransactionReference(txId, payoutResult);
+      const retryProviderReference = await persistProviderTransactionReference(txId, payoutResult, provider);
 
       if (payoutResult.success) {
         // Provider accepted — mark this BEFORE any DB write so the catch block
@@ -20523,6 +20574,7 @@ export async function registerRoutes(
         let result: any;
         if (provider === "afribapay") {
           const localPhone = getAfribaPayPayoutPhone(phone, countryCode, toLocalMobileMoneyPhone(phone, countryCode));
+          await clearAfribaPayPayoutStatusTransactionId(transaction.id);
           result = await initiateAfribaPayout({
             operator: resolveAfribaPayOperatorCode(operator, operator.name || ""),
             country: countryCode,
@@ -20575,7 +20627,7 @@ export async function registerRoutes(
           };
         }
 
-        await persistProviderTransactionReference(transaction.id, result);
+        await persistProviderTransactionReference(transaction.id, result, provider);
         if (result.success) {
           const pollReference = provider === "afribapay"
             ? resolveAfribaPayPayoutOrderId(result.order_id, providerReference)
@@ -22671,8 +22723,10 @@ export async function registerRoutes(
                   paymentProvider: "afribapay",
                   pendingPayoutProvider: "afribapay",
                   payoutAttemptStartedAt: afribaRetryStartedAt,
+                  afribapayStatusTransactionId: null,
                 },
               } as any);
+              await clearAfribaPayPayoutStatusTransactionId(tx.id);
               const afribaResult = await initiateAfribaPayout({
                 operator: afribapayOperatorCode,
                 country: countryCode,
@@ -22689,6 +22743,7 @@ export async function registerRoutes(
                 await storage.updateTransactionExternalReference(tx.id, telegramPollerRef);
               }
               payoutResult = afribaResult;
+              await persistProviderTransactionReference(tx.id, afribaResult, "afribapay");
 
             } else if (provider === "pixpay") {
               const cashInServiceId = getPixPayServiceId(operator?.name || "", countryCode, "cash_in");

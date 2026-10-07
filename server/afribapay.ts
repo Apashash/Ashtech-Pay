@@ -670,7 +670,11 @@ export function classifyAfribaPayoutStatus(
   return "pending";
 }
 
-/** The public docs use the shared API host for transaction status, including order_id lookups. */
+/**
+ * Status URLs use AfribaPay's shared API host. Order-ID lookup is documented,
+ * but callers must only select it after confirming the provider record has a
+ * PIM/POM; the active pay-in and payout pollers use transaction_id only.
+ */
 export function buildAfribaPayStatusUrl(
   identifier: string,
   type: "order_id" | "transaction_id" = "order_id",
@@ -682,17 +686,20 @@ export function buildAfribaPayStatusUrl(
 
 // ─── Check payout status (withdrawals / transfers) ────────────────────────────
 export async function checkAfribaPayoutStatus(
-  identifier: string,
-  type: "order_id" | "transaction_id" = "order_id"
+  transactionId: string,
 ): Promise<{ status: "completed" | "failed" | "pending"; raw?: any }> {
   try {
-    const url = buildAfribaPayStatusUrl(identifier, type);
-    const param = `${type}=${identifier}`;
+    const normalizedTransactionId = transactionId.trim();
+    if (!normalizedTransactionId) {
+      console.warn("[AfribaPay PayoutStatus] Lookup skipped: missing provider transaction_id");
+      return { status: "pending" };
+    }
+    const url = buildAfribaPayStatusUrl(normalizedTransactionId, "transaction_id");
     const { res, data } = await fetchAfribaPayJson(url);
 
     const d = data.data;
     const rawStatus = (d?.status || d?.transaction_status || d?.payout_status || "").toUpperCase();
-    console.log(`[AfribaPay PayoutStatus] ${param} → HTTP ${res.status} | raw_status="${rawStatus}" | data=${JSON.stringify(maskPiiInObject(d))}`);
+    console.log(`[AfribaPay PayoutStatus] transaction_id=${normalizedTransactionId} → HTTP ${res.status} | raw_status="${rawStatus}" | data=${JSON.stringify(maskPiiInObject(d))}`);
 
     return { status: classifyAfribaPayoutStatus(res.status, rawStatus), raw: data };
   } catch (err: any) {

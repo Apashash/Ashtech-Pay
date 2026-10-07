@@ -403,7 +403,7 @@ async function checkProviderStatus(
       // Leave the payout pending without generating repeated failed requests.
       if (!isAfribaPayConfigured()) return { status: "pending" };
       if (!lookupReference.trim()) return { status: "pending" };
-      const result = await checkAfribaPayoutStatus(lookupReference, "order_id");
+      const result = await checkAfribaPayoutStatus(lookupReference);
       return { status: result.status };
     }
 

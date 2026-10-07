@@ -167,16 +167,43 @@ export function shouldUseManualPayoutStatusOverride(input: {
   );
 }
 
+function payoutMetadataRecord(metadata: unknown): Record<string, unknown> {
+  if (metadata && typeof metadata === "object" && !Array.isArray(metadata)) {
+    return metadata as Record<string, unknown>;
+  }
+  if (typeof metadata === "string") {
+    try {
+      const parsed: unknown = JSON.parse(metadata);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      // Malformed legacy metadata cannot authorize a provider lookup.
+    }
+  }
+  return {};
+}
+
 /**
  * Resolve a provider status lookup ID from the current persisted transaction.
- * PawaPay and IziChange require their provider IDs and must never fall back to
- * an AshTech transaction reference.
+ * AfribaPay, PawaPay, and IziChange require confirmed provider IDs and must
+ * never fall back to an AshTech transaction reference.
  */
 export function resolvePayoutStatusLookupReference(
   provider: PayoutStatusProvider,
-  transaction: { reference?: string | null; externalReference?: string | null },
+  transaction: {
+    reference?: string | null;
+    externalReference?: string | null;
+    metadata?: unknown;
+  },
   iziPayoutId?: string | null,
 ): string | null {
+  if (provider === "afribapay") {
+    const transactionId = payoutMetadataRecord(transaction.metadata).afribapayStatusTransactionId;
+    return typeof transactionId === "string" && transactionId.trim()
+      ? transactionId.trim()
+      : null;
+  }
   if (provider === "pawapay") {
     return transaction.externalReference?.trim() || null;
   }

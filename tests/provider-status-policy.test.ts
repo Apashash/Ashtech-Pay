@@ -176,7 +176,22 @@ test("payout status lookup uses the current provider reference without unsafe fa
   assert.equal(resolvePayoutStatusLookupReference("afribapay", {
     reference: "ashtech-ref",
     externalReference: "current-afriba-order",
-  }), "current-afriba-order");
+  }), null);
+  assert.equal(resolvePayoutStatusLookupReference("afribapay", {
+    reference: "ashtech-ref",
+    externalReference: "current-afriba-order",
+    metadata: { afribapayStatusTransactionId: "provider-transaction-42" },
+  }), "provider-transaction-42");
+  assert.equal(resolvePayoutStatusLookupReference("afribapay", {
+    reference: "ashtech-ref",
+    externalReference: "current-afriba-order",
+    metadata: { afribapayStatusTransactionId: "  " },
+  }), null);
+  assert.equal(resolvePayoutStatusLookupReference("afribapay", {
+    reference: "ashtech-ref",
+    externalReference: "current-afriba-order",
+    metadata: { providerReference: "unverified-legacy-reference" },
+  }), null);
   assert.equal(resolvePayoutStatusLookupReference("pixpay", {
     reference: "ashtech-ref",
     externalReference: null,
@@ -224,20 +239,15 @@ test("non-AfribaPay provider status polling checks every three minutes for ten m
   );
 });
 
-test("AfribaPay payout polling follows the requested four-stage schedule indefinitely", () => {
-  const second = 1000;
-  const minute = 60 * second;
-  const hour = 60 * minute;
+test("AfribaPay payout polling is a low-frequency reconciliation fallback", () => {
+  const minute = 60 * 1000;
   const startedAt = 1_000_000;
   const cases = [
-    [0, 5 * second],
-    [5 * minute - 1, 5 * second],
-    [5 * minute, 5 * minute],
-    [35 * minute - 1, 5 * minute],
-    [35 * minute, 30 * minute],
-    [5 * hour + 35 * minute - 1, 30 * minute],
-    [5 * hour + 35 * minute, 5 * hour],
-    [365 * 24 * hour, 5 * hour],
+    [0, minute],
+    [10 * minute - 1, minute],
+    [10 * minute, 10 * minute],
+    [35 * minute, 10 * minute],
+    [365 * 24 * 60 * minute, 10 * minute],
   ] as const;
 
   for (const [age, expectedInterval] of cases) {
@@ -249,26 +259,17 @@ test("AfribaPay payout polling follows the requested four-stage schedule indefin
   }
 
   assert.equal(
-    isProviderStatusPollDue(startedAt, startedAt + 4 * minute + 55 * second, startedAt + 5 * minute, "afribapay"),
+    isProviderStatusPollDue(startedAt, startedAt + 9 * minute, startedAt + 10 * minute, "afribapay"),
     true,
-    "the final 5-second check must not be skipped at the 5-minute boundary",
+    "the next reconciliation should run at the 10-minute cadence boundary",
   );
   assert.equal(
-    isProviderStatusPollDue(startedAt, startedAt + 5 * minute, startedAt + 10 * minute - 1, "afribapay"),
+    isProviderStatusPollDue(startedAt, startedAt + 10 * minute, startedAt + 20 * minute - 1, "afribapay"),
     false,
   );
   assert.equal(
-    isProviderStatusPollDue(startedAt, startedAt + 5 * minute, startedAt + 10 * minute, "afribapay"),
+    isProviderStatusPollDue(startedAt, startedAt + 10 * minute, startedAt + 20 * minute, "afribapay"),
     true,
-  );
-  assert.equal(
-    isProviderStatusPollDue(startedAt, startedAt + 34 * minute + 55 * second, startedAt + 35 * minute - 1, "afribapay"),
-    false,
-  );
-  assert.equal(
-    isProviderStatusPollDue(startedAt, startedAt + 34 * minute + 55 * second, startedAt + 35 * minute, "afribapay"),
-    true,
-    "the next phase must start with a check at the 35-minute boundary",
   );
 });
 

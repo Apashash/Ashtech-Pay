@@ -1,6 +1,5 @@
 const SECOND = 1000;
 const MINUTE = 60 * SECOND;
-const HOUR = 60 * MINUTE;
 
 export const PROVIDER_STATUS_POLL_INTERVALS = [
   { maxAgeMs: 10 * MINUTE, intervalMs: 3 * MINUTE },
@@ -8,13 +7,11 @@ export const PROVIDER_STATUS_POLL_INTERVALS = [
 ] as const;
 
 export const AFRIBAPAY_PAYOUT_STATUS_POLL_INTERVALS = [
-  { maxAgeMs: 5 * MINUTE, intervalMs: 5 * SECOND },
-  { maxAgeMs: 35 * MINUTE, intervalMs: 5 * MINUTE },
-  { maxAgeMs: 335 * MINUTE, intervalMs: 30 * MINUTE },
-  { maxAgeMs: Number.POSITIVE_INFINITY, intervalMs: 5 * HOUR },
+  { maxAgeMs: 10 * MINUTE, intervalMs: MINUTE },
+  { maxAgeMs: Number.POSITIVE_INFINITY, intervalMs: 10 * MINUTE },
 ] as const;
 
-/** AfribaPay payouts use the requested fast-to-slow schedule; other providers keep the shared schedule. */
+/** Callbacks settle payouts promptly; these lower-frequency checks are reconciliation only. */
 export function providerStatusPollIntervalMs(
   startedAt: number,
   now = Date.now(),
