@@ -18782,27 +18782,47 @@ export async function registerRoutes(
     return c; // CDF stays unchanged
   }
 
-  /** GET /v1/countries — list all active countries with their operators */
-  app.get("/v1/countries", apiV1Limiter, requireApiKey, async (_req, res) => {
+  /** GET /v1/countries — list active country/operator catalog for deposits or payouts */
+  app.get("/v1/countries", apiV1Limiter, requireApiKey, async (req, res) => {
     try {
-       const countries = (await storage.getActiveCountries()).filter((c: any) => c.isActiveForDeposit !== false);
-       const allFees = await storage.getAllFees();
+      const requestedOperation = req.query?.operation;
+      const operation = requestedOperation === undefined
+        ? "deposit"
+        : typeof requestedOperation === "string"
+          ? requestedOperation.trim().toLowerCase()
+          : "";
+      if (operation !== "deposit" && operation !== "payout") {
+        return res.status(400).json({
+          error: "invalid_operation",
+          message: "operation doit valoir deposit ou payout.",
+        });
+      }
+      const isPayout = operation === "payout";
+      const feeOperation = isPayout ? "withdrawal" : "deposit";
+      const countries = (await storage.getActiveCountries()).filter((c: any) =>
+        isPayout ? c.isActiveForTransfer !== false : c.isActiveForDeposit !== false
+      );
+      const allFees = await storage.getAllFees();
       const result = await Promise.all(
         countries.map(async (c: any) => {
           const ops = await storage.getOperatorsByCountry(c.id);
           const supportedOperators = ops.filter((o: any) => {
-            const provider = o.depositPaymentProvider || o.paymentProvider;
+            const provider = isPayout
+              ? o.withdrawalPaymentProvider || o.paymentProvider
+              : o.depositPaymentProvider || o.paymentProvider;
             return o.isActive &&
               !o.isInMaintenance &&
               (provider === "afribapay" || provider === "pixpay" || provider === "pawapay");
           });
+          const walletCurrency = countryWalletCurrency(c);
           return {
             code: c.code,
             name: c.name,
-             currency: normalizeApiCurrency(countryWalletCurrency(c)),
+            currency: normalizeApiCurrency(walletCurrency),
+            ...(isPayout ? { wallet_currency: walletCurrency } : {}),
             operators: supportedOperators.map((o: any) => getOperatorDisplayName(o.name)),
             unavailable_operators: supportedOperators
-              .filter((o: any) => isOperatorDisabledByFee(allFees, o.id, "deposit"))
+              .filter((o: any) => isOperatorDisabledByFee(allFees, o.id, feeOperation))
               .map((o: any) => getOperatorDisplayName(o.name)),
           };
         })

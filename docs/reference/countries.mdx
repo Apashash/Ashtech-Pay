@@ -1,11 +1,19 @@
 ---
 title: "GET /v1/countries"
-description: "Obtenez les pays et opérateurs Mobile Money actifs."
+description: "Obtenez les pays et opérateurs actifs pour les dépôts ou les payouts."
 ---
 
 ```http
 GET https://www.ashtechpay.com/v1/countries
 ```
+
+Par défaut, cette requête retourne le catalogue des dépôts. Pour les retraits Mobile Money, ajoutez `?operation=payout` :
+
+```http
+GET https://www.ashtechpay.com/v1/countries?operation=payout
+```
+
+La réponse payout contient le code à envoyer comme `country_code`, les opérateurs de retrait actifs et `wallet_currency`, le wallet interne résolu pour ce pays. Le champ `currency` reste la devise ISO normalisée. `wallet_currency` est informatif : le payout choisit toujours le wallet côté serveur à partir du `country_code`.
 
 <Tabs>
   <Tab title="Node.js">
@@ -63,7 +71,7 @@ curl_close($ch);
   </Tab>
 </Tabs>
 
-La réponse contient les pays actifs, leur devise ISO normalisée et les opérateurs disponibles. Utilisez le champ `code` pour sélectionner un pays. Le champ `currency` (`XAF`, `XOF`, etc.) ne représente pas toujours le code interne exact du wallet de ce pays. Pour une conversion, envoyez plutôt `destination_country_code`; AshTech Pay résout le wallet correspondant. Consultez [Wallets et conversions](/docs/direct-api/wallets-conversions) pour le détail.
+La réponse contient les pays actifs, leur devise ISO normalisée et les opérateurs disponibles pour l'opération choisie. Utilisez le champ `code` pour sélectionner le pays. En mode `operation=payout`, `wallet_currency` indique le wallet interne que le serveur débitera. Le champ `currency` (`XAF`, `XOF`, etc.) ne représente pas toujours ce code interne. Pour une conversion, envoyez plutôt `destination_country_code`; AshTech Pay résout le wallet correspondant. Consultez [Wallets et conversions](/docs/direct-api/wallets-conversions) pour le détail.
 
 ```json
 [

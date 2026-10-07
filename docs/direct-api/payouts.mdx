@@ -27,8 +27,8 @@ Content-Type: application/json
 }
 ```
 
-- Chargez les opérateurs avec `GET /v1/countries` et transmettez le nom d'opérateur correspondant au pays.
-- Le wallet débité est résolu côté serveur à partir du pays (`CM` → `XAF`, `GA` → `XAFG`, `CG` → `XAFC`, etc.). AshTech Pay ne convertit jamais automatiquement un autre wallet pour couvrir le payout.
+- Récupérez les pays et opérateurs actifs pour les retraits avec [`GET /v1/countries?operation=payout`](/docs/reference/countries). Copiez le champ `code` retourné (par exemple `CM`, `GA` ou `CG`) dans `country_code`; n'envoyez pas le nom du pays. Transmettez le nom d'opérateur de retrait renvoyé pour ce pays.
+- Le wallet débité est résolu côté serveur à partir de `country_code` (`CM` → `XAF`, `GA` → `XAFG`, `CG` → `XAFC`, etc.). Vous n'avez pas à connaître ni à envoyer le code interne du wallet. AshTech Pay ne convertit jamais automatiquement un autre wallet pour couvrir le payout.
 - `reference` est obligatoire et idempotente. Réutilisez-la uniquement pour rejouer la même demande; une référence réutilisée avec des paramètres différents renvoie `409 reference_conflict`.
 - `fee_bearer` vaut `sender` (frais ajoutés au débit) ou `recipient` (frais retranchés au montant envoyé). La valeur par défaut est `sender`.
 - `notify_url` est facultative et doit être une URL HTTPS publique.
