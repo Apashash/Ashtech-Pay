@@ -26,3 +26,11 @@ The Direct API payout scope should include automated USDT withdrawals as a separ
 **Why:** The user requires `user_id` on all merchant API operations, wants merchants to display AshTechPay balances inside their own platforms, and requires country-specific wallets and automated USDT payouts.
 
 **How to apply:** Keep Bearer-key ownership authoritative; require exact equality with `user_id` on balance, conversion, and payout requests. For fiat, resolve the destination-country wallet and do not silently FX-convert payouts. For USDT, reuse the existing crypto payout and IziChange reconciliation path without mixing it into Mobile Money fields.
+
+## Mobile Money payout phone input
+
+The Direct API Mobile Money payout requires `phone` to be a non-empty string containing the recipient number as digits, with the country prefix when supplied. Reject alphabetic characters and masked placeholders; return a specific invalid-phone response instead of silently stripping letters or treating the phone as an optional field. Public examples should use digits only and clearly label fictitious values.
+
+**Why:** The user requires payout phone input to accept numbers, not letters; alphabetic masks are not valid recipient numbers.
+
+**How to apply:** Keep `phone` validation on the server, preserve the phone as a string so leading zeros are not lost, and use a digit-only example in payout documentation.

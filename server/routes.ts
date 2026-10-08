@@ -20560,10 +20560,17 @@ export async function registerRoutes(
       const amountText = String(req.body?.amount ?? "").trim();
       const phoneResult = parsePhoneInput(req.body?.phone);
       const feeBearer = req.body?.fee_bearer === undefined ? "sender" : req.body.fee_bearer;
-      if (!referenceInput || !countryCode || !operatorName || !phoneResult.ok || !amountText) {
+      if (!referenceInput || !countryCode || !operatorName || !amountText) {
         return res.status(400).json({
           error: "bad_request",
           message: "Champs requis : reference, country_code, operator, phone, amount.",
+        });
+      }
+      if (!phoneResult.ok || !phoneResult.phone) {
+        return res.status(400).json({
+          error: "invalid_phone",
+          code: "INVALID_RECIPIENT_PHONE",
+          message: "phone est obligatoire et doit contenir un numéro composé de chiffres. Les lettres ne sont pas autorisées.",
         });
       }
       if (referenceInput.length > 191) return res.status(400).json({ error: "invalid_reference", message: "reference ne doit pas dépasser 191 caractères." });

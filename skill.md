@@ -221,6 +221,8 @@ Before implementing payouts, read the current documentation:
   silently converts another wallet to cover the payout.
 - Require `user_id` to match the profile that owns the Bearer API key. Require
   a stable `reference`; reuse it only for the same request parameters.
+- Send `phone` as a string of recipient-number digits including the country
+  prefix. Letters are rejected.
 - Respect the documented `fee_bearer` values and optional public HTTPS
   `notify_url`. An insufficient wallet balance returns `409` before the payout
   request is sent.

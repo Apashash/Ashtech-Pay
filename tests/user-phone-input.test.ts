@@ -17,6 +17,7 @@ test("allows an omitted or blank optional phone", () => {
 
 test("rejects alphabetic and mixed phone strings instead of storing them", () => {
   assert.deepEqual(parsePhoneInput("Bizboy"), { ok: false });
+  assert.deepEqual(parsePhoneInput("2376XXXXXXXX"), { ok: false });
   assert.deepEqual(parsePhoneInput("+225057450950xEcC9f10cC20b07853"), { ok: false });
   assert.deepEqual(parsePhoneInput("+225xEcC9f10cC20b07835E63fc608"), { ok: false });
 });
