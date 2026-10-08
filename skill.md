@@ -1,6 +1,6 @@
 ---
 name: ashtech
-description: Use when integrating AshTech Pay Hosted Checkout, Direct API payments, Mobile Money or USDT payouts, payment webhooks, transaction verification, or payment troubleshooting.
+description: Use when integrating AshTech Pay Hosted Checkout, Direct API payments, immediate or automatic wallet conversions, Mobile Money or USDT payouts, payment webhooks, transaction verification, or payment troubleshooting.
 metadata:
   version: "1.1"
   homepage: https://doc.ashtechpay.com
@@ -23,7 +23,7 @@ When a developer asks for an AshTech Pay integration:
    Mobile Money, crypto, payout, or webhook instructions for those specific flows.
 3. Read the relevant pages on `https://doc.ashtechpay.com` before writing
    requests. The documentation is the authority for endpoint names, fields,
-   response shapes, statuses, and provider catalogues.
+   response shapes, statuses, and active country/operator catalogues.
 4. Keep all credentials on the server. Never put an API key or webhook secret
    in browser code, a mobile bundle, logs, or a Git commit.
 5. Implement the complete server-side payment lifecycle, not only the initial
@@ -37,7 +37,7 @@ valid but Direct API access is not activated on the merchant account. Do not
 try to bypass this status or replace the key without a reason.
 
 Do not claim that installation of this Skill activates an API account, creates
-credentials, or enables a payment provider. Those actions require the merchant
+credentials, or enables account features. Those actions require the merchant
 dashboard or AshTech Pay support.
 
 ## Source of truth
@@ -67,6 +67,7 @@ Use this Skill when:
 - accepting cryptocurrency payments;
 - sending Mobile Money or USDT payouts;
 - implementing payment webhooks;
+- converting funds between wallets or configuring automatic conversions;
 - verifying transaction status;
 - handling OTP, pending, failed, expired, or duplicate payment states;
 - troubleshooting AshTech Pay API errors.
@@ -130,11 +131,16 @@ Use this Skill when:
 
 ## Documented endpoint selection
 
-Use the live documentation and current catalogues rather than hardcoding
-provider or network assumptions. The currently documented Direct API includes:
+Use the current documentation and catalogues; never assume operators,
+currencies, or networks. The currently documented Direct API includes:
 
 - `GET /v1/countries` — active countries and operators;
 - `GET /v1/fees` — applicable fees;
+- `GET /v1/wallets?user_id=...` — profile wallet balances;
+- `POST /v1/conversions` and `GET /v1/conversions/:id?user_id=...` — immediate wallet conversion and status;
+- `GET /v1/auto-conversion-rules?user_id=...` — list automatic conversion rules;
+- `POST /v1/auto-conversion-rules` — create an automatic conversion rule;
+- `DELETE /v1/auto-conversion-rules/:id?user_id=...` — delete a rule;
 - `POST /v1/collect` — Mobile Money collection;
 - `GET /v1/transaction/:id` — transaction status;
 - `GET /v1/crypto/assets` — active crypto assets and networks;
@@ -145,6 +151,37 @@ provider or network assumptions. The currently documented Direct API includes:
 
 Hosted Checkout endpoints and fields must be taken from the current Hosted
 Checkout documentation.
+
+## Wallet conversions
+
+Read the current conversion documentation before implementing this flow:
+
+https://doc.ashtechpay.com/docs/direct-api/wallets-conversions
+
+- Confirm `user_id` matches the profile that owns the Bearer API key.
+- Read the source wallet from `GET /v1/wallets?user_id=...` and send its exact
+  `wallet_currency` as `from_currency`.
+- Load destination countries from `GET /v1/countries` and send the selected
+  country's `destination_country_code`. Do not send a guessed target wallet
+  code or an ISO currency as the destination; AshTech Pay resolves the target
+  and returns `to_wallet_currency`.
+- Create a conversion with `POST /v1/conversions`, using the documented amount,
+  a stable unique `reference`, and optional HTTPS `notify_url`. Insufficient
+  balance and amounts below the configured minimum are rejected before debit.
+- A `202` means the source amount has been debited and the destination credit
+  will be processed asynchronously. Follow `GET /v1/conversions/{id}?user_id=...`
+  or a verified `conversion.completed` / `conversion.failed` webhook. A
+  cancelled conversion refunds the source wallet; never report `pending` as
+  completed.
+- Automatic rules use `POST /v1/auto-conversion-rules`, are listed with
+  `GET /v1/auto-conversion-rules?user_id=...`, and are removed with
+  `DELETE /v1/auto-conversion-rules/{rule_id}?user_id=...`. Only one active
+  rule is allowed per source currency. Creating a rule may immediately convert
+  an existing balance; follow `initial_conversion_id` when returned. Later
+  credits to that source wallet trigger the rule. Deleting a rule stops future
+  conversions but does not cancel one already pending.
+- Do not silently convert a wallet as part of a payout. Create a separate
+  conversion only when the merchant has requested it.
 
 ## Mobile Money
 
@@ -162,7 +199,7 @@ Consult the payment-flow documentation for the exact USSD Push, Wave, OTP SMS,
 and OTP USSD request and retry rules. Do not reuse an OTP reference or retry
 an expired payment unless the current documentation explicitly allows it.
 
-Never hardcode a provider code when the live catalogue provides it.
+Never hardcode an operator code when the live catalogue provides it.
 
 ## Merchant payouts
 
@@ -185,8 +222,8 @@ Before implementing payouts, read the current documentation:
 - Require `user_id` to match the profile that owns the Bearer API key. Require
   a stable `reference`; reuse it only for the same request parameters.
 - Respect the documented `fee_bearer` values and optional public HTTPS
-  `notify_url`. An insufficient wallet balance returns `409` before provider
-  submission.
+  `notify_url`. An insufficient wallet balance returns `409` before the payout
+  request is sent.
 - Treat uncertain results such as `pending_manual` as unresolved. Do not create
   another payout or a new reference to work around them.
 

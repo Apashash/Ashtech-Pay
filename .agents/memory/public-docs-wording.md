@@ -7,4 +7,4 @@ Public documentation must not name payment providers or refer to them genericall
 
 **Why:** the user explicitly chose to remove generic provider mentions throughout the documentation, not only company names.
 
-**How to apply:** before editing `docs/`, search prose for provider terms and equivalents, then reformulate. Do not rename literal API fields such as `provider_fee_percent`.
+**How to apply:** before editing public docs or Skills (`docs/`, `skill.md`, and `.well-known/skills/`), search prose for provider terms and equivalents, then reformulate. Do not rename literal API fields such as `provider_fee_percent`.

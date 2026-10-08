@@ -28,4 +28,4 @@ https://doc.ashtechpay.com/direct-api/payment-flows
 - Do not blindly retry a timed-out initiation.
 - Verify the transaction server-side or through a verified webhook.
 - Make order fulfillment and webhook processing idempotent.
-- Never hardcode undocumented provider codes or assume country currencies.
+- Never hardcode undocumented operator codes or assume country currencies.

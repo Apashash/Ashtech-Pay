@@ -60,7 +60,7 @@ npx skills add https://doc.ashtechpay.com --all
 
 Après installation, inspecte le projet et utilise les Skills pertinents avec la documentation officielle actuelle comme seule source de vérité. Mets à jour ou remplace toute logique incompatible avec les règles actuelles. Ne fais aucune supposition et n'invente aucun endpoint, paramètre, header, signature, statut ou comportement.
 
-Prends en charge tous les flux requis par le projet : Direct API et pay-in Mobile Money (USSD Push, Wave, OTP SMS et OTP USSD), Hosted Checkout, pay-in crypto, payouts Mobile Money et USDT, vérification des statuts, webhooks signés et sécurisés, idempotence, erreurs et toutes les méthodes documentées. Ne laisse aucun flux requis à moitié implémenté.
+Prends en charge tous les flux requis par le projet : Direct API et pay-in Mobile Money (USSD Push, Wave, OTP SMS et OTP USSD), Hosted Checkout, pay-in crypto, payouts Mobile Money et USDT, conversions immédiates ou automatiques entre wallets, suivi de `initial_conversion_id`, vérification des statuts, webhooks signés et sécurisés, idempotence, erreurs et toutes les méthodes documentées. Ne laisse aucun flux requis à moitié implémenté.
 
 Garde les clés et secrets uniquement côté serveur. Implémente l'intégration, exécute les tests et le build, puis corrige les erreurs. Indique les variables d'environnement ou réglages de compte nécessaires sans me demander de secret dans le chat.
 ```
@@ -79,15 +79,16 @@ Installe le Skill officiel AshTech Pay Direct API et mets à jour l'intégration
 
 npx skills add https://doc.ashtechpay.com --skill ashtech-direct-api
 
-Inspecte d'abord le projet. Implémente les flux Direct API nécessaires en utilisant les catalogues et valeurs actifs documentés : pay-in Mobile Money, méthodes USSD Push, Wave et OTP SMS/USSD, et pay-in crypto si ce flux est requis. Respecte les endpoints, champs, headers, statuts et erreurs exacts de la documentation.
+Inspecte d'abord le projet. Implémente les flux Direct API nécessaires en utilisant les catalogues et valeurs actifs documentés : pay-in Mobile Money, méthodes USSD Push, Wave et OTP SMS/USSD, pay-in crypto si requis, et conversions de wallets si demandées. Pour une conversion, lis les soldes avec `GET /v1/wallets`, utilise le `wallet_currency` exact comme `from_currency`, et sélectionne le pays cible avec `destination_country_code` depuis `GET /v1/countries`. Respecte les endpoints, champs, headers, statuts et erreurs exacts de la documentation.
 
-Vérifie les transactions côté serveur ou par webhook vérifié avant tout crédit ou livraison. Gère les états pending et finaux, l'idempotence, les délais et les erreurs sans relance aveugle. Ne conserve aucune logique ancienne qui contredit le Skill et n'invente aucune méthode ou valeur.
+Pour les conversions, utilise `POST /v1/conversions`, une `reference` idempotente, puis suis l'état avec `GET /v1/conversions/:id?user_id=...` ou un webhook vérifié. Implémente aussi les règles automatiques via `POST /v1/auto-conversion-rules`, `GET /v1/auto-conversion-rules?user_id=...` et `DELETE /v1/auto-conversion-rules/:id?user_id=...` si elles sont requises; respecte la limite d'une règle active par wallet source, suis `initial_conversion_id` si une conversion est lancée à la création et ne prétends pas que supprimer une règle annule une conversion déjà en attente. Vérifie tous les statuts côté serveur avant de considérer une opération terminée. Gère les états pending et finaux, l'idempotence, les délais et les erreurs sans relance aveugle. Ne conserve aucune logique ancienne qui contredit le Skill et n'invente aucune méthode ou valeur.
 
 Garde les clés et secrets côté serveur. Si le projet doit aussi envoyer des payouts, utilise le Skill Payouts au lieu de détourner un endpoint pay-in. Exécute les tests et le build, puis résume les changements et les réglages requis sans demander de secret dans le chat.
 ```
 
 Ce Skill couvre les catalogues, les collectes Mobile Money, les paiements
-crypto, les statuts et la vérification serveur.
+crypto, les soldes et conversions immédiates ou automatiques entre wallets, les
+statuts et la vérification serveur.
 
   </Tab>
   <Tab title="Payouts">
@@ -105,7 +106,7 @@ npx skills add https://doc.ashtechpay.com --skill ashtech-payouts
 
 Inspecte le projet avant de modifier le code. Prends en charge les payouts Mobile Money et USDT requis par le projet. Charge le catalogue de retrait documenté, utilise uniquement ses codes pays et opérateurs actifs, et respecte la résolution du wallet, les frais, user_id, reference, champs de requête et endpoints exacts.
 
-Vérifie le statut final par la méthode documentée ou par un webhook vérifié. Un résultat pending ou incertain n'est pas un succès : ne crée pas de demande en double et ne relance pas avec une nouvelle référence. Gère les erreurs, les soldes insuffisants, l'idempotence et les webhooks conformément au Skill.
+Vérifie le statut final par la méthode documentée ou par un webhook vérifié. Un résultat pending ou incertain n'est pas un succès : ne crée pas de demande en double et ne relance pas avec une nouvelle référence. Ne convertis jamais un wallet automatiquement dans le cadre d'un payout; si une conversion séparée est demandée, suis sa documentation dédiée. Gère les erreurs, les soldes insuffisants, l'idempotence et les webhooks conformément au Skill.
 
 Ne fais aucune supposition et ne conserve aucune logique incompatible. Garde les clés et secrets côté serveur. Exécute les tests et le build, puis résume les changements et les réglages nécessaires sans demander de secret dans le chat.
 ```
@@ -219,6 +220,7 @@ fulfillment idempotente.
 | --- | --- |
 | Intégrer AshTech Pay avec plusieurs fonctionnalités | `ashtech` |
 | Construire votre propre formulaire et appeler l'API | `ashtech-direct-api` |
+| Convertir les soldes entre wallets ou automatiser ces conversions | `ashtech-direct-api` |
 | Envoyer des payouts Mobile Money ou USDT | `ashtech-payouts` |
 | Rediriger le client vers une page de paiement hébergée | `ashtech-checkout` |
 | Accepter des paiements crypto | `ashtech-crypto` |
@@ -243,6 +245,8 @@ Les Skills demandent toujours à l'agent de :
 8. ne jamais considérer une redirection navigateur comme une confirmation de
    paiement ;
 9. ne pas relancer aveuglément une initiation après un timeout.
+10. suivre les conversions de wallets jusqu'à un statut final et traiter les
+    règles automatiques selon les endpoints documentés.
 
 ## Crypto incluse
 

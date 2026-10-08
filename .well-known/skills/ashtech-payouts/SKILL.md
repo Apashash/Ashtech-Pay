@@ -29,8 +29,12 @@ Read the current payout and country-catalogue documentation before implementing:
 - Require `user_id` to match the owner of the Bearer API key. Use a stable,
   unique `reference` and reuse it only for the same request parameters.
 - Respect `fee_bearer` (`sender` or `recipient`) and the documented optional
-  HTTPS `notify_url`. An insufficient balance is rejected before provider
-  submission.
+  HTTPS `notify_url`. An insufficient balance is rejected before the payout
+  request is sent.
+- A payout never converts funds automatically. If the merchant separately
+  requests a wallet conversion, follow
+  https://doc.ashtechpay.com/docs/direct-api/wallets-conversions and keep that
+  operation separate from the payout.
 
 ## USDT and crypto payouts
 
