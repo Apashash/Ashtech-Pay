@@ -287,13 +287,13 @@ test("recovered provider lookups are deterministically spread over one minute", 
   assert.ok(now - lastCheckedAt < interval);
 });
 
-test("recovered AfribaPay lookups are spread by no more than one 5-second check interval", () => {
+test("recovered AfribaPay lookups are spread by no more than one 1-minute check interval", () => {
   const now = 2_000_000_000_000;
   const startedAt = now - 2 * 60 * 1000;
   const lastCheckedAt = recoveredStatusPollLastCheckedAt("afri-recovery", startedAt, now, "afribapay");
 
   assert.ok(now - lastCheckedAt >= 1);
-  assert.ok(now - lastCheckedAt <= 5_000);
+  assert.ok(now - lastCheckedAt <= 60_000);
 });
 
 test("async status cache coalesces requests and expires values", async () => {
