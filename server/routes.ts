@@ -6346,6 +6346,8 @@ export async function registerRoutes(
       if (isPrimaryTransfer) {
         await storage.updateUserBalance(senderId, -totalAmount);
       } else {
+        // The balance precheck is informational; storage must atomically reject
+        // insufficient funds if a conversion spent them in the meantime.
         await storage.upsertWallet(senderId, walletCurrency, -totalAmount);
       }
 
@@ -7778,6 +7780,7 @@ export async function registerRoutes(
             message: `Solde insuffisant dans votre compte ${withdrawalCurrency}. Vous avez ${walletBalance.toLocaleString()} ${withdrawalCurrency} — besoin de ${amount.toLocaleString()} ${withdrawalCurrency}. Convertissez d'abord depuis votre compte ${userCurrency}.`,
           });
         }
+        // Conditional storage debit is authoritative, not the earlier read.
         await storage.upsertWallet(userId, withdrawalCurrency, -amount);
       }
 

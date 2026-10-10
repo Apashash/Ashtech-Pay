@@ -3630,6 +3630,39 @@ export class DatabaseStorage implements IStorage {
   }
 
   async upsertWallet(userId: string, currency: string, balanceDelta: number): Promise<Wallet> {
+    if (!Number.isFinite(balanceDelta)) throw new Error("Montant invalide");
+    // Every negative adjustment must compete atomically with conversion debits.
+    // Never INSERT or clamp a debit: a missing/underfunded wallet must fail.
+    if (balanceDelta < 0) {
+      const amountText = Math.abs(balanceDelta).toFixed(2);
+      if (Number(amountText) === 0) throw new Error("Montant invalide");
+      const whereClause = and(
+        eq(wallets.userId, userId),
+        eq(wallets.currency, currency),
+        isMysqlDialect
+          ? sql`CAST(${wallets.balance} AS DECIMAL(30, 10)) >= ${amountText}`
+          : sql`${wallets.balance}::numeric >= ${amountText}::numeric`,
+      );
+      if (isMysqlDialect) {
+        const result = await db.update(wallets).set({
+          balance: sql`CAST(${wallets.balance} AS DECIMAL(30, 10)) - ${amountText}`,
+          updatedAt: new Date(),
+        }).where(whereClause);
+        const header = Array.isArray(result) ? result[0] : result;
+        const affectedRows = Number((header as any)?.affectedRows ?? (header as any)?.rowCount);
+        if (!Number.isFinite(affectedRows)) throw new Error("WALLET_DEBIT_UNCONFIRMED");
+        if (affectedRows === 0) throw new Error("Solde insuffisant");
+        const wallet = await this.getWallet(userId, currency);
+        if (!wallet) throw new Error("WALLET_DEBIT_READBACK_FAILED");
+        return wallet;
+      }
+      const [wallet] = await db.update(wallets).set({
+        balance: sql`${wallets.balance}::numeric - ${amountText}::numeric`,
+        updatedAt: new Date(),
+      }).where(whereClause).returning();
+      if (!wallet) throw new Error("Solde insuffisant");
+      return wallet;
+    }
     if (isMysqlDialect) {
       const now = new Date();
       await pool.query(
@@ -3655,7 +3688,7 @@ export class DatabaseStorage implements IStorage {
     // Atomic upsert: INSERT ... ON CONFLICT DO UPDATE using PostgreSQL raw SQL.
     // This prevents race conditions where two concurrent operations (e.g. deposit + conversion)
     // could both read "no wallet exists" and then create duplicates or silently lose balance.
-    // GREATEST(0, ...) ensures balance never goes negative at the DB level.
+    // Only credits and zero-value wallet creation reach the upsert path.
     const result = await db.execute(sql`
       INSERT INTO wallets (id, user_id, currency, balance, updated_at)
       VALUES (gen_random_uuid(), ${userId}, ${currency}, GREATEST(0, ${balanceDelta}::numeric), NOW())
