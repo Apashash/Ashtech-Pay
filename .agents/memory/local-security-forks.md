@@ -25,3 +25,13 @@ setting also affects npm's assessment of lockfile validity.
 
 **How to apply:** Keep npm and pnpm locks synchronized, verify clean installs,
 and do not preserve broken relative links from an earlier generated lock.
+
+On Replit, post-merge npm installs must override `replace-registry-host` to
+`npmjs` for that command while retaining the configured registry and the
+Plesk `.npmrc` setting.
+
+**Why:** `replace-registry-host=always` can rewrite a local `file:vendor/...`
+dependency into an HTTP registry request, producing a misleading 404.
+
+**How to apply:** Use `npm_config_replace_registry_host=npmjs` on the Replit
+post-merge install command; do not rewrite lockfile URLs or bypass the registry.
