@@ -13,7 +13,7 @@
 - [Plesk npm registry](plesk-npm-registry.md) — Plesk needs `replace-registry-host=always`; temporarily use `npmjs` for Replit installs to avoid duplicate `/npm` URLs.
 - [Replit package firewall misses patched tarballs](replit-package-firewall-missing-tarballs.md) — do not bypass managed installs when a patched version returns 404; report blocked updates.
 - [Admin path injection](admin-path-injection.md) — .htaccess must use passthrough (not static index.html) so Node.js injects window.__ADMIN_PATH__; server/index.ts now loads .env manually at startup because Passenger may not pass Plesk env vars to process.env.
-- [Admin private document access](admin-private-document-access.md) — protected KYC images/PDFs need authenticated fetches and object URLs; direct browser resource links omit the Bearer token.
+- [Admin private document access](admin-private-document-access.md) — KYC files need authenticated fetches; non-owned reads need the full admin-panel gate; never redirect to public CDN.
 - [Country wallet currency codes](countries-table-currency-codes.md) — destination country mappings must preserve distinct wallets (GA→XAFG, CG→XAFC, etc.), not collapse them into generic XAF/XOF.
 - [AfribaPay OTP detection](afribapay-otp-detection.md) — OTP-requirement check must union live API data with a static fallback table and never silently swallow fetch errors, or OTP-required operators (Orange/Moov CI) fail opaquely.
 - [AfribaPay documentation drift](afribapay-documentation-drift.md) — current callback docs specify raw-body HMAC; PAYIN ceiling still conflicts, so keep the 2,000,000 cap.

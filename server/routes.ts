@@ -3248,24 +3248,72 @@ export async function registerRoutes(
         return res.status(400).send("Invalid storage folder");
       }
 
-      // ── 5.2 IDOR fix: KYC documents require ownership or admin role ──────────
-      if (isRelativePath && (storagePath.startsWith("kyc/") || isPrivateKycPath(storagePath))) {
-        const requestingUser = await storage.getUser(req.userId!);
-        const isAdminRole = requestingUser && ["admin"].includes(requestingUser.role);
-        if (!isAdminRole) {
-          // Verify the path belongs to a KYC submission owned by this user
-          // FIX: exact path comparison only — no suffix/filename matching (IDOR)
-          const kycSub = await storage.getKycSubmissionByUserId(req.userId!);
-          const ownedPaths = [
-            kycSub?.documentFrontPath,
-            kycSub?.documentBackPath,
-            kycSub?.selfiePath,
-            kycSub?.summaryPdfPath,
-          ]
-            .filter(Boolean) as string[];
-          const isOwned = ownedPaths.some(p => p === storagePath);
-          if (!isOwned) {
+      // Full Supabase URLs resolve to an object path inside the storage bucket.
+      // Resolve it here so KYC access rules apply to both input forms.
+      const resolveSupabaseObjectPath = (value: string): string | null => {
+        const match = value.match(
+          /\/storage\/v1\/object\/(?:public|sign)\/[^/]+\/(.+?)(?:\?|$)/
+        );
+        if (!match) return null;
+        try {
+          return decodeURIComponent(match[1]);
+        } catch {
+          return null;
+        }
+      };
+      let supabaseObjectPath: string | null = null;
+      if (isSupabaseUrl) {
+        supabaseObjectPath = resolveSupabaseObjectPath(storagePath);
+        // Apply the same rules as relative paths to the decoded object path:
+        // no traversal or dot segments, and only allowlisted folders. Otherwise
+        // "payment-links/../kyc/x" would skip the KYC checks below.
+        if (
+          !supabaseObjectPath ||
+          supabaseObjectPath.startsWith("/") ||
+          supabaseObjectPath.includes("\\") ||
+          supabaseObjectPath.includes("\0") ||
+          supabaseObjectPath.includes("?") ||
+          supabaseObjectPath.split("/").some(seg => seg === "" || seg === "." || seg === "..") ||
+          !ALLOWED_FOLDERS.some(f => supabaseObjectPath!.startsWith(f + "/"))
+        ) {
+          return res.status(400).send("Invalid path");
+        }
+      }
+      const requestedObjectPath = supabaseObjectPath ?? storagePath;
+      const isKycDocument = isRelativePath
+        ? storagePath.startsWith("kyc/") || isPrivateKycPath(storagePath)
+        : !!supabaseObjectPath &&
+          (supabaseObjectPath.startsWith("kyc/") || isPrivateKycPath(supabaseObjectPath));
+
+      // ── 5.2 IDOR fix: KYC documents require ownership or full admin access ───
+      if (isKycDocument) {
+        // Verify the path belongs to a KYC submission owned by this user
+        // FIX: exact path comparison only — no suffix/filename matching (IDOR)
+        const kycSub = await storage.getKycSubmissionByUserId(req.userId!);
+        const ownedPaths = [
+          kycSub?.documentFrontPath,
+          kycSub?.documentBackPath,
+          kycSub?.selfiePath,
+          kycSub?.summaryPdfPath,
+        ]
+          .filter(Boolean) as string[];
+        // Compare normalized object paths so a stored relative path and the
+        // equivalent full Supabase URL refer to the same document.
+        const isOwned = ownedPaths.some(p =>
+          (p.startsWith("http") ? resolveSupabaseObjectPath(p) : p) === requestedObjectPath
+        );
+        if (!isOwned) {
+          const requestingUser = await storage.getUser(req.userId!);
+          if (requestingUser?.role !== "admin") {
             return res.status(403).send("Accès refusé");
+          }
+          // Another user's identity documents are admin-panel data: enforce the
+          // same gate as admin APIs (panel IP blocklist, TOTP, and PIN).
+          let adminGatePassed = false;
+          await requireAdmin(req, res, () => { adminGatePassed = true; });
+          if (!adminGatePassed) {
+            if (!res.headersSent) res.status(403).send("Accès refusé");
+            return;
           }
         }
       }
@@ -3332,7 +3380,9 @@ export async function registerRoutes(
       // Supabase bucket itself is public; otherwise the redirect would expose
       // a reusable CDN URL outside the ownership check above.
       const isProfileAvatar = isRelativePath && storagePath.startsWith("profile-avatars/");
-      if (supabasePublicBase && isRelativePath && !isProfileAvatar) {
+      // KYC documents are never redirected to a public CDN URL: a redirect would
+      // hand out a reusable link that bypasses the access checks above.
+      if (supabasePublicBase && isRelativePath && !isProfileAvatar && !isKycDocument) {
         const publicUrl = `${supabasePublicBase}/storage/v1/object/public/${getStorageBucket()}/${storagePath}`;
         res.setHeader("Cache-Control", "public, max-age=3600");
         return res.redirect(302, publicUrl);
@@ -3355,6 +3405,12 @@ export async function registerRoutes(
       res.setHeader("Content-Type", result.contentType);
       res.setHeader("Content-Disposition", "inline");
       res.setHeader("X-Content-Type-Options", "nosniff");
+
+      if (isKycDocument) {
+        res.setHeader("Cache-Control", "private, no-store");
+        res.setHeader("Content-Length", buffer.length);
+        return res.end(buffer);
+      }
 
       const etag = `"${storagePath.replace(/[^a-zA-Z0-9]/g, "")}-${buffer.length}"`;
       res.setHeader("ETag", etag);
@@ -3693,12 +3749,13 @@ export async function registerRoutes(
     const storagePath = req.query.path as string;
     if (!storagePath) return res.status(400).send("Path required");
 
-    // KYC documents are sensitive — require authentication to prevent enumeration
-    if (storagePath.startsWith("kyc/") && !req.session?.userId) {
-      return res.status(401).json({ message: "Authentification requise" });
+    // KYC documents are never served here: they must go through
+    // /api/image-proxy, which enforces ownership or the full admin-panel gate.
+    if (storagePath.startsWith("kyc/") || storagePath.startsWith("private-kyc/")) {
+      return res.status(403).send("Accès refusé");
     }
 
-      const ALLOWED_FOLDERS = ["payment-links", "kyc"];
+    const ALLOWED_FOLDERS = ["payment-links"];
     const isValid =
       !storagePath.startsWith("http") &&
       !storagePath.startsWith("/") &&

@@ -15,3 +15,10 @@ the token automatically.
 **How to apply:** Do not make KYC storage public or put tokens in query strings.
 Use authenticated fetches for images and PDFs, revoke object URLs when the
 submission view closes, and preserve the server-side ownership/admin check.
+Reading another user's identity documents is admin-panel access: it must pass
+the same step-up factors as the admin panel (TOTP, PIN, IP blocklist), not a
+role check alone. KYC bytes must never be handed out as a public CDN redirect;
+stream them with no-store caching after the access check.
+
+**Why:** a role-only check let a stolen admin token read identity documents
+without the panel step-up factor, and a public redirect URL outlives any check.
