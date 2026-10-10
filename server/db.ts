@@ -121,7 +121,8 @@ function createMysqlCompatiblePool(rawPool: any, connectionLimit: number): Compa
       const query = typeof queryOrConfig === "string" ? queryOrConfig : queryOrConfig.text;
       const params = values ?? (typeof queryOrConfig === "string" ? [] : queryOrConfig.values ?? []);
       const normalized = normalizeMysqlQuery(query, params);
-      const [rows, fields] = await rawPool.query(normalized.text, normalized.values);
+      // Drizzle supplies SQL templates; user values are passed separately as bound parameters.
+      const [rows, fields] = await rawPool.query(normalized.text, normalized.values); // nosemgrep: javascript.express.mysql.express-mysql-sqli.express-mysql-sqli
       const isRowResult = Array.isArray(rows);
       const rowArray = isRowResult ? rows as any[] : [];
       // mysql2 returns a ResultSetHeader for INSERT/UPDATE/DELETE instead of
@@ -227,7 +228,7 @@ sessionPool.on("error", (err: any) => {
 });
 
 // Test connection at startup
-pool.query("SELECT 1").then(() => {
+pool.query("SELECT 1").then(() => { // nosemgrep: javascript.express.mysql.express-mysql-sqli.express-mysql-sqli
   console.log("[DB] Main pool connection OK");
 }).catch((err: any) => {
   console.error("[DB] CRITICAL: Main pool connection FAILED:", err.message);

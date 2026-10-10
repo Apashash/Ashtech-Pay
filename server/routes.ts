@@ -277,7 +277,7 @@ const AFRIBAPAY_CONFIRMED_COUNTRIES = new Set([
 ]);
 function warnIfAfribaPayUnsupportedCountry(countryCode: string, context: string) {
   if (!AFRIBAPAY_CONFIRMED_COUNTRIES.has(countryCode.toUpperCase())) {
-    console.warn(`[AfribaPay] ${context}: country "${countryCode}" is NOT in AfribaPay's confirmed country list. Request will likely fail. Consider routing via PixPay.`);
+    console.warn("[AfribaPay] Request uses a country outside the confirmed list.");
   }
 }
 
@@ -6378,7 +6378,7 @@ export async function registerRoutes(
       let transferCountryCode = "CM";
       if (country?.code) transferCountryCode = country.code;
 
-      console.log(`[Transfer] Payout Data: Country=${transferCountryCode}, Amount=${creditedAmount}, Operator=${operator.name}`);
+      console.log("[Transfer] Payout request prepared.");
 
       try {
         const operatorName = (operator.name || "").toUpperCase();
@@ -6402,7 +6402,7 @@ export async function registerRoutes(
         if (transferProvider === "afribapay") {
           const afribapayOperatorCode = resolveAfribaPayOperatorCode(operator, operatorName);
           const afribapayCurrency = AFRIBAPAY_ISO_CURRENCY[countryCode] || txCurrency;
-          console.log(`[Transfer] AfribaPay | country=${countryCode} | currency=${afribapayCurrency} | operator=${afribapayOperatorCode}`);
+          console.log("[Transfer] AfribaPay payout request prepared.");
           const callbackUrl = buildWebhookUrl("/api/afribapay/webhook");
 
           const localPhone = getAfribaPayPayoutPhone(
@@ -6435,7 +6435,7 @@ export async function registerRoutes(
         } else if (transferProvider === "pixpay") {
           const cashInServiceId = getPixPayServiceId(operator?.name || "", countryCode, "cash_in");
           if (!cashInServiceId) {
-            console.error(`[Transfer] PixPay: no cash_in service_id for ${operator?.name} in ${countryCode}`);
+            console.error("[Transfer] PixPay payout service configuration is missing.");
             const refunded = await storage.claimPayoutFailedAndRefund(transaction.id, ["pending"]);
             await releasePayoutOperationLock(senderId, payoutLockUntil);
             payoutLockUntil = null;
@@ -6446,7 +6446,7 @@ export async function registerRoutes(
               message: `Envoi non supporté pour cet opérateur (${operator?.name}) dans ce pays`,
             });
           }
-          console.log(`[Transfer] PixPay | country=${countryCode} | service_id=${cashInServiceId} | operator=${operator?.name}`);
+          console.log("[Transfer] PixPay payout request prepared.");
           const pixpayIpnUrl = buildWebhookUrl("/api/pixpay/webhook");
           const pixpayResult = await initiatePixPayPayout({
             serviceId: String(cashInServiceId),
@@ -7078,7 +7078,7 @@ export async function registerRoutes(
             const afribapayOperatorCode = resolveAfribaPayOperatorCode(operatorRecord, operatorName);
             // Always use AfribaPay ISO currency (overrides DB value to avoid XOFC/XOFS/XAF mismatch)
             const afribapayCurrency = AFRIBAPAY_ISO_CURRENCY[countryCode.toUpperCase()] || countryCurrency;
-            console.log(`[Deposit] AfribaPay | country=${countryCode} | currency=${afribapayCurrency} | operator=${afribapayOperatorCode}`);
+            console.log("[Deposit] AfribaPay deposit request prepared.");
             const callbackUrl = buildWebhookUrl("/api/afribapay/webhook");
 
             // Use already-resolved fee record from outer scope
@@ -7101,7 +7101,7 @@ export async function registerRoutes(
             if (prefix && localPhone.startsWith(prefix)) {
               localPhone = localPhone.slice(prefix.length);
             }
-            console.log(`[Deposit] AfribaPay phone formatted for country=${countryCode}`);
+            console.log("[Deposit] Phone number formatted for payment request.");
 
             // Build return/cancel URLs for Wave (redirect-based operators)
             const appBaseUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
@@ -7255,7 +7255,7 @@ export async function registerRoutes(
               // NOTE: do NOT call initiateAfribaPayOtp here — the /v1/pay/payin call
               // above already triggered the OTP SMS on AfribaPay's side. A second
               // initiation call with the same order_id causes a 5xx on their end.
-              console.warn(`[AfribaPay Payin] OTP required but not pre-detected for operator=${afribapayOperatorCode} country=${countryCode} — SMS already sent by payin, switching to OTP confirmation flow`);
+              console.warn("[AfribaPay Payin] OTP confirmation is required; continuing with the existing OTP session.");
               await persistOtpContext(depositRef, {
                 userId: (req as any).userId || undefined,
                 operator: afribapayOperatorCode,
@@ -7284,7 +7284,7 @@ export async function registerRoutes(
                 }
               });
             } else {
-              console.error(`[AfribaPay Payin FAILED] country=${countryCode} operator=${afribapayOperatorCode}`);
+              console.error("[AfribaPay Payin] Request failed.");
               await storage.updateTransactionStatus(transaction.id, "failed");
               res.status(isProviderTimeoutFailure(afribaResponse) ? 502 : 400).json(buildProviderErrorPayload({
                 error: "payment_initiation_failed",
@@ -7313,7 +7313,7 @@ export async function registerRoutes(
             const pxFees = computePixPayFees(totalAmount, pixpayFeeRate, ashtechMarginPct);
             const cleanPhone = data.phoneNumber.replace(/\s/g, "");
 
-            console.log(`[Deposit] PixPay type=${pixpayOpType} | country=${countryCode} | service_id=${pixpayAutoServiceId} (auto)`);
+            console.log("[Deposit] PixPay deposit request prepared.");
 
             const baseParams = {
               serviceId: String(pixpayAutoServiceId),
@@ -7847,7 +7847,7 @@ export async function registerRoutes(
           // ─── AfribaPay Payout ────────────────────────────────────────────────
           const afribapayOperatorCode = resolveAfribaPayOperatorCode(operator, operatorName);
           const afribapayCurrency = AFRIBAPAY_ISO_CURRENCY[countryCode.toUpperCase()] || withdrawalCurrency;
-          console.log(`[Withdrawal] AfribaPay | country=${countryCode} | currency=${afribapayCurrency} | operator=${afribapayOperatorCode}`);
+          console.log("[Withdrawal] AfribaPay payout request prepared.");
           const callbackUrl = buildWebhookUrl("/api/afribapay/webhook");
 
           // Strip country prefix from phone
@@ -7887,7 +7887,7 @@ export async function registerRoutes(
           // ─── PixPay Payout ──────────────────────────────────────────────────
           const cashOutServiceId = getPixPayServiceId(operator?.name || "", countryCode, "cash_in");
           if (!cashOutServiceId) {
-            console.error(`[Withdrawal] PixPay: no cash_in service_id for ${operator?.name} in ${countryCode}`);
+            console.error("[Withdrawal] PixPay payout service configuration is missing.");
             const refunded = await storage.claimPayoutFailedAndRefund(transaction.id, ["pending"]);
             if (!refunded) {
               return res.status(409).json({ message: "Le statut du retrait a changé. Vérifiez son état avant de réessayer." });
@@ -7896,7 +7896,7 @@ export async function registerRoutes(
               message: `Retrait non supporté pour cet opérateur (${operator?.name}) dans ce pays`,
             });
           }
-          console.log(`[Withdrawal] PixPay | country=${countryCode} | service_id=${cashOutServiceId} | operator=${operator?.name}`);
+          console.log("[Withdrawal] PixPay payout request prepared.");
           const pixpayPayoutIpnUrl = buildWebhookUrl("/api/pixpay/webhook");
           const pixpayResult = await initiatePixPayPayout({
             serviceId: String(cashOutServiceId),
@@ -11382,7 +11382,7 @@ export async function registerRoutes(
             const afribapayOperatorCode = resolveAfribaPayOperatorCode(operatorRecord, operatorName);
             // Always use AfribaPay ISO currency (overrides any legacy country code)
             const afribapayCurrency = AFRIBAPAY_ISO_CURRENCY[paymentCountryCode.toUpperCase()] || paymentCurrency;
-            console.log(`[PaymentLink] AfribaPay | country=${paymentCountryCode} | currency=${afribapayCurrency} | operator=${afribapayOperatorCode}`);
+            console.log("[PaymentLink] AfribaPay payment request prepared.");
             const callbackUrl = buildWebhookUrl("/api/afribapay/webhook");
             // Strip country dialing prefix (AfribaPay needs local number without prefix)
             const prefixMap: Record<string, string> = {
@@ -11535,7 +11535,7 @@ export async function registerRoutes(
               // NOTE: do NOT call initiateAfribaPayOtp here — the /v1/pay/payin call
               // above already triggered the OTP SMS on AfribaPay's side. A second
               // initiation call with the same order_id causes a 5xx on their end.
-              console.warn(`[AfribaPay PaymentLink] OTP required but not pre-detected for operator=${afribapayOperatorCode} country=${paymentCountryCode} — SMS already sent by payin, switching to OTP confirmation flow`);
+              console.warn("[AfribaPay PaymentLink] OTP confirmation is required; continuing with the existing OTP session.");
               await persistOtpContext(reference, {
                 userId: intent.merchantId,
                 operator: afribapayOperatorCode,
@@ -11683,7 +11683,7 @@ export async function registerRoutes(
             const pxIpnUrl = buildWebhookUrl("/api/pixpay/webhook");
             const cleanPxPhone = phone.replace(/\s/g, "");
 
-            console.log(`[PaymentLink] PixPay type=${pxOpType} | country=${paymentCountryCode} | service_id=${pxAutoServiceId} (auto)`);
+            console.log("[PaymentLink] PixPay payment request prepared.");
 
             const pxBaseParams = {
               serviceId: String(pxAutoServiceId),
@@ -14416,7 +14416,7 @@ export async function registerRoutes(
             // ─── AfribaPay Payout ─────────────────────────────────────────────
             const afribapayOperatorCode = resolveAfribaPayOperatorCode(operator, operatorName);
             const afribapayCurrency = AFRIBAPAY_ISO_CURRENCY[countryCode] || (transaction.currency || "XAF");
-            console.log(`[Admin] AfribaPay payout | country=${countryCode} | currency=${afribapayCurrency} | operator=${afribapayOperatorCode}`);
+            console.log("[Admin] AfribaPay payout request prepared.");
             const callbackUrl = buildWebhookUrl("/api/afribapay/webhook");
 
             let localPhone = (transaction.recipientPhone || "").replace(/\s/g, "");
@@ -14782,7 +14782,7 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Pays non trouvé" });
       }
       if (req.body.exchangeRate !== undefined) {
-        console.log(`[Admin] Country ${country.code} (${country.currency}) exchangeRate saved as ${country.exchangeRate}`);
+        console.log("[Admin] Country exchange rate saved.");
       }
       
       await storage.createAdminLog({
@@ -19521,7 +19521,7 @@ export async function registerRoutes(
            });
          }
        }
-      console.log(`[API /v1/collect] merchant=${merchant.id} | country=${country.code} | operator=${operatorName} | provider=${paymentProvider} | amount=${amountNum} ${currency}`);
+       console.log("[API /v1/collect] Merchant collection request received.");
       const resolvedFeeRecord = await storage.resolveFee("deposit", country.id, (operatorRecord as any).id);
       const ashtechMarginPct = (resolvedFeeRecord as any)?.ashtechMargin != null
         ? parseFloat((resolvedFeeRecord as any).ashtechMargin)
@@ -20041,7 +20041,7 @@ export async function registerRoutes(
           // triggered an OTP SMS automatically on its side. Cache the session so the
           // client can confirm with otp + reference — do NOT call initiateAfribaPayOtp
           // again (that would invalidate the already-sent SMS).
-          console.warn(`[API v1/collect] OTP required but not pre-detected for operator=${afribaOpCode} country=${country.code} — caching session for client confirmation`);
+          console.warn("[API v1/collect] OTP confirmation is required; continuing with the existing OTP session.");
           await persistOtpContext(depositRef, {
             userId: merchant.id,
             operator: afribaOpCode,

@@ -252,7 +252,7 @@ function buildBaseBody(params: PixPayBaseParams, countryCode: string): Record<st
   const normalizedPhone = normalizePixPayPhone(params.phone, countryCode, {
     preserveCameroonInput: params.preserveCameroonInput,
   });
-  console.log(`[PixPay] Phone normalisation completed (${countryCode})`);
+  console.log("[PixPay] Phone number normalisation completed.");
   return {
     amount: params.amount,
     api_key: getPixPayApiKey(countryCode),

@@ -49,7 +49,7 @@ export function addPendingPayout(
   payout: Omit<PendingPayout, "attempts" | "startedAt" | "lastCheckedAt"> &
     Partial<Pick<PendingPayout, "startedAt" | "lastCheckedAt">>,
 ) {
-  console.log(`[PayoutPoller] Tracking payout: ${payout.reference} (provider=${payout.provider}, country=${payout.countryCode})`);
+  console.log("[PayoutPoller] Tracking a pending payout.");
   const existing = pendingPayouts.get(payout.reference);
   pendingPayouts.set(payout.reference, {
     ...existing,
