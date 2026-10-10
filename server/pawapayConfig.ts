@@ -1,4 +1,5 @@
 import { storage } from "./storage";
+import { pawaPayCallbackUrlTemplate } from "./pawapayCallbackAuth";
 import {
   encryptPawaPayCredential,
   isPawaPayCredentialEncryptionConfigured,
@@ -174,8 +175,8 @@ export async function getPawaPaySettingsView() {
     credentialEncryptionConfigured: isPawaPayCredentialEncryptionConfigured(),
     baseUrl: PAWAPAY_PRODUCTION_BASE_URL,
     callbackUrls: {
-      deposit: PAWAPAY_DEPOSIT_CALLBACK_URL,
-      payout: PAWAPAY_PAYOUT_CALLBACK_URL,
+      deposit: pawaPayCallbackUrlTemplate(PAWAPAY_DEPOSIT_CALLBACK_URL),
+      payout: pawaPayCallbackUrlTemplate(PAWAPAY_PAYOUT_CALLBACK_URL),
     },
   };
 }

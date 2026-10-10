@@ -395,7 +395,11 @@ export async function processPaymentResult(payment: PendingPayment, status: "com
   }
 }
 
-/** Complete a PawaPay callback through the exact same idempotent wallet path as polling. */
+/**
+ * Settle a trusted PawaPay result through the idempotent wallet path.
+ * Callers must authenticate callbacks or obtain status from the provider API;
+ * a payer-visible external reference alone is not proof of payment.
+ */
 export async function processPawaPayDepositCallback(
   transaction: { id: string; reference: string | null; externalReference: string | null; userId: string; type: string; amount: string; paymentIntentId?: string | null; payerName?: string | null },
   status: "completed" | "failed",

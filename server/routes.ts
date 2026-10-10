@@ -125,6 +125,8 @@ import {
 } from "@shared/transaction-status";
 import { getAvailablePayoutProviders, isProviderAvailable } from "@shared/provider-countries";
 import { isPawaPayUuidV4, parsePawaPayCallback, verifyPawaPayCallbackSignature } from "./pawapay";
+import { verifyPawaPayCallbackToken } from "./pawapayCallbackAuth";
+import { hasSupportedOperatorProviders } from "./operatorProviderPolicy";
 import {
   getPawaPaySettingsView,
   getPawaPayWebhookSecret,
@@ -14859,6 +14861,9 @@ export async function registerRoutes(
 
   app.post("/api/admin/operators", requireAuth, requireAdmin, async (req, res) => {
     try {
+      if (!hasSupportedOperatorProviders(req.body)) {
+        return res.status(400).json({ message: "Fournisseur invalide." });
+      }
       const operator = await storage.createOperator(req.body);
       
       await storage.createAdminLog({
@@ -14882,6 +14887,9 @@ export async function registerRoutes(
 
   app.patch("/api/admin/operators/:id", requireAuth, requireAdmin, async (req, res) => {
     try {
+      if (!hasSupportedOperatorProviders(req.body)) {
+        return res.status(400).json({ message: "Fournisseur invalide." });
+      }
       const operator = await storage.updateOperator(req.params.id, req.body);
       if (!operator) {
         return res.status(404).json({ message: "Opérateur non trouvé" });
@@ -17919,19 +17927,14 @@ export async function registerRoutes(
   // ─── PawaPay callbacks ────────────────────────────────────────────────────
   // PawaPay callbacks contain only a provider UUID.  We deliberately look up
   // that UUID in external_reference rather than accepting a merchant reference.
-  // PawaPay's documented callback contract requires a publicly reachable POST
-  // endpoint and does not send AshTechPay's locally stored webhook secret.
-  // A token remains supported for deployments that put one in the configured
-  // callback URL, but it is not mandatory by default.
+  // The UUID is visible to the payer and is not authentication. Require the
+  // shared token configured in the provider callback URL/proxy on every request.
+  // Missing configuration fails closed, regardless of legacy opt-in flags.
   async function handlePawaPayCallback(req: Request, res: Response, direction: "deposit" | "payout") {
     try {
       const webhookSecret = await getPawaPayWebhookSecret();
-      const callbackToken = (req.query.token as string) || (req.headers["x-webhook-token"] as string);
-      const callbackTokenRequired = process.env.PAWAPAY_REQUIRE_CALLBACK_TOKEN === "true";
-      if (callbackToken && (!webhookSecret || callbackToken !== webhookSecret)) {
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-      if (callbackTokenRequired && (!webhookSecret || !callbackToken)) {
+      const callbackToken = req.query.token ?? req.headers["x-webhook-token"];
+      if (!verifyPawaPayCallbackToken(webhookSecret, callbackToken)) {
         return res.status(401).json({ message: "Unauthorized" });
       }
       if (process.env.PAWAPAY_REQUIRE_SIGNED_CALLBACKS === "true") {
@@ -18663,7 +18666,7 @@ export async function registerRoutes(
       const { id } = req.params;
       const { paymentProvider, afribapayOperatorCode, pixpayServiceId, pawapayProviderCode } = req.body;
 
-      if (!["afribapay", "pixpay", "pawapay"].includes(paymentProvider)) {
+      if (!["afribapay", "pixpay"].includes(paymentProvider)) {
         return res.status(400).json({ message: "Fournisseur invalide." });
       }
 
@@ -18703,7 +18706,7 @@ export async function registerRoutes(
     try {
       const { id } = req.params;
       const { depositPaymentProvider, afribapayOperatorCode, pawapayProviderCode } = req.body;
-      if (!["afribapay", "pixpay", "pawapay"].includes(depositPaymentProvider)) {
+      if (!["afribapay", "pixpay"].includes(depositPaymentProvider)) {
         return res.status(400).json({ message: "Fournisseur invalide." });
       }
       const updateData: any = { depositPaymentProvider };

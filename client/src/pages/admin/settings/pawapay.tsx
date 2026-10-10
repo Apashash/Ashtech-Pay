@@ -191,7 +191,11 @@ export default function AdminSettingsPawaPay() {
               Endpoints de production
             </CardTitle>
             <CardDescription>
-              Ces adresses sont configurées dans le tableau de bord PawaPay. Aucun secret n’est inclus dans les URLs.
+              Modèles pour les callbacks historiques uniquement : PawaPay ne peut plus être sélectionné pour un opérateur.
+              Dans le tableau de bord PawaPay, remplacez REPLACE_WITH_URL_ENCODED_CALLBACK_SECRET par
+              votre secret de callback encodé pour une URL (encodeURIComponent), identique au secret enregistré ici.
+              Le secret enregistré n’est jamais affiché. Si vous ne le connaissez plus, remplacez-le ici et dans PawaPay.
+              Ne copiez pas le modèle tel quel : sans le bon token, les callbacks sont refusés (401).
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">

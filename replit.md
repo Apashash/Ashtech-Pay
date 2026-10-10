@@ -112,6 +112,17 @@ previews do not contact a payment provider or move funds.
   admin TOTP protections.
 - Webhook endpoints are explicitly exempted from browser CSRF checks and are
   protected by their provider-specific verification logic.
+- Historical PawaPay callbacks require the stored callback secret on every
+  request, regardless of legacy `PAWAPAY_REQUIRE_CALLBACK_TOKEN` settings.
+  Admin settings show URL templates, never the stored secret. In the PawaPay
+  dashboard, replace `REPLACE_WITH_URL_ENCODED_CALLBACK_SECRET` with
+  `encodeURIComponent(secret)` using the same secret saved in PawaPay settings.
+  If the old secret is unavailable, rotate it in both places. Do not publish or
+  log the resulting URL. A trusted upstream may instead send `x-webhook-token`
+  with the same secret to the tokenless endpoint. No proxy is configured by
+  this application. Missing or incorrect tokens return 401 without settlement;
+  signature-required mode also fails closed until a verifier is implemented.
+  PawaPay cannot be selected through operator create/update or provider routes.
 - Bot protection keeps payment webhooks accessible to provider servers while
   rejecting scanner probes with a branded 404 response.
 
