@@ -804,10 +804,17 @@ function ApiDeveloperSection() {
                 </div>
                 <span className="text-xs text-zinc-400 ml-2 flex items-center gap-1.5"><Terminal className="w-3 h-3" />{example === "payin" ? "collect.js" : "payout.js"}</span>
               </div>
-              <div className="flex gap-2 bg-zinc-900 px-4 py-3">
-                <Button size="sm" variant={example === "payin" ? "default" : "outline"} aria-pressed={example === "payin"} onClick={() => setExample("payin")}>Payin</Button>
-                <Button size="sm" variant={example === "payout" ? "default" : "outline"} aria-pressed={example === "payout"} onClick={() => setExample("payout")}>Payout</Button>
+              <div className="border-b border-zinc-800 bg-zinc-950 px-4 py-4">
+                <p className="mb-2 text-xs font-medium text-zinc-400">{t.landing.apiBtn1}</p>
+                <a href={PUBLIC_DOCS_INTRO_URL} className="block break-all text-sm text-green-400 underline underline-offset-4 hover:text-green-300" data-testid="link-code-documentation">
+                  {PUBLIC_DOCS_INTRO_URL}
+                </a>
               </div>
+              <div className="flex gap-2 bg-zinc-900 px-4 py-3">
+                <Button size="sm" variant={example === "payin" ? "default" : "outline"} className={example === "payin" ? "" : "bg-zinc-800 text-zinc-200 border-zinc-700 hover:bg-zinc-700 hover:text-white"} aria-pressed={example === "payin"} onClick={() => setExample("payin")}>Payin</Button>
+                <Button size="sm" variant={example === "payout" ? "default" : "outline"} className={example === "payout" ? "" : "bg-zinc-800 text-zinc-200 border-zinc-700 hover:bg-zinc-700 hover:text-white"} aria-pressed={example === "payout"} onClick={() => setExample("payout")}>Payout</Button>
+              </div>
+              <p className="bg-zinc-950 px-6 pt-4 text-xs text-zinc-400">{t.landing.apiExample} ({example === "payin" ? "Payin" : "Payout"})</p>
               {example === "payin" ? <pre className="text-sm leading-relaxed p-6 bg-zinc-950 overflow-x-auto max-w-full whitespace-pre-wrap break-words text-left font-mono">
                 <span className="text-sky-400">const</span>
                 <span className="text-zinc-300"> response = </span>

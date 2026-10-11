@@ -8,7 +8,7 @@ const content = {
   fr: {
     back: "Retour",
     title: "Conditions générales d'utilisation",
-    subtitle: "Ashtech SARL — Ashtech Pay · Dernière mise à jour : Février 2026",
+    subtitle: "Ashtech SARL, Ashtech Pay · Dernière mise à jour : Février 2026",
     copyright: "© 2026 Ashtech SARL. Tous droits réservés.",
 
     s1title: "Conditions d'utilisation",
@@ -85,7 +85,7 @@ const content = {
 
     s4badge: "Politique AML/CFT",
     s4title: "Lutte contre le blanchiment de capitaux et le financement du terrorisme",
-    s4subtitle: "ASHTECH SARL — Ashtech Pay",
+    s4subtitle: "ASHTECH SARL, Ashtech Pay",
     s4_1h: "1. Engagement",
     s4_1p: "ASHTECH SARL s'engage fermement à prévenir, détecter et signaler toute tentative d'utilisation de sa plateforme à des fins illicites, notamment :",
     s4_1list: ["Blanchiment de capitaux", "Financement du terrorisme", "Fraude financière", "Corruption", "Escroquerie"],
@@ -110,7 +110,7 @@ const content = {
   en: {
     back: "Back",
     title: "Terms & Conditions",
-    subtitle: "Ashtech SARL — Ashtech Pay · Last updated: February 2026",
+    subtitle: "Ashtech SARL, Ashtech Pay · Last updated: February 2026",
     copyright: "© 2026 Ashtech SARL. All rights reserved.",
 
     s1title: "Terms of Use",
@@ -187,7 +187,7 @@ const content = {
 
     s4badge: "AML/CFT Policy",
     s4title: "Anti-Money Laundering and Counter-Terrorism Financing",
-    s4subtitle: "ASHTECH SARL — Ashtech Pay",
+    s4subtitle: "ASHTECH SARL, Ashtech Pay",
     s4_1h: "1. Commitment",
     s4_1p: "ASHTECH SARL is firmly committed to preventing, detecting and reporting any attempt to use its platform for illicit purposes, including:",
     s4_1list: ["Money laundering", "Terrorism financing", "Financial fraud", "Corruption", "Scams"],
