@@ -80,7 +80,7 @@ const MENU_URLS = [
   { key: "withdraw", url: "/dashboard/withdraw", icon: Wallet, imageSrc: "/sidebar-icons/withdraw.png", color: "bg-orange-500/10 text-orange-500" },
   { key: "send", url: "/dashboard/send", icon: Send, imageSrc: "/sidebar-icons/send.png", color: "bg-sky-500/10 text-sky-500" },
   { key: "wallets", url: "/dashboard/wallets", icon: Coins, imageSrc: "/sidebar-icons/wallets.png", color: "bg-teal-500/10 text-teal-500" },
-  { key: "referrals", url: "/dashboard/referrals", icon: Gift, imageSrc: "/sidebar-icons/referrals.jpg", color: "bg-primary/10 text-primary" },
+  { key: "referrals", url: "/dashboard/referrals", icon: Gift, imageSrc: "/sidebar-icons/referrals.png", color: "bg-primary/10 text-primary" },
 ] as const;
 
 const SETTINGS_URLS = [
