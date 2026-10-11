@@ -533,7 +533,6 @@ export default function RegisterPage() {
                     maxLength={20} autoComplete="off" autoCapitalize="none" spellCheck={false}
                     placeholder="Code de 6 caractères, ex. a7k2m9"
                     data-testid="input-referral-code" />
-                  {referralCode && <p className="text-xs text-muted-foreground">Votre parrainage sera enregistré à l'inscription.</p>}
                 </div>
 
                 <FormField
