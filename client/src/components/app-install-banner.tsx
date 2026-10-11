@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { getAdminPath } from "@/lib/adminPath";
+import { useLanguage } from "@/lib/language";
 import {
   Dialog,
   DialogContent,
@@ -71,6 +72,7 @@ function getInstallBannerSuppressedUntil(): number {
 }
 
 function IosStepIllustration({ step }: { step: 1 | 2 | 3 }) {
+  const { t } = useLanguage();
   return (
     <div className="relative mx-auto h-[248px] w-[156px] overflow-hidden rounded-[26px] border-[5px] border-slate-900 bg-slate-100 shadow-[0_18px_45px_rgba(15,23,42,0.22)] dark:border-slate-700 dark:bg-slate-900">
       <div className="absolute left-1/2 top-0 z-10 h-5 w-16 -translate-x-1/2 rounded-b-xl bg-slate-900" />
@@ -99,19 +101,19 @@ function IosStepIllustration({ step }: { step: 1 | 2 | 3 }) {
       {step === 1 && (
         <div className="absolute bottom-2 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-full bg-amber-400 px-2 py-1 text-[8px] font-bold text-slate-950 shadow-lg ring-2 ring-amber-400 ring-offset-2 ring-offset-slate-100">
           <Share2 className="h-3 w-3" />
-          Partager
+          {t.install.share}
         </div>
       )}
       {step === 2 && (
         <div className="absolute bottom-2 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-lg border-2 border-amber-400 bg-white px-2 py-1.5 text-[8px] font-bold text-slate-900 shadow-xl ring-2 ring-amber-400 ring-offset-2 ring-offset-slate-100 dark:bg-slate-800 dark:text-white dark:ring-offset-slate-900">
           <Share2 className="h-3 w-3" />
-          Sur l’écran d’accueil
+          {t.install.homeScreen}
         </div>
       )}
       {step === 3 && (
         <div className="absolute bottom-2 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-lg bg-amber-400 px-2 py-1.5 text-[8px] font-bold text-slate-950 shadow-xl ring-2 ring-amber-400 ring-offset-2 ring-offset-slate-100">
           <Plus className="h-3 w-3" />
-          Ajouter
+          {t.install.add}
         </div>
       )}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-amber-400/25 to-transparent" />
@@ -120,6 +122,7 @@ function IosStepIllustration({ step }: { step: 1 | 2 | 3 }) {
 }
 
 function AndroidGuideIllustration() {
+  const { t } = useLanguage();
   return (
     <div className="mx-auto flex max-w-xs items-center gap-3 rounded-2xl border border-border bg-muted/50 p-4">
       <div className="flex h-16 w-12 shrink-0 flex-col items-center rounded-xl border-2 border-foreground/70 bg-background pt-2">
@@ -131,15 +134,16 @@ function AndroidGuideIllustration() {
       <div className="text-left text-xs text-muted-foreground">
         <div className="mb-1 flex items-center gap-1 font-semibold text-foreground">
           <MoreVertical className="h-4 w-4 text-primary" />
-          Menu du navigateur
+          {t.install.browserMenu}
         </div>
-        <p>Choisissez « Installer l’application » ou « Ajouter à l’écran d’accueil ».</p>
+        <p>{t.install.androidChoice}</p>
       </div>
     </div>
   );
 }
 
 function AppInstallBanner() {
+  const { t } = useLanguage();
   const [location] = useLocation();
   const adminPath = getAdminPath();
   const [device, setDevice] = useState<InstallDevice>("unknown");
@@ -233,7 +237,7 @@ function AppInstallBanner() {
 
   const shouldShowBanner = visible && !isStandalone && deviceCanInstall && isEligibleRoute;
 
-  const installLabel = "Installer";
+  const installLabel = t.install.install;
 
   const handleInstall = async () => {
     if (isIos) {
@@ -295,13 +299,13 @@ function AppInstallBanner() {
               className="h-10 w-10 shrink-0 rounded-xl shadow-sm ring-1 ring-black/5"
             />
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-bold tracking-tight text-foreground">📲 Téléchargez notre application</p>
+              <p className="truncate text-sm font-bold tracking-tight text-foreground">📲 {t.install.title}</p>
               <p className="hidden truncate text-[11px] text-muted-foreground sm:block">
                 {isIos
-                  ? "Une expérience plus rapide sur votre iPhone"
+                  ? t.install.iosSubtitle
                   : isAndroid && deferredPrompt
-                    ? "Installation native Android disponible"
-                    : "Retrouvez AshTech Pay depuis votre écran d’accueil"}
+                    ? t.install.androidSubtitle
+                    : t.install.homeSubtitle}
               </p>
             </div>
             <button
@@ -310,13 +314,13 @@ function AppInstallBanner() {
               className="shrink-0 rounded-xl bg-primary px-3.5 py-2 text-xs font-bold text-primary-foreground shadow-sm transition-transform hover:scale-[1.02] active:scale-95 sm:px-4 sm:text-sm"
               data-testid="button-install-app"
             >
-              {isIos ? "Installer" : installLabel}
+              {installLabel}
             </button>
             <button
               type="button"
               onClick={() => setConfirmCloseOpen(true)}
               className="shrink-0 rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              aria-label="Fermer l’invitation à installer l’application"
+              aria-label={t.install.close}
               data-testid="button-close-install-banner"
             >
               <X className="h-4 w-4" />
@@ -328,9 +332,9 @@ function AppInstallBanner() {
       <Dialog open={confirmCloseOpen} onOpenChange={setConfirmCloseOpen}>
         <DialogContent className="max-w-sm rounded-2xl border-border p-6">
           <DialogHeader className="pr-5">
-            <DialogTitle>Ne plus afficher cette notification&nbsp;?</DialogTitle>
+            <DialogTitle>{t.install.dismissTitle}</DialogTitle>
             <DialogDescription className="pt-2 leading-relaxed">
-              Souhaitez-vous ne plus voir cette invitation à installer l’application&nbsp;?
+              {t.install.dismissDesc}
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:justify-end">
@@ -339,14 +343,14 @@ function AppInstallBanner() {
               onClick={() => hideBannerFor(SNOOZE_INSTALL_BANNER_MS)}
               className="rounded-xl border border-border px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
             >
-              Non, continuer à afficher
+              {t.install.keepShowing}
             </button>
             <button
               type="button"
               onClick={() => hideBannerFor(DISMISS_INSTALL_BANNER_MS)}
               className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700"
             >
-              Oui, ne plus afficher
+              {t.install.stopShowing}
             </button>
           </div>
         </DialogContent>
@@ -359,15 +363,15 @@ function AppInstallBanner() {
               <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/15 text-primary">
                 <Smartphone className="h-5 w-5" />
               </div>
-              <DialogTitle className="text-xl">Comment installer l’application sur votre iPhone&nbsp;?</DialogTitle>
+              <DialogTitle className="text-xl">{t.install.iosTitle}</DialogTitle>
               <DialogDescription className="pt-2">
-                Suivez ces trois étapes simples dans Safari.
+                {t.install.iosIntro}
               </DialogDescription>
             </DialogHeader>
           </div>
 
           <div className="px-5 pb-5 pt-4 sm:px-7">
-            <div className="mb-4 flex justify-center gap-2" aria-label={`Étape ${iosStep} sur 3`}>
+            <div className="mb-4 flex justify-center gap-2" aria-label={`${t.install.step} ${iosStep} ${t.install.of} 3`}>
               {[1, 2, 3].map((step) => (
                 <span
                   key={step}
@@ -381,14 +385,14 @@ function AppInstallBanner() {
               </span>
               <div>
                 <p className="text-sm font-bold text-foreground">
-                  {iosStep === 1 && "Ouvrez le menu Partager"}
-                  {iosStep === 2 && "Ajoutez AshTech Pay"}
-                  {iosStep === 3 && "Confirmez l’installation"}
+                  {iosStep === 1 && t.install.step1Title}
+                  {iosStep === 2 && t.install.step2Title}
+                  {iosStep === 3 && t.install.step3Title}
                 </p>
                 <p className="text-xs leading-relaxed text-muted-foreground">
-                  {iosStep === 1 && "Appuyez sur le bouton Partager ⎋ en bas de votre écran."}
-                  {iosStep === 2 && "Faites défiler le menu puis appuyez sur « Sur l’écran d’accueil »."}
-                  {iosStep === 3 && "Appuyez sur « Ajouter » pour installer l’application sur votre écran d’accueil."}
+                  {iosStep === 1 && t.install.step1Desc}
+                  {iosStep === 2 && t.install.step2Desc}
+                  {iosStep === 3 && t.install.step3Desc}
                 </p>
               </div>
             </div>
@@ -400,7 +404,7 @@ function AppInstallBanner() {
                 className={`inline-flex items-center gap-1 rounded-xl px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted ${iosStep === 1 ? "invisible" : ""}`}
               >
                 <ArrowLeft className="h-4 w-4" />
-                Retour
+                {t.install.back}
               </button>
               {iosStep < 3 ? (
                 <button
@@ -408,7 +412,7 @@ function AppInstallBanner() {
                   onClick={() => setIosStep((current) => (current + 1) as 1 | 2 | 3)}
                   className="inline-flex items-center gap-1 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90"
                 >
-                  Suivant
+                  {t.install.next}
                   <ArrowRight className="h-4 w-4" />
                 </button>
               ) : (
@@ -418,7 +422,7 @@ function AppInstallBanner() {
                   className="inline-flex items-center gap-1 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:opacity-90"
                 >
                   <Check className="h-4 w-4" />
-                  J’ai compris
+                  {t.install.understood}
                 </button>
               )}
             </div>
@@ -432,9 +436,9 @@ function AppInstallBanner() {
             <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/15 text-primary">
               <Smartphone className="h-5 w-5" />
             </div>
-            <DialogTitle className="text-xl">Installer AshTech Pay sur Android</DialogTitle>
+            <DialogTitle className="text-xl">{t.install.androidTitle}</DialogTitle>
             <DialogDescription className="pt-2 leading-relaxed">
-              Ouvrez le menu ⋮ de votre navigateur, puis choisissez « Installer l’application » ou « Ajouter à l’écran d’accueil ».
+              {t.install.androidIntro}
             </DialogDescription>
           </DialogHeader>
           <AndroidGuideIllustration />
@@ -443,7 +447,7 @@ function AppInstallBanner() {
             onClick={() => setGuideMode(null)}
             className="mt-1 w-full rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground hover:opacity-90"
           >
-            J’ai compris
+            {t.install.understood}
           </button>
         </DialogContent>
       </Dialog>
