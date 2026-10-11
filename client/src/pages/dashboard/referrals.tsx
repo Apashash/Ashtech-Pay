@@ -106,32 +106,6 @@ export default function ReferralsPage() {
   return (
     <DashboardLayout>
       <div className="mx-auto w-full min-w-0 max-w-5xl space-y-6 pb-8">
-        <Card className="relative overflow-hidden border-card-border bg-card px-6 py-7 shadow-sm transition-colors sm:px-9 sm:py-9">
-          <div aria-hidden="true" className="pointer-events-none absolute -right-14 -top-24 h-64 w-64 rounded-full border border-primary/15" />
-          <div aria-hidden="true" className="pointer-events-none absolute -right-2 -top-12 h-48 w-48 rounded-full border border-primary/15" />
-          <div className="relative max-w-2xl">
-            <p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-              <Users className="h-4 w-4" /> Programme de parrainage
-            </p>
-            <h1 className="text-2xl font-semibold text-foreground">Faites découvrir AshTech Pay.</h1>
-            <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-              Invitez vos proches. Lorsqu’un compte invité atteint les conditions, il bénéficie d’une période de frais réduits sur ses opérations éligibles.
-            </p>
-          </div>
-          <div className="relative mt-7 grid max-w-xl grid-cols-3 gap-2 sm:gap-3">
-            {[
-              ["01", "Partager"],
-              ["02", "3 opérations"],
-              ["03", "5 jours"],
-            ].map(([number, label]) => (
-              <div key={number} className="border-t border-border pt-3">
-                <p className="text-xs font-semibold tabular-nums text-muted-foreground">{number}</p>
-                <p className="mt-1 text-sm font-medium text-foreground">{label}</p>
-              </div>
-            ))}
-          </div>
-        </Card>
-
         {isLoading ? (
           <section aria-label="Chargement des informations de parrainage" className="space-y-4">
             <div className="h-36 animate-pulse rounded-2xl bg-muted/70" />
