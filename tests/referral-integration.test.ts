@@ -1,6 +1,8 @@
-import test from "node:test";
+import test, { mock } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import crypto from "node:crypto";
+import { syncBuiltinESMExports } from "node:module";
 
 // Opt-in: uses only isolated, temporary fixtures in a DEVELOPMENT database.
 // Example: REFERRAL_TEST_DB=1 DB_DIALECT=mysql MYSQL_DATABASE_URL=... node --import tsx --test tests/referral-integration.test.ts
@@ -33,9 +35,52 @@ test("referral qualification, concurrency, fees, caps and admin cancellation", {
     });
     ids.push(signup.id);
     assert.equal(signup.role, "user");
-    const account = await service.ensureReferralAccount(referrer);
+    await service.ensureReferralAccount(referrer);
+    const legacyCode = randomUUID().replaceAll("-", "").slice(0, 20);
+    const oldStart = new Date("2020-01-01T00:00:00.000Z");
+    const oldExpiry = new Date("2020-01-06T00:00:00.000Z");
+    await pool.query("UPDATE referral_accounts SET code=$1,starts_at=$2,expires_at=$3 WHERE user_id=$4",
+      [legacyCode, oldStart, oldExpiry, referrer]);
+    assert.equal(await service.resolveReferralCode(legacyCode), referrer);
+    const migrated = await Promise.all(Array.from({ length: 12 }, () => service.ensureReferralAccount(referrer)));
+    const account = migrated[0];
+    assert.match(account.code, /^[a-z0-9]{6}$/);
+    assert.equal(new Set(migrated.map(row => row.code)).size, 1);
+    assert.equal(account.legacy_code, legacyCode);
+    assert.equal(new Date(account.starts_at).toISOString(), oldStart.toISOString());
+    assert.equal(new Date(account.expires_at).toISOString(), oldExpiry.toISOString());
     assert.equal(await service.resolveReferralCode(account.code), referrer);
+    assert.equal(await service.resolveReferralCode(` ${account.code.toUpperCase()} `), referrer);
+    assert.equal(await service.resolveReferralCode(legacyCode), referrer);
+    await assert.rejects(service.resolveReferralCode("abcdefg"));
     await assert.rejects(service.resolveReferralCode("' OR 1=1 --"));
+    // Force a short-code collision inside the atomic signup transaction. The
+    // retry must work on PostgreSQL without aborting that transaction.
+    const originalRandomInt = crypto.randomInt;
+    let forcedCollision = false;
+    const rng = mock.method(crypto, "randomInt", ((max: number) => {
+      if (max === 36 ** 6 && !forcedCollision) {
+        forcedCollision = true;
+        return parseInt(account.code, 36);
+      }
+      return originalRandomInt(max);
+    }) as typeof crypto.randomInt);
+    syncBuiltinESMExports();
+    try {
+      const referredSignup = await storage.createUser({
+        username: `ref${randomUUID().replaceAll("-", "").slice(0, 12)}`,
+        email: `${randomUUID()}@example.invalid`, password: "not-a-login-hash", fullName: "Short code fixture",
+      }, unrelated);
+      ids.push(referredSignup.id);
+      const newAccount = await service.ensureReferralAccount(referredSignup.id);
+      assert.equal(forcedCollision, true);
+      assert.match(newAccount.code, /^[a-z0-9]{6}$/);
+      assert.notEqual(newAccount.code, account.code);
+      assert.equal(await service.resolveReferralCode(newAccount.code), referredSignup.id);
+    } finally {
+      rng.mock.restore();
+      syncBuiltinESMExports();
+    }
     await assert.rejects(service.attachReferral(referrer, referrer));
     await service.attachReferral(invitee, referrer);
     await assert.rejects(service.attachReferral(invitee, unrelated));

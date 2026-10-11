@@ -31,3 +31,9 @@ Referral eligibility is a lifetime signup threshold, not a rolling history-windo
 **Why:** A user may complete KYC after the platform has purged old transaction history. That purge must not erase legitimate progress; known failed or refunded transactions must still stop counting.
 
 **How to apply:** Retain minimal eligibility proof separately from the financial history and label unavailable historical details honestly. Do not recreate purged financial records.
+
+Changes to the referral-code format must preserve links already shared by users.
+
+**Why:** The user requested six-character codes for easier sharing after twenty-character codes had already been exposed in production.
+
+**How to apply:** Keep earlier codes usable as aliases, enforce uniqueness for new codes, and preserve existing attribution and promotion periods. Referral codes are public sharing identifiers, not authentication credentials.

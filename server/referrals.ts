@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from "node:crypto";
+import { randomInt, randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { db, pool } from "./db";
 import { sendPushNotification } from "./push";
@@ -31,6 +31,17 @@ export function ensureReferralSchema(): Promise<void> {
           transaction_id VARCHAR(191) PRIMARY KEY, invitee_id VARCHAR(191) NOT NULL,
           reference VARCHAR(191), type VARCHAR(32) NOT NULL, confirmed_at ${date} NOT NULL)`,
       ]) await pool.query(statement);
+      // Keep previously shared 20-character codes valid when shortening them.
+      try {
+        await pool.query("ALTER TABLE referral_accounts ADD COLUMN legacy_code VARCHAR(32) NULL");
+      } catch (error: any) {
+        if (!["42701", "ER_DUP_FIELDNAME"].includes(error.code)) throw error;
+      }
+      try {
+        await pool.query("CREATE UNIQUE INDEX referral_accounts_legacy_code_idx ON referral_accounts (legacy_code)");
+      } catch (error: any) {
+        if (!["42P07", "ER_DUP_KEYNAME"].includes(error.code)) throw error;
+      }
       // Indexes are idempotent across MySQL/MariaDB/Postgres versions.
       for (const [name, table, columns] of [
         ["referral_invites_referrer_idx", "referral_invites", "referrer_id"],
@@ -60,31 +71,44 @@ function invitationTime() { return new Date(Math.floor(Date.now() / 1000) * 1000
 // This does not grant admin privileges; every administrative gate remains separate.
 function isClientRole(role: unknown) { return role == null || role === "user"; }
 const promoMessage = "Vos frais sont réduits pendant cinq jours sur vos dépôts et retraits Mobile Money admissibles, dans la limite des plafonds : coût de traitement réel + 0,3 %. Ce gain n'est pas un versement d'argent. Consultez Parrainage & gains pour les conditions et la date de fin.";
+function newReferralCode() { return randomInt(36 ** 6).toString(36).padStart(6, "0"); }
 
 export async function ensureReferralAccount(userId: string) {
   await ensureReferralSchema();
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < 20; attempt++) {
     const existing = await pool.query("SELECT * FROM referral_accounts WHERE user_id=$1", [userId]);
-    if (existing.rows[0]) return existing.rows[0];
+    const account = existing.rows[0];
+    if (account && /^[a-z0-9]{6}$/.test(account.code)) return account;
     try {
-      await pool.query("INSERT INTO referral_accounts (user_id, code) VALUES ($1,$2)",
-        [userId, randomBytes(10).toString("hex")]);
+      if (account) {
+        // Compare-and-set changes code and alias together, without touching the
+        // promotion dates or attribution. Concurrent readers converge on one code.
+        await pool.query(`UPDATE referral_accounts
+          SET legacy_code=COALESCE(legacy_code,code), code=$1 WHERE user_id=$2 AND code=$3`,
+        [newReferralCode(), userId, account.code]);
+      } else {
+        await pool.query("INSERT INTO referral_accounts (user_id, code) VALUES ($1,$2)",
+          [userId, newReferralCode()]);
+      }
     } catch (error: any) {
       if (!["23505", "ER_DUP_ENTRY"].includes(error.code)) throw error;
     }
   }
   const result = await pool.query("SELECT * FROM referral_accounts WHERE user_id=$1", [userId]);
-  if (!result.rows[0]) throw new Error("Impossible de créer le code de parrainage");
+  if (!result.rows[0] || !/^[a-z0-9]{6}$/.test(result.rows[0].code)) throw new Error("Impossible de créer le code de parrainage");
   return result.rows[0];
 }
 
 export async function resolveReferralCode(value: unknown): Promise<string | null> {
   if (value == null || value === "") return null;
-  if (typeof value !== "string" || !/^[a-f0-9]{20}$/.test(value)) throw new Error("Code de parrainage invalide");
+  if (typeof value !== "string") throw new Error("Code de parrainage invalide");
+  const code = value.trim().toLowerCase();
+  if (!/^(?:[a-z0-9]{6}|[a-f0-9]{20})$/.test(code)) throw new Error("Code de parrainage invalide");
   await ensureReferralSchema();
   const result = await pool.query(`SELECT a.user_id FROM referral_accounts a
-    JOIN users u ON u.id=a.user_id WHERE a.code=$1 AND (u.role='user' OR u.role IS NULL) AND u.is_banned=$2`,
-  [value, false]);
+    JOIN users u ON u.id=a.user_id WHERE (a.code=$1 OR a.legacy_code=$1)
+    AND (u.role='user' OR u.role IS NULL) AND u.is_banned=$2`,
+  [code, false]);
   if (!result.rows[0]) throw new Error("Code de parrainage indisponible");
   return result.rows[0].user_id;
 }
@@ -101,8 +125,24 @@ export async function attachReferral(inviteeId: string, referrerId: string | nul
 
 export async function registerReferral(trx: any, inviteeId: string, referrerId: string) {
   if (inviteeId === referrerId) throw new Error("Auto-parrainage interdit");
-  await trx.execute(sql`INSERT INTO referral_accounts (user_id,code)
-    VALUES (${inviteeId},${randomBytes(10).toString("hex")})`);
+  // Do not catch a unique violation inside a PostgreSQL transaction: it would
+  // leave the signup transaction aborted. A conflicting code is simply retried.
+  let created = false;
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const code = newReferralCode();
+    if (process.env.DB_DIALECT?.toLowerCase() === "mysql") {
+      await trx.execute(sql`INSERT INTO referral_accounts (user_id,code)
+        VALUES (${inviteeId},${code}) ON DUPLICATE KEY UPDATE user_id=user_id`);
+    } else {
+      await trx.execute(sql`INSERT INTO referral_accounts (user_id,code)
+        VALUES (${inviteeId},${code}) ON CONFLICT DO NOTHING`);
+    }
+    if (rows(await trx.execute(sql`SELECT user_id FROM referral_accounts WHERE user_id=${inviteeId}`)).length) {
+      created = true;
+      break;
+    }
+  }
+  if (!created) throw new Error("Impossible de créer le code de parrainage");
   await trx.execute(sql`INSERT INTO referral_invites (id,referrer_id,invitee_id,created_at)
     VALUES (${randomUUID()},${referrerId},${inviteeId},${invitationTime()})`);
 }

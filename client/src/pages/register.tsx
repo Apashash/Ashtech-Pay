@@ -414,13 +414,6 @@ export default function RegisterPage() {
                   </div>
                 )}
 
-                <div className="space-y-2">
-                  <label htmlFor="referral-code" className="font-semibold text-sm">Code de parrainage (facultatif)</label>
-                  <Input id="referral-code" value={referralCode} onChange={event => setReferralCode(event.target.value)}
-                    maxLength={20} autoComplete="off" placeholder="Le code partagé par votre parrain"
-                    data-testid="input-referral-code" />
-                  {referralCode && <p className="text-xs text-muted-foreground">Votre parrainage sera enregistré à l'inscription.</p>}
-                </div>
                 <FormField
                   control={form.control}
                   name="fullName"
@@ -533,6 +526,15 @@ export default function RegisterPage() {
                     </FormItem>
                   )}
                 />
+
+                <div className="space-y-2">
+                  <label htmlFor="referral-code" className="font-semibold text-sm">Code de parrainage (facultatif)</label>
+                  <Input id="referral-code" value={referralCode} onChange={event => setReferralCode(event.target.value)}
+                    maxLength={20} autoComplete="off" autoCapitalize="none" spellCheck={false}
+                    placeholder="Code de 6 caractères, ex. a7k2m9"
+                    data-testid="input-referral-code" />
+                  {referralCode && <p className="text-xs text-muted-foreground">Votre parrainage sera enregistré à l'inscription.</p>}
+                </div>
 
                 <FormField
                   control={form.control}
