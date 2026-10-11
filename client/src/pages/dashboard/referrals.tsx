@@ -148,9 +148,6 @@ export default function ReferralsPage() {
                     </Button>
                   </div>
                 </div>
-                <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-                  Partagez ce lien directement. Si le partage natif n’est pas disponible, le lien sera copié.
-                </p>
               </Card>
 
               <Card className="relative overflow-hidden bg-muted/55 p-5 transition-colors sm:p-7">
@@ -199,7 +196,6 @@ export default function ReferralsPage() {
                 <div className="flex flex-col items-center px-6 py-12 text-center">
                   <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10 text-primary"><Users className="h-6 w-6" /></div>
                   <h3 className="mt-4 font-semibold">Votre réseau commence ici</h3>
-                  <p className="mt-1 max-w-sm text-sm leading-relaxed text-muted-foreground">Partagez votre lien. Les comptes créés avec celui-ci apparaîtront ici avec leur progression.</p>
                 </div>
               ) : (
                 <ul className="divide-y divide-border">
