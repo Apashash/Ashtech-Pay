@@ -6,7 +6,7 @@ Referral discounts must not guess an unknown processing cost or increase a custo
 
 **Why:** The agreed reward is a temporary reduction, not cash. A fabricated provider cost could turn a nominal margin into a loss; “−50 %” is not a universal mathematical consequence of cost + 0.3 %.
 
-**How to apply:** Price only operations with a configured processing cost, preserve a cheaper normal tariff, and explain the actual formula instead of promising a fixed reduction.
+**How to apply:** Price only operations with a configured processing cost and preserve a cheaper normal tariff. The user explicitly requested “−50 %” promotional copy on the referral page without changing this calculation. Treat that wording as a copy-only choice, not authorization to halve fees; the actual formula does not guarantee that percentage.
 
 Account-wide operation limits and currency-specific volume limits intentionally avoid adding unlike wallet amounts.
 

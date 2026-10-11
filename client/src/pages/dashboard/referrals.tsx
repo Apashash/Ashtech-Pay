@@ -7,7 +7,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import {
   CheckCircle2, Clock3, Copy, Link2, Loader2,
-  RefreshCw, Share2, ShieldCheck, Users, WalletCards,
+  RefreshCw, Share2, ShieldCheck, Users,
 } from "lucide-react";
 
 interface ReferralInvite {
@@ -256,37 +256,16 @@ export default function ReferralsPage() {
               )}
             </section>
 
-            <section className="grid gap-5 lg:grid-cols-[0.85fr_1.15fr]">
+            <section>
               <Card className="p-5 transition-colors sm:p-7">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Comment ça marche</p>
-                <h2 className="mt-2 text-lg font-semibold tracking-tight sm:text-xl">Trois opérations complétées.</h2>
-                <ol className="mt-5 space-y-4">
-                  {[
-                    ["01", "Votre invité crée son compte avec votre lien."],
-                    ["02", `Il vérifie son compte et termine ${data.rules.requiredTransactions} opérations.`],
-                    ["03", `Une période de ${data.rules.durationDays} jours de frais réduits commence.`],
-                  ].map(([step, text]) => (
-                    <li key={step} className="flex gap-3 text-sm leading-relaxed">
-                      <span className="text-xs font-semibold tabular-nums text-muted-foreground">{step}</span><span>{text}</span>
-                    </li>
-                  ))}
-                </ol>
-              </Card>
-              <Card className="bg-muted/55 p-5 transition-colors sm:p-7">
-                <div className="flex items-center gap-2 text-foreground">
-                  <WalletCards className="h-5 w-5" />
-                  <h2 className="font-semibold tracking-tight">Des frais expliqués clairement</h2>
-                </div>
-                <ul className="mt-4 list-disc space-y-3 pl-5 text-sm leading-relaxed text-muted-foreground marker:text-primary">
-                  <li>L’avantage est une réduction de frais, pas un versement en espèces. Il s’applique aux dépôts et retraits Mobile Money éligibles, pas aux opérations USDT.</li>
-                  <li>Les frais réduits restent calculés à partir du coût du prestataire, avec une marge de {data.rules.marginPercent}%.</li>
-                  <li>Le tarif habituel est conservé si le coût de traitement n’est pas renseigné, si ce tarif est déjà plus bas, ou si les plafonds promotionnels sont atteints.</li>
-                  <li>La troisième opération requise est facturée normalement. Il n’y a pas de promesse de réduction de 50%.</li>
-                  <li>Jusqu’à {data.rules.maxDiscountedOperations} opérations peuvent bénéficier de l’avantage. Le volume cumulé, par devise, est plafonné à {data.rules.maxVolumeMultiplier}× le maximum d’opération configuré.</li>
-                  <li>Les plafonds d’opération configurés pour le pays concerné continuent de s’appliquer.</li>
-                </ul>
-                <p className="mt-4 border-t border-border pt-3 text-xs leading-relaxed text-muted-foreground">
-                  Les plafonds et l’éligibilité dépendent des limites en vigueur dans votre pays et chez l’opérateur Mobile Money.
+                <h2 className="text-lg font-semibold tracking-tight text-foreground sm:text-xl">
+                  Profitez de -50 % sur vos frais pendant 5 jours !
+                </h2>
+                <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
+                  Bénéficiez d’une réduction de 50 % sur les frais de chaque dépôt et retrait Mobile Money éligible pendant 5 jours.
+                </p>
+                <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
+                  Cette offre concerne uniquement les opérations Mobile Money éligibles. Il s’agit d’une réduction sur les frais de transaction, et non d’un versement en espèces. Les opérations USDT ne sont pas concernées.
                 </p>
               </Card>
             </section>
