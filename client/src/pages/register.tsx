@@ -92,6 +92,7 @@ export default function RegisterPage() {
   const { toast } = useToast();
   const { t } = useLanguage();
   const [showPassword, setShowPassword] = useState(false);
+  const [referralCode, setReferralCode] = useState(() => new URLSearchParams(window.location.search).get("ref") || "");
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [selectedCountry, setSelectedCountry] = useState<CountryData | null>(null);
   const [countryManuallySelected, setCountryManuallySelected] = useState(false);
@@ -261,6 +262,7 @@ export default function RegisterPage() {
         ...submitData,
         phone: normalizedPhone,
         country: selectedCountry?.name || "",
+        referralCode: referralCode.trim().toLowerCase() || undefined,
         turnstileToken: turnstileToken || undefined,
       });
       const json = await res.json();
@@ -412,6 +414,13 @@ export default function RegisterPage() {
                   </div>
                 )}
 
+                <div className="space-y-2">
+                  <label htmlFor="referral-code" className="font-semibold text-sm">Code de parrainage (facultatif)</label>
+                  <Input id="referral-code" value={referralCode} onChange={event => setReferralCode(event.target.value)}
+                    maxLength={20} autoComplete="off" placeholder="Le code partagé par votre parrain"
+                    data-testid="input-referral-code" />
+                  {referralCode && <p className="text-xs text-muted-foreground">Votre parrainage sera enregistré à l'inscription.</p>}
+                </div>
                 <FormField
                   control={form.control}
                   name="fullName"

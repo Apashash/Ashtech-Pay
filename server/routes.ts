@@ -2,6 +2,9 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage, normalizePhone } from "./storage";
 import {
+  resolveReferralCode, referralOverview, adminReferralOverview, adminReferralAction, quoteReferralFee, getReferralPromo, releaseReferralQuote,
+} from "./referrals";
+import {
   submissionStatusFromAdminKycStatus,
   userKycStateForProfile,
   userKycStateFromAdminStatus,
@@ -4087,14 +4090,9 @@ export async function registerRoutes(
         });
       }
 
-      // Bloquer si une adresse IP a déjà créé un compte
-      const existingIpUser = await storage.getUserByRegistrationIp(ip);
-      if (existingIpUser) {
-        return res.status(403).json({
-          message: "Un compte a déjà été créé depuis cette adresse IP. Une seule inscription par adresse IP est autorisée.",
-          ipBlocked: true,
-        });
-      }
+      // A shared network/CGNAT is an audit signal, not evidence of self-referral.
+      // Captcha, request rate limits, unique identities and KYC remain enforced.
+      const sharesRegistrationIp = Boolean(await storage.getUserByRegistrationIp(ip));
 
       const parsedPhone = parseUserPhoneInput(req.body?.phone);
       if (!parsedPhone.ok) {
@@ -4154,6 +4152,12 @@ export async function registerRoutes(
       }
 
       const hashedPassword = await hashPassword(data.password);
+      let referrerId: string | null;
+      try {
+        referrerId = await resolveReferralCode(req.body.referralCode);
+      } catch (error: any) {
+        return res.status(400).json({ message: error.message });
+      }
       
       const preferredCurrency =
         CURRENCY_ZONE[registrationCountry.code.toUpperCase()] ||
@@ -4165,7 +4169,7 @@ export async function registerRoutes(
         password: hashedPassword,
         preferredCurrency,
         registrationIp: ip,
-      });
+      }, referrerId);
 
       await clearAuthAttempts(ip);
 
@@ -4193,7 +4197,7 @@ export async function registerRoutes(
             userId: user.id,
             userName: user.fullName || user.username,
             userEmail: user.email || undefined,
-            details: { country: (user as any).country ?? null },
+            details: { country: (user as any).country ?? null, sharedRegistrationIp: sharesRegistrationIp },
           });
           const { password: _, ...safeUser } = user;
           res.json({ user: safeUser, token: authToken });
@@ -7040,7 +7044,7 @@ export async function registerRoutes(
       const resolvedFeeRecord = (data.operatorId || data.countryId)
         ? await storage.resolveFee("deposit", data.countryId, data.operatorId)
         : null;
-      const ashtechMarginPct = (resolvedFeeRecord as any)?.ashtechMargin != null
+      let ashtechMarginPct = (resolvedFeeRecord as any)?.ashtechMargin != null
         ? parseFloat((resolvedFeeRecord as any).ashtechMargin)
         : ASHTECH_MARGIN;
 
@@ -7072,6 +7076,24 @@ export async function registerRoutes(
       }
 
       const depositRef = generateTransactionReference("deposit");
+      const configuredProviderRate = paymentProvider === "pawapay" ? (resolvedFeeRecord as any)?.pawapayFee
+        : paymentProvider === "pixpay" ? resolvedFeeRecord?.pixpayFee : resolvedFeeRecord?.afribapayFee;
+      const referralPricing = data.paymentMethod === "mobile_money" ? await quoteReferralFee({
+        userId, amount, currency: countryCurrency,
+        providerPercent: configuredProviderRate == null ? null : Number(configuredProviderRate),
+        normalFee: totalAmount - creditedAmount,
+        maxOperation: Number(depositCountry?.maxDeposit ?? 5000000), reference: depositRef,
+      }) : null;
+      if (referralPricing) {
+        creditedAmount = Math.round((totalAmount - referralPricing.total) * 100) / 100;
+        ashtechFeeAmount = referralPricing.margin;
+        ashtechMarginPct = 0.3;
+        res.once("finish", () => { void releaseReferralQuote(depositRef).catch(error => console.error("[Referral] Reservation cleanup:", error.message)); });
+      }
+      if (req.body.expectedFeeAmount != null && (!Number.isFinite(Number(req.body.expectedFeeAmount))
+        || Math.abs(Number(req.body.expectedFeeAmount) - (totalAmount - creditedAmount)) > 0.011)) {
+        return res.status(409).json({ message: "Les frais ont changé. Vérifiez le nouveau tarif avant de confirmer.", code: "FEE_QUOTE_CHANGED" });
+      }
         if (paymentProvider === "pawapay") {
           try {
             await assertPawaPayProviderActive(resolvePawaPayProviderCode(operatorRecord, operatorName, countryCode), "DEPOSIT", pawaPayCountry(countryCode));
@@ -7116,17 +7138,19 @@ export async function registerRoutes(
         reference: depositRef,
         operatorId: data.operatorId,
         feeAmount: ashtechFeeAmount.toFixed(2),
+        ashtechFeeAmount: ashtechFeeAmount.toFixed(2),
         totalAmount: totalAmount.toFixed(2),
         recipientPhone: data.phoneNumber || null,
         ...(pawaPayDepositId ? { externalReference: pawaPayDepositId } : {}),
-         ...(pawaPayDepositId ? {
+         ...({
            metadata: {
-             paymentProvider: "pawapay",
-             pawaCountry: pawaPayCountry(countryCode),
+             paymentProvider,
+             ...(pawaPayDepositId ? { pawaCountry: pawaPayCountry(countryCode) } : {}),
              countryCode,
              walletCurrency: countryCurrency,
+             ...(referralPricing ? { referralPromotion: referralPricing } : {}),
            },
-         } : {}),
+         }),
       });
 
       // Call payment gateway for mobile money deposits
@@ -7767,7 +7791,24 @@ export async function registerRoutes(
         
         feeAmount = calculatedFee;
       }
-      const creditedAmount = amount - feeAmount;
+      const withdrawalRef = generateTransactionReference("withdrawal");
+      const configuredProviderRate = withdrawalProvider === "pawapay" ? (fee as any)?.pawapayFee
+        : withdrawalProvider === "pixpay" ? fee?.pixpayFee : fee?.afribapayFee;
+      const referralPricing = data.paymentMethod === "mobile_money" ? await quoteReferralFee({
+        userId, amount, currency: withdrawalCurrency,
+        providerPercent: configuredProviderRate == null ? null : Number(configuredProviderRate),
+        normalFee: feeAmount, maxOperation: maxWithdrawal, reference: withdrawalRef,
+      }) : null;
+      if (referralPricing) {
+        feeAmount = referralPricing.total;
+        ashtechFeeAmount = referralPricing.margin;
+        res.once("finish", () => { void releaseReferralQuote(withdrawalRef).catch(error => console.error("[Referral] Reservation cleanup:", error.message)); });
+      }
+      if (req.body.expectedFeeAmount != null && (!Number.isFinite(Number(req.body.expectedFeeAmount))
+        || Math.abs(Number(req.body.expectedFeeAmount) - feeAmount) > 0.011)) {
+        return res.status(409).json({ message: "Les frais ont changé. Vérifiez le nouveau tarif avant de confirmer.", code: "FEE_QUOTE_CHANGED" });
+      }
+      const creditedAmount = Math.round((amount - feeAmount) * 100) / 100;
       const totalAmount = amount;
 
       // Debit the wallet that matches the destination country currency.
@@ -7843,7 +7884,6 @@ export async function registerRoutes(
 
       console.log(`[Withdrawal] User=${userId}, RequestedAmount=${amount}, Fee=${feeAmount}, NetToUser=${creditedAmount} (${withdrawalCurrency})`);
 
-      const withdrawalRef = generateTransactionReference("withdrawal");
       const pawaPayPayoutId = withdrawalProvider === "pawapay" ? createPawaPayId() : undefined;
       const afribaPayoutStartedAt = withdrawalProvider === "afribapay" ? Date.now() : undefined;
       let pawaPayInitiationAmbiguous = false;
@@ -7858,6 +7898,7 @@ export async function registerRoutes(
         paymentMethod: data.paymentMethod,
         reference: withdrawalRef,
         feeAmount: ashtechFeeAmount.toFixed(2),
+        ashtechFeeAmount: ashtechFeeAmount.toFixed(2),
         totalAmount: amount.toFixed(2),
         recipientName: user.fullName || user.username || "Client",
         recipientPhone: data.accountDetails,
@@ -7872,6 +7913,7 @@ export async function registerRoutes(
            metadata: {
              paymentProvider: withdrawalProvider,
              walletCurrency: withdrawalCurrency,
+             ...(referralPricing ? { referralPromotion: referralPricing } : {}),
             ...(afribaPayoutStartedAt ? { payoutAttemptStartedAt: afribaPayoutStartedAt } : {}),
              ...(pawaPayPayoutId
                ? { pawaCountry: pawaPayCountry(withdrawalCountryCode) }
@@ -8248,6 +8290,44 @@ export async function registerRoutes(
   );
 
   // Fee calculation endpoint
+  app.get("/api/referrals/me", requireAuth, async (req, res) => {
+    try {
+      res.setHeader("Cache-Control", "no-store");
+      res.json(await referralOverview(req.userId!));
+    } catch (error) {
+      console.error("[Referral] Overview failed:", error);
+      res.status(500).json({ message: "Impossible de charger le parrainage. Réessayez." });
+    }
+  });
+
+  app.get("/api/admin/referrals", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const search = typeof req.query.search === "string" ? req.query.search.trim().slice(0, 100) : "";
+      res.setHeader("Cache-Control", "no-store");
+      res.json(await adminReferralOverview(search));
+    } catch (error) {
+      console.error("[Referral] Admin overview failed:", error);
+      res.status(500).json({ message: "Impossible de charger les parrainages." });
+    }
+  });
+
+  app.post("/api/admin/referrals/:userId/promotion", requireAuth, requireAdmin, adminActionLimiter, async (req, res) => {
+    const { action, reason } = req.body;
+    if (!["activate", "cancel"].includes(action) || typeof reason !== "string"
+      || reason.trim().length < 5 || reason.length > 1000) {
+      return res.status(400).json({ message: "Action valide et motif de 5 à 1000 caractères requis." });
+    }
+    try {
+      const target = await storage.getUser(req.params.userId);
+      if (!target || (target.role != null && target.role !== "user")) return res.status(404).json({ message: "Compte client introuvable." });
+      await adminReferralAction(target.id, req.userId!, action, reason.trim());
+      res.json({ message: action === "activate" ? "Promotion active pour cinq jours." : "Promotion annulée." });
+    } catch (error: any) {
+      console.error("[Referral] Admin action failed:", error);
+      res.status(400).json({ message: error.message || "Action impossible." });
+    }
+  });
+
   app.post("/api/fees/calculate", requireAuth, async (req, res) => {
     try {
       const { transactionType, amount, countryId, operatorId } = req.body;
@@ -8258,6 +8338,43 @@ export async function registerRoutes(
       }
 
       const fee = await storage.resolveFee(transactionType, countryId, operatorId);
+      if (["deposit", "withdrawal"].includes(transactionType) && req.body.paymentMethod === "mobile_money") {
+        if (!Number.isFinite(numAmount) || numAmount > 1e12) {
+          return res.status(400).json({ message: "Montant invalide." });
+        }
+        const country = countryId ? await storage.getCountry(countryId) : null;
+        const operator = operatorId ? await storage.getOperator(operatorId) : null;
+        if (!country || !operator || operator.countryId !== country.id || !operator.isActive
+          || operator.isInMaintenance || (transactionType === "deposit" ? country.isActiveForDeposit === false : country.isActiveForWithdrawal === false)) {
+          return res.status(400).json({ message: "Pays ou opérateur indisponible." });
+        }
+        const provider = transactionType === "deposit"
+          ? operator.depositPaymentProvider || operator.paymentProvider : operator.paymentProvider;
+        const configuredRate = provider === "pawapay" ? (fee as any)?.pawapayFee
+          : provider === "pixpay" ? fee?.pixpayFee : provider === "afribapay" ? fee?.afribapayFee : null;
+        const providerRate = configuredRate != null ? Number(configuredRate) : transactionType === "deposit" ? 3 : 0;
+        const marginRate = fee?.ashtechMargin != null ? Number(fee.ashtechMargin) : transactionType === "deposit" ? ASHTECH_MARGIN : 0;
+        const totalRate = providerRate + marginRate;
+        let normalFee = transactionType === "deposit" ? numAmount * totalRate / 100
+          : (fee && (fee.feeType === "percentage" || totalRate > 0))
+            ? numAmount * (totalRate > 0 ? totalRate : Number(fee?.feeValue || 0)) / 100
+            : Number(fee?.feeValue || 0);
+        if (transactionType === "withdrawal" && fee?.maxFee) normalFee = Math.min(normalFee, Number(fee.maxFee));
+        normalFee = Math.round(normalFee * 100) / 100;
+        const promo = await quoteReferralFee({
+          userId: req.userId!, amount: numAmount, currency: CURRENCY_ZONE[country.code.toUpperCase()] || country.currency,
+          providerPercent: configuredRate == null ? null : Number(configuredRate), normalFee,
+          maxOperation: Number(transactionType === "deposit" ? country.maxDeposit ?? 5000000 : country.maxWithdrawal ?? 500000),
+        });
+        const chargedFee = promo?.total ?? normalFee;
+        res.setHeader("Cache-Control", "no-store");
+        return res.json({
+          feeAmount: chargedFee, netAmount: Math.round((numAmount - chargedFee) * 100) / 100,
+          totalAmount: numAmount, feePercentage: numAmount ? chargedFee * 100 / numAmount : 0,
+          feeType: fee?.feeType || "none", feeName: fee?.name || null,
+          promoApplied: !!promo, promoExpiresAt: promo?.expiresAt || null, normalFeeAmount: normalFee,
+        });
+      }
       let feeAmount = 0;
       let feePercentage = 0;
       
@@ -16856,10 +16973,21 @@ export async function registerRoutes(
 
   // Get active global messages for current user (regardless of dismissal)
   app.get("/api/global-messages/active", requireAuth, async (req, res) => {
+    res.set("Cache-Control", "no-store");
     try {
       const all = await storage.getActiveGlobalMessages();
       const now = new Date();
       const active = all.filter(m => !m.expiresAt || new Date(m.expiresAt) > now);
+      const referralPromo = await getReferralPromo(req.userId!);
+      if (referralPromo) {
+        active.unshift({
+          id: `referral-promotion-${referralPromo.startsAt}`, adminId: "",
+          title: "Votre tarif de parrainage est actif",
+          message: `Vos frais sont réduits sur vos dépôts et retraits Mobile Money admissibles, dans la limite des plafonds : coût de traitement réel + 0,3 %. La promotion dure cinq jours. Consultez Parrainage & gains pour les conditions, votre date de fin et le temps restant.`,
+          isActive: true, expiresAt: new Date(referralPromo.expiresAt),
+          createdAt: new Date(referralPromo.startsAt),
+        });
+      }
       res.json(active);
     } catch (error) {
       console.error("Get active global messages error:", error);

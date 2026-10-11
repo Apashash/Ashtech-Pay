@@ -52,6 +52,7 @@ import {
   Receipt,
   Phone,
   Wrench,
+  Gift,
 } from "lucide-react";
 import { SiWhatsapp, SiFacebook } from "react-icons/si";
 import { BottomSheet, BottomSheetContent, BottomSheetHeader, BottomSheetTitle, BottomSheetFooter, BottomSheetDescription } from "@/components/ui/bottom-sheet";
@@ -79,6 +80,7 @@ const MENU_URLS = [
   { key: "withdraw", url: "/dashboard/withdraw", icon: Wallet, imageSrc: "/sidebar-icons/withdraw.png", color: "bg-orange-500/10 text-orange-500" },
   { key: "send", url: "/dashboard/send", icon: Send, imageSrc: "/sidebar-icons/send.png", color: "bg-sky-500/10 text-sky-500" },
   { key: "wallets", url: "/dashboard/wallets", icon: Coins, imageSrc: "/sidebar-icons/wallets.png", color: "bg-teal-500/10 text-teal-500" },
+  { key: "referrals", url: "/dashboard/referrals", icon: Gift, imageSrc: undefined, color: "bg-primary/10 text-primary" },
 ] as const;
 
 const SETTINGS_URLS = [
@@ -90,6 +92,7 @@ const SETTINGS_URLS = [
 ] as const;
 
 const SIDEBAR_ROUTE_LOADERS: Record<string, () => Promise<unknown>> = {
+  "/dashboard/referrals": () => import("@/pages/dashboard/referrals"),
   "/dashboard": () => import("@/pages/dashboard/index"),
   "/dashboard/links": () => import("@/pages/dashboard/links"),
   "/dashboard/transactions": () => import("@/pages/dashboard/transactions"),
@@ -173,7 +176,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [logoClickCount, setLogoClickCount] = useState(0);
   const logoClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const menuItems = MENU_URLS.map(item => ({ title: t.sidebar[item.key], url: item.url, icon: item.icon, imageSrc: item.imageSrc, color: item.color }));
+  const menuItems = MENU_URLS.map(item => ({ title: item.key === "referrals" ? "Parrainage & gains" : t.sidebar[item.key], url: item.url, icon: item.icon, imageSrc: item.imageSrc, color: item.color }));
 
   const { data: user, isLoading } = useQuery<User>({
     queryKey: ["/api/user"],
@@ -614,7 +617,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
               </div>
             </div>
           </header>
-          <main className="flex-1 p-4 pb-10">
+          <main className="min-w-0 flex-1 p-4 pb-10">
             {children}
           </main>
         </div>

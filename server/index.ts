@@ -69,7 +69,7 @@ const STARTUP_PUBLIC_API_PATHS = new Set([
 // Bump this value whenever the idempotent migration block below gains a new
 // schema change. Completed versions are stored in platform_settings so a
 // normal Passenger restart does not repeat every ALTER TABLE/CREATE INDEX.
-const SCHEMA_MIGRATION_VERSION = "2026-10-05-internal-transfer-idempotency-v1";
+const SCHEMA_MIGRATION_VERSION = "2026-10-11-referral-promotion-v1";
 
 // ── Gestionnaires d'erreurs globaux ──────────────────────────────────────────
 // unhandledRejection: log + continue — safe, these are async promise failures.
@@ -634,6 +634,9 @@ app.use((req, res, next) => {
       attempt++;
       try {
         await ensureMysqlAuxiliarySchema();
+        const { ensureReferralSchema, startReferralReconciliation } = await import("./referrals");
+        await ensureReferralSchema();
+        startReferralReconciliation();
         break;
       } catch (error) {
           const delayMs = retryDelaysMs[Math.min(attempt - 1, retryDelaysMs.length - 1)];
@@ -644,6 +647,9 @@ app.use((req, res, next) => {
     console.log("[Migration] DB_DIALECT=mysql — PostgreSQL boot migrations skipped; using imported MySQL schema");
     return;
   }
+  const { ensureReferralSchema, startReferralReconciliation } = await import("./referrals");
+  await ensureReferralSchema();
+  startReferralReconciliation();
   migrationStage = "postgres-schema-marker";
   try {
     const marker = await db.execute(sql`

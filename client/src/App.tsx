@@ -48,6 +48,8 @@ const AutoConversionSourcesPage = React.lazy(() =>
 );
 const UpdatesPage = React.lazy(() => import("@/pages/dashboard/updates"));
 const NotificationsPage = React.lazy(() => import("@/pages/dashboard/notifications"));
+const ReferralsPage = React.lazy(() => import("@/pages/dashboard/referrals"));
+const AdminReferralsPage = React.lazy(() => import("@/pages/admin/referrals"));
 const PaymentPage = React.lazy(() => import("@/pages/payment"));
 const CheckoutPage = React.lazy(() => import("@/pages/checkout"));
 const NotFound = React.lazy(() => import("@/pages/not-found"));
@@ -237,12 +239,14 @@ function Router() {
       <Route path="/dashboard/auto-conversion" component={AutoConversionPage} />
       <Route path="/dashboard/updates" component={UpdatesPage} />
       <Route path="/dashboard/notifications" component={NotificationsPage} />
+      <Route path="/dashboard/referrals" component={ReferralsPage} />
       <Route path="/pay/:slug" component={PaymentPage} />
       <Route path="/checkout/:transactionId" component={CheckoutPage} />
       <Route path="/admin-panel-verify" component={AdminPanelVerifyPage} />
       <Route path="/admin-login-otp" component={AdminLoginOtpPage} />
       <Route path={A} component={AdminDashboard} />
       <Route path={`${A}/users`} component={AdminUsers} />
+      <Route path={`${A}/referrals`} component={AdminReferralsPage} />
       <Route path={`${A}/users/:id`} component={AdminUserDetail} />
       <Route path={`${A}/transactions`} component={AdminTransactions} />
       <Route path={`${A}/transactions/deposits`} component={AdminDeposits} />

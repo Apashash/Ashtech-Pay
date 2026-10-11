@@ -10,6 +10,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { withdrawSchema, type SupportedCurrency, type WithdrawalNumber } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useOperationFees } from "@/hooks/use-operation-fees";
 import type { User } from "@shared/schema";
 import { Smartphone, SmartphoneNfc, Coins, Loader2, CheckCircle, AlertCircle, Plus, Settings, Shield, Info, CreditCard, X, RefreshCw, Clock } from "lucide-react";
 import { useLanguage } from "@/lib/language";
@@ -326,6 +327,7 @@ export default function WithdrawPage() {
       const res = await apiRequest("POST", "/api/withdrawals", {
         ...data,
         paymentMethod: selectedMethod,
+        expectedFeeAmount: selectedMethod === "mobile_money" ? operationFees.data?.feeAmount : undefined,
         otpRef,
         otpCode,
       });
@@ -375,9 +377,10 @@ export default function WithdrawPage() {
   const minPayoutCharge = selectedOperatorData?.minFee || 0;
 
   const percentageFee = (amountValue * feePercent / 100);
-  const feeAmount = (amountValue > 0 && selectedOperatorData)
+  const operationFees = useOperationFees("withdrawal", watchedAmount, selectedCountry, selectedOperator, !isCryptoWithdrawal && selectedMethod === "mobile_money");
+  const feeAmount = operationFees.data?.feeAmount ?? ((amountValue > 0 && selectedOperatorData)
     ? Math.max(percentageFee + feeFixed, minPayoutCharge)
-    : 0;
+    : 0);
 
   const isAmountValid = isCryptoWithdrawal
     ? cryptoLimitsConfigured &&
@@ -389,7 +392,8 @@ export default function WithdrawPage() {
     ? (!!selectedCountry && !!selectedOperator && selectedOperatorData?.available !== false && !!watchedAccountDetails)
     : true;
   const isBankTransferValid = selectedMethod === "bank_transfer" ? !!watchedAccountDetails : true;
-  const isSubmitDisabled = withdrawMutation.isPending || !isAmountValid || !isMobileMoneyValid || !isBankTransferValid;
+  const isSubmitDisabled = withdrawMutation.isPending || !isAmountValid || !isMobileMoneyValid || !isBankTransferValid
+    || (!isCryptoWithdrawal && selectedMethod === "mobile_money" && (operationFees.isUpdating || !operationFees.data || operationFees.isError));
 
   if (user && !isVerified) {
     return (
@@ -746,6 +750,12 @@ export default function WithdrawPage() {
             </div>
 
             {/* ── Submit ── */}
+            {!isCryptoWithdrawal && operationFees.isError && (
+              <p className="text-sm text-destructive" role="alert">
+                Le calcul des frais est indisponible.
+                <button type="button" className="ml-2 underline" onClick={() => void operationFees.refetch()}>Réessayer</button>
+              </p>
+            )}
             {!isCryptoWithdrawal && (
               <button
                 type="button"
@@ -803,10 +813,13 @@ export default function WithdrawPage() {
             </div>
             {feeAmount > 0 && (
               <div className="flex items-center justify-between px-4 py-3.5">
-                <span className="text-sm text-muted-foreground">{t.withdraw.confirmFee} {feePercent > 0 ? `(${feePercent}%)` : ""}</span>
+                <span className="text-sm text-muted-foreground">{t.withdraw.confirmFee} {(operationFees.data?.feePercentage ?? feePercent) > 0 ? `(${(operationFees.data?.feePercentage ?? feePercent).toFixed(2)}%)` : ""}</span>
                 <span className="text-sm font-medium text-red-500">-{formatCurrency(feeAmount, withdrawalCurrency as SupportedCurrency)}</span>
               </div>
             )}
+            {operationFees.isUpdating && <p className="px-4 text-sm text-muted-foreground">Calcul des frais…</p>}
+            {operationFees.isError && <p role="alert" className="px-4 text-sm text-destructive">Impossible de vérifier les frais. Réessayez avant de confirmer.</p>}
+            {operationFees.data?.promoApplied && <p className="px-4 text-sm text-primary">Tarif parrainage appliqué : coût de traitement + 0,3 %.</p>}
             <div className="flex items-center justify-between px-4 py-3.5 bg-muted/30">
               <span className="text-sm font-semibold text-foreground">{t.withdraw.confirmNet}</span>
               <span className="text-base font-bold text-green-500">{formatCurrency(amountValue - feeAmount, withdrawalCurrency as SupportedCurrency)}</span>
@@ -837,7 +850,7 @@ export default function WithdrawPage() {
                 }
                 requestOtpMutation.mutate();
               }}
-              disabled={requestOtpMutation.isPending || withdrawMutation.isPending}
+              disabled={requestOtpMutation.isPending || isSubmitDisabled}
               data-testid="button-final-confirm-withdraw"
             >
               {(requestOtpMutation.isPending || withdrawMutation.isPending) ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CreditCard className="w-4 h-4 mr-2" />}

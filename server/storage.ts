@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { encryptField, decryptField, hmacField, hmacFieldCandidates } from "./fieldEncryption";
 import { userKycStateFromSubmissionStatus } from "./kycStatusPolicy";
+import { registerReferral, scheduleReferralReconciliation } from "./referrals";
 
 /**
  * Normalize a phone number before DB storage or lookup:
@@ -160,7 +161,7 @@ export interface IStorage {
   getUserByEmailOrPhone(identifier: string): Promise<User | undefined>;
   getUserByResetToken(token: string): Promise<User | undefined>;
   getUserByRegistrationIp(ip: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  createUser(user: InsertUser, referrerId?: string | null): Promise<User>;
   updateUserBalance(id: string, amount: number): Promise<User | undefined>;
   refundToOriginalWallet(userId: string, txType: string, txCurrency: string, amount: number): Promise<void>;
   refundPendingManualPayout(id: string): Promise<Transaction | undefined>;
@@ -548,7 +549,7 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
+  async createUser(insertUser: InsertUser, referrerId?: string | null): Promise<User> {
     // Generate unique user ID: ASHTECH + 8 random digits (e.g. ASHTECH38023380)
     const generateId = () =>
       "ASHTECH" + Math.floor(10000000 + Math.random() * 90000000).toString();
@@ -557,14 +558,18 @@ export class DatabaseStorage implements IStorage {
     for (let attempt = 0; attempt < 10; attempt++) {
       const id = generateId();
       try {
-        if (isMysqlDialect) {
-          await db.insert(users).values({ ...insertUser, id });
-          const user = await this.getUser(id);
+        return await db.transaction(async trx => {
+          let user: User;
+          if (isMysqlDialect) {
+            await trx.insert(users).values({ ...insertUser, id, role: "user" });
+            [user] = await trx.select().from(users).where(eq(users.id, id));
+          } else {
+            [user] = await trx.insert(users).values({ ...insertUser, id, role: "user" }).returning();
+          }
           if (!user) throw new Error("USER_INSERT_READBACK_FAILED");
+          if (referrerId) await registerReferral(trx, id, referrerId);
           return user;
-        }
-        const [user] = await db.insert(users).values({ ...insertUser, id }).returning();
-        return user;
+        });
       } catch (err: any) {
         // 23505 = unique_violation — retry with a new ID
         if (
@@ -1807,6 +1812,7 @@ export class DatabaseStorage implements IStorage {
       ? await mysqlUpdateAndRead(users, eq(users.id, id), updates, () => this.getUser(id))
       : (await db.update(users).set(updates).where(eq(users.id, id)).returning())[0];
     if (user) setCachedUser(user);
+    if (updates.kycStatus === "verified" && user?.isVerified) scheduleReferralReconciliation(id);
     return user || undefined;
   }
 
@@ -3193,6 +3199,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createUserNotification(notification: InsertUserNotification): Promise<UserNotification> {
+    if (["deposit_confirmed", "withdrawal_confirmed"].includes(notification.type)) {
+      scheduleReferralReconciliation(notification.userId);
+    }
     if (isMysqlDialect) {
       const id = randomUUID();
       await db.insert(userNotifications).values({ ...notification, id });
@@ -3301,6 +3310,10 @@ export class DatabaseStorage implements IStorage {
         isRead: false,
       })
       .where(eq(userNotifications.id, pending.id));
+    if (!isPaymentLink && params.status === "completed") {
+      const transaction = await this.getTransactionById(params.transactionId);
+      if (transaction) scheduleReferralReconciliation(transaction.userId);
+    }
     return true;
   }
 

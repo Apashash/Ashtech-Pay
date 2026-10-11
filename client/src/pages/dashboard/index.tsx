@@ -890,6 +890,10 @@ export default function DashboardHome() {
         </div>
 
         <div className="flex flex-col sm:flex-row gap-4">
+          <Button variant="outline" className="justify-between gap-3" onClick={() => setLocation("/dashboard/referrals")} data-testid="button-dashboard-referrals">
+            <span>Parrainage & gains — invitez vos proches</span>
+            <ChevronRight className="h-4 w-4 shrink-0" />
+          </Button>
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-muted-foreground" />
             <Select value={selectedLink} onValueChange={setSelectedLink}>

@@ -114,6 +114,7 @@ export default function NotificationsPage() {
   // ── Navigation par type ───────────────────────────────────────────────────────
   function getDestination(type: string, notificationId?: string): string {
     switch (type) {
+      case "referral_promo_activated": return "/dashboard/referrals";
       case "deposit_confirmed":
       case "deposit_failed":
       case "deposit_pending":

@@ -24,6 +24,7 @@ import { cryptoQrPayload } from "@/lib/crypto-qr";
 import { formatCryptoAmount, minimumCryptoAmount } from "@/lib/crypto-minimum";
 import { getPawaPayPinInstructions } from "@/lib/pawapay-instructions";
 import { isAdminBlockedOperationError } from "@/lib/operation-errors";
+import { useOperationFees } from "@/hooks/use-operation-fees";
 
 interface OperatorConfig {
   id: string;
@@ -179,6 +180,7 @@ export default function DepositPage() {
     }
   }, [countries, watchedCountryId, form]);
 
+  const operationFees = useOperationFees("deposit", watchedAmount, watchedCountryId, watchedOperatorId, depositMode === "mobile_money");
   const feeCalculation = useMemo(() => {
     const amount = parseFloat(watchedAmount) || 0;
     if (amount <= 0 || !selectedOperator || selectedOperator.available === false) return null;
@@ -208,9 +210,13 @@ export default function DepositPage() {
       fee = (amount * feePercentage) / 100;
     }
 
+    if (operationFees.data) {
+      fee = operationFees.data.feeAmount;
+      feePercentage = operationFees.data.feePercentage;
+    }
     const creditedAmount = amount - fee;
     return { amount, fee, creditedAmount: creditedAmount > 0 ? creditedAmount : 0, feePercentage, fixedFee: selectedOperator.fixedFee || 0, isAfribaPay, isPixPay, isPawaPay };
-  }, [watchedAmount, selectedOperator]);
+  }, [watchedAmount, selectedOperator, operationFees.data]);
 
   useEffect(() => {
     if (watchedCountryId !== prevCountryId) {
@@ -317,6 +323,7 @@ export default function DepositPage() {
         countryId: data.countryId,
         phoneNumber: data.phoneNumber,
         description: data.description,
+        expectedFeeAmount: operationFees.data?.feeAmount,
           preAuthorisationCode: pawaPayPreAuthCode || undefined,
       };
       if (isPixPayOtp && pixpayOtpCode) payload.pixpayOtp = pixpayOtpCode;
@@ -474,7 +481,7 @@ export default function DepositPage() {
   };
 
   const handleConfirmDeposit = () => {
-    if (!pendingDepositData) return;
+    if (!pendingDepositData || operationFees.isUpdating || !operationFees.data || operationFees.isError) return;
     setShowConfirmDialog(false);
     setShowValidationMessage(false);
     depositMutation.mutate(pendingDepositData);
@@ -483,8 +490,9 @@ export default function DepositPage() {
   const canSubmit = useMemo(() => {
     const amount = parseFloat(watchedAmount) || 0;
     return amount >= minDeposit && amount <= maxDeposit &&
-      !!watchedCountryId && !!watchedOperatorId && selectedOperator?.available !== false && watchedPhoneNumber.length >= 8;
-  }, [watchedAmount, minDeposit, maxDeposit, watchedCountryId, watchedOperatorId, watchedPhoneNumber, selectedOperator]);
+      !!watchedCountryId && !!watchedOperatorId && selectedOperator?.available !== false && watchedPhoneNumber.length >= 8
+      && !operationFees.isUpdating && !!operationFees.data && !operationFees.isError;
+  }, [watchedAmount, minDeposit, maxDeposit, watchedCountryId, watchedOperatorId, watchedPhoneNumber, selectedOperator, operationFees.isUpdating, operationFees.data, operationFees.isError]);
 
   const resetWizard = () => {
     setShowValidationMessage(false);
@@ -1513,6 +1521,12 @@ export default function DepositPage() {
                       </div>
                     )}
 
+                    {operationFees.isError && (
+                      <p className="text-sm text-destructive" role="alert">
+                        Le calcul des frais est indisponible.
+                        <button type="button" className="ml-2 underline" onClick={() => void operationFees.refetch()}>Réessayer</button>
+                      </p>
+                    )}
                     <Button
                       type="submit"
                       className="w-full h-12 rounded-xl font-bold"
@@ -1558,6 +1572,9 @@ export default function DepositPage() {
                 {feeCalculation ? formatCurrency(feeCalculation.amount.toString(), (selectedCountry?.currency || "XAF") as SupportedCurrency) : "—"}
               </span>
             </div>
+            {operationFees.isUpdating && <p className="text-sm text-muted-foreground">Calcul des frais…</p>}
+            {operationFees.isError && <p role="alert" className="text-sm text-destructive">Impossible de vérifier les frais. Réessayez avant de confirmer.</p>}
+            {operationFees.data?.promoApplied && <p className="text-sm text-primary">Tarif parrainage appliqué : coût de traitement + 0,3 %.</p>}
             {feeCalculation && feeCalculation.fee > 0 && (
               <div className="flex items-center justify-between px-4 py-3.5">
                 <span className="text-sm text-muted-foreground">
@@ -1577,7 +1594,7 @@ export default function DepositPage() {
           </div>
           <BottomSheetFooter>
             <Button variant="outline" className="flex-1" onClick={() => setShowConfirmDialog(false)}>{t.deposit.back}</Button>
-            <Button className="flex-1 font-bold" onClick={handleConfirmDeposit} disabled={depositMutation.isPending} data-testid="button-final-confirm-deposit">
+            <Button className="flex-1 font-bold" onClick={handleConfirmDeposit} disabled={depositMutation.isPending || operationFees.isUpdating || !operationFees.data || operationFees.isError} data-testid="button-final-confirm-deposit">
               {depositMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CreditCard className="w-4 h-4 mr-2" />}
               {t.deposit.confirmBtn}
             </Button>

@@ -122,6 +122,7 @@ const menuItems: MenuItem[] = [
   { icon: Zap, label: "AfribaPay", href: `${ADMIN}/afribapay` },
   { icon: Zap, label: "PixPay", href: `${ADMIN}/pixpay` },
   { icon: Mail, label: "Campagnes Email", href: `${ADMIN}/email-campaigns` },
+  { icon: Users, label: "Parrainage & gains", href: `${ADMIN}/referrals` },
   { icon: Code2, label: "Gestion des API", href: `${ADMIN}/api-management` },
   { icon: Link2, label: "Liens de paiement", href: `${ADMIN}/links` },
   { icon: GlobalMessageIcon, label: "Message Global", href: `${ADMIN}/global-messages` },
