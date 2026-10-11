@@ -1,7 +1,7 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ArrowLeft, Globe, Shield, Users, Zap, Target, Heart, TrendingUp, ShoppingBag, Send, Code2, MapPin, Mail, Phone, Building2 } from "lucide-react";
+import { ArrowLeft, Globe, Shield, Users, Zap, Target, Heart, TrendingUp, ShoppingBag, Send, Code2, MapPin, Mail, Phone } from "lucide-react";
 
 
 const activityBreakdown = [
@@ -25,7 +25,7 @@ const values = [
   {
     icon: Users,
     title: "Accessibilité",
-    description: "Nous rendons les paiements en ligne accessibles à tous — entrepreneurs, créateurs, PME — partout en Afrique.",
+    description: "Nous rendons les paiements en ligne accessibles à tous, entrepreneurs, créateurs et PME, partout en Afrique.",
   },
   {
     icon: Heart,
@@ -55,10 +55,6 @@ const services = [
     title: "Solutions marchands",
     description: "Des outils complets pour gérer vos ventes, suivre vos transactions et retirer vos fonds facilement.",
   },
-];
-
-const partners = [
-  { name: "AfribaPay & PixPay", description: "Partenaires de paiement Mobile Money pour les dépôts et les retraits." },
 ];
 
 export default function AboutPage() {
@@ -159,27 +155,6 @@ export default function AboutPage() {
                   </div>
                   <h3 className="text-base font-bold text-foreground mb-2">{value.title}</h3>
                   <p className="text-muted-foreground text-sm leading-relaxed">{value.description}</p>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section>
-            <h2 className="text-2xl font-bold text-foreground mb-6">Partenaires technologiques</h2>
-            <p className="text-muted-foreground mb-6">
-              Ashtech Pay s'appuie sur des partenaires technologiques reconnus pour assurer la fiabilité, 
-              la sécurité et la conformité des transactions :
-            </p>
-            <div className="space-y-4">
-              {partners.map((partner) => (
-                <div key={partner.name} className="p-5 bg-card border border-border rounded-2xl flex items-center gap-4 hover:border-primary/40 transition-colors">
-                  <div className="w-12 h-12 bg-background border-2 border-border rounded-full flex items-center justify-center flex-shrink-0">
-                    <Building2 className="w-6 h-6 text-primary" />
-                  </div>
-                  <div>
-                    <p className="font-bold text-foreground">{partner.name}</p>
-                    <p className="text-sm text-muted-foreground">{partner.description}</p>
-                  </div>
                 </div>
               ))}
             </div>

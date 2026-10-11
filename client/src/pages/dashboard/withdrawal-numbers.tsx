@@ -251,7 +251,7 @@ export default function WithdrawalNumbersPage() {
               {totalPages > 1 && (
                 <div className="flex items-center justify-between mt-3">
                   <p className="text-xs text-muted-foreground">
-                    {(historyPage - 1) * HISTORY_PAGE_SIZE + 1}–{Math.min(historyPage * HISTORY_PAGE_SIZE, history.length)} / {history.length}
+                    {(historyPage - 1) * HISTORY_PAGE_SIZE + 1} à {Math.min(historyPage * HISTORY_PAGE_SIZE, history.length)} / {history.length}
                   </p>
                   <div className="flex items-center gap-1">
                     <Button

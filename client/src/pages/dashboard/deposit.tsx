@@ -367,7 +367,7 @@ export default function DepositPage() {
         return;
       }
       const diagnostics = [
-        typeof error.provider_code === "string" ? `Code fournisseur : ${error.provider_code}` : "",
+        typeof error.provider_code === "string" ? `Code de traitement : ${error.provider_code}` : "",
         error.provider_status !== undefined && Number.isFinite(Number(error.provider_status))
           ? `Statut : ${error.provider_status}`
           : "",
@@ -393,9 +393,9 @@ export default function DepositPage() {
     },
     onError: (error: Error & { provider_code?: unknown; provider_status?: unknown }) => {
       const diagnostics = [
-        typeof error.provider_code === "string" ? `Code fournisseur : ${error.provider_code}` : "",
+        typeof error.provider_code === "string" ? `Code de traitement : ${error.provider_code}` : "",
         error.provider_status !== undefined && Number.isFinite(Number(error.provider_status))
-          ? `Statut fournisseur : ${error.provider_status}`
+          ? `Statut de traitement : ${error.provider_status}`
           : "",
       ].filter(Boolean);
       toast({
@@ -428,7 +428,7 @@ export default function DepositPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Erreur lors de la génération");
       if (net.memoRequired && !data.memo) {
-        throw new Error(`Le réseau ${net.label} exige un memo/tag, mais le fournisseur n'en a pas retourné.`);
+        throw new Error(`Le réseau ${net.label} exige un memo/tag, mais aucun memo/tag n’a été retourné.`);
       }
       return data;
     },
@@ -994,7 +994,7 @@ export default function DepositPage() {
                     {/* Warning for memo chains */}
                     {cryptoCoinList[cryptoCoin]?.networks.find(n => n.id === displayedCryptoNetwork)?.memoRequired && (
                       <p className="text-xs text-amber-600 dark:text-amber-400">
-                        ⚠️ Ce réseau nécessite un mémo/tag — il sera affiché avec l'adresse.
+                        ⚠️ Ce réseau nécessite un mémo/tag. Il sera affiché avec l'adresse.
                       </p>
                     )}
                   </div>

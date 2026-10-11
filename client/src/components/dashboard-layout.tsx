@@ -645,7 +645,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           <BottomSheetHeader>
             <BottomSheetTitle>Conversion Fiat vers pUSD</BottomSheetTitle>
             <BottomSheetDescription>
-              Convertit les fonds en monnaie locale du wallet fournisseur en pUSD pour les retraits.
+              Convertit les fonds en monnaie locale du wallet en pUSD pour les retraits.
             </BottomSheetDescription>
           </BottomSheetHeader>
           <div className="space-y-4 py-4">

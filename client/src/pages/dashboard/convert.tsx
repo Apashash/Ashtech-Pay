@@ -298,7 +298,7 @@ export default function ConvertPage() {
                 <strong>{conversionPending.fromAmount.toLocaleString("fr-FR")} {conversionPending.fromCurrency}</strong>
                 {" "}→{" "}
                 <strong>{conversionPending.toAmount.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} {conversionPending.toCurrency}</strong>
-                {" "}— traitement en cours, veuillez patienter.
+                {" "}Traitement en cours, veuillez patienter.
               </p>
             </div>
           </div>

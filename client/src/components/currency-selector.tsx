@@ -53,7 +53,7 @@ export function CurrencySelector() {
             <div>
               <span className="font-medium text-primary text-sm">Devise locale</span>
               <span className="text-muted-foreground text-xs block">
-                {localCurrencyMeta.flag} {localCurrencyMeta.label} — {localCurrencyMeta.name}
+                {localCurrencyMeta.flag} {localCurrencyMeta.label} : {localCurrencyMeta.name}
               </span>
             </div>
           </div>

@@ -119,17 +119,17 @@ Exemples de familles de flux actuellement configurées :
 | Pays | Opérateur / cas | Parcours | Code à composer |
 | --- | --- | --- | --- |
 | Côte d'Ivoire | Orange | OTP obtenu par USSD | `#144*82#` |
-| Côte d'Ivoire | Wave | Redirection Wave | Aucun — ouvrir la redirection |
-| Côte d'Ivoire | MTN, Moov | USSD Push | Aucun — valider la notification |
+| Côte d'Ivoire | Wave | Redirection Wave | Aucun : ouvrir la redirection |
+| Côte d'Ivoire | MTN, Moov | USSD Push | Aucun : valider la notification |
 | Sénégal | Orange | OTP obtenu par USSD | `#144#391#` |
-| Sénégal | Wave | Redirection Wave | Aucun — ouvrir la redirection |
-| Sénégal | Free, E-money | USSD Push | Aucun — valider la notification |
+| Sénégal | Wave | Redirection Wave | Aucun : ouvrir la redirection |
+| Sénégal | Free, E-money | USSD Push | Aucun : valider la notification |
 | Mali | Orange | OTP obtenu par USSD | `#144#77#` |
-| Mali | Moov | USSD Push | Aucun — valider la notification |
+| Mali | Moov | USSD Push | Aucun : valider la notification |
 | Burkina Faso | Orange | OTP USSD, avec montant dans certains codes | `*144*4*6*montant#` |
-| Burkina Faso | Moov / Flooz | USSD Push | Aucun — valider la notification |
-| Cameroun | MTN, Orange | USSD Push | Aucun — valider la notification |
-| Congo RDC | Orange, Airtel, M-Pesa, Afrimoney | USSD Push | Aucun — valider la notification |
+| Burkina Faso | Moov / Flooz | USSD Push | Aucun : valider la notification |
+| Cameroun | MTN, Orange | USSD Push | Aucun : valider la notification |
+| Congo RDC | Orange, Airtel, M-Pesa, Afrimoney | USSD Push | Aucun : valider la notification |
 | Autres opérateurs actifs | Selon le catalogue et la configuration active | USSD Push, OTP ou redirection | Utiliser `ussd_code` ou l'URL retournée |
 
 Cette matrice décrit le routage actuellement configuré pour les opérateurs concernés. Le statut actif peut changer. La réponse de [`GET /v1/countries`](/docs/reference/countries) reste la source de vérité pour votre formulaire.
@@ -246,7 +246,7 @@ curl_close($ch);
 
 Utilisez la devise et le nom exacts retournés par `/v1/countries`. Le champ `reference` est votre référence marchand et doit rester unique pour chaque commande.
 
-### Exemple USSD Push — Cameroun
+### Exemple USSD Push : Cameroun
 
 ```bash
 curl -X POST https://www.ashtechpay.com/v1/collect \
@@ -266,7 +266,7 @@ curl -X POST https://www.ashtechpay.com/v1/collect \
 
 Réponse attendue : `202`, `status: "pending"`. Le client valide ensuite la demande reçue sur son téléphone.
 
-### Exemple Wave — Côte d'Ivoire
+### Exemple Wave : Côte d'Ivoire
 
 ```bash
 curl -X POST https://www.ashtechpay.com/v1/collect \
@@ -286,7 +286,7 @@ curl -X POST https://www.ashtechpay.com/v1/collect \
 
 Si le flux est Wave, la réponse `202` contient `flow: "wave"` et `wave_url`. Ouvrez cette URL pour que le client confirme le paiement.
 
-### Exemple OTP Orange — première requête
+### Exemple OTP Orange : première requête
 
 ```bash
 curl -X POST https://www.ashtechpay.com/v1/collect \
@@ -306,7 +306,7 @@ curl -X POST https://www.ashtechpay.com/v1/collect \
 
 La réponse peut être `400 otp_required` avec un `ussd_code`, ou avec une `reference` si le code est envoyé par SMS. Affichez l'instruction retournée par l'API au client.
 
-### Exemple OTP — confirmation
+### Exemple OTP : confirmation
 
 Après réception du code OTP, reprenez les mêmes paramètres et ajoutez `otp`. Si la première réponse contenait `reference`, envoyez exactement cette valeur :
 

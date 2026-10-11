@@ -60,7 +60,7 @@ export function CoinSelect({ value, onChange, coinList, coinLogoUrl }: CoinSelec
         onClick={() => setOpen(v => !v)}
         className="w-full h-12 pl-11 pr-10 rounded-xl border border-border bg-background text-sm font-semibold text-left focus:outline-none focus:ring-2 focus:ring-primary/40 flex items-center"
       >
-        <span className="truncate">{value} — {selectedDef?.name ?? value}</span>
+        <span className="truncate">{value} : {selectedDef?.name ?? value}</span>
       </button>
 
       {/* coin logo left */}
@@ -115,7 +115,7 @@ export function CoinSelect({ value, onChange, coinList, coinLogoUrl }: CoinSelec
                     />
                   </span>
                   <span className="font-semibold">{sym}</span>
-                  <span className="text-muted-foreground font-normal truncate">— {def.name}</span>
+                  <span className="text-muted-foreground font-normal truncate">({def.name})</span>
                   {sym === value && <span className="ml-auto text-primary">✓</span>}
                 </button>
               ))

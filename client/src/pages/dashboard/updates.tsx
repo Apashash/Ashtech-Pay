@@ -137,14 +137,14 @@ export default function UpdatesPage() {
       icon: BadgeCheck,
       iconBg: "bg-amber-500/15",
       iconColor: "text-amber-600 dark:text-amber-400",
-      title: "KYC — Nouvelle procédure de vérification",
+      title: "KYC : Nouvelle procédure de vérification",
       date: "Juillet 2026",
       summary:
         "Le processus de vérification d'identité (KYC) a été entièrement repensé pour être plus rapide, plus sécurisé et plus professionnel.",
       bullets: [
         "Suppression du récépissé comme document accepté",
         "Suppression de la carte électorale comme document accepté",
-        "Ajout de la carte graphique — plus moderne et sécurisée",
+        "Ajout de la carte graphique, plus moderne et sécurisée",
         "Interface KYC redessinée : plus intuitive et professionnelle",
         "Validation plus rapide grâce à une meilleure reconnaissance documentaire",
         "Documents acceptés : CNI, Passeport, Carte graphique",

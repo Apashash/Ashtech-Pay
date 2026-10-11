@@ -6067,7 +6067,7 @@ export async function registerRoutes(
 
       const provider = (operator as any).paymentProvider;
       if (provider !== "afribapay" && provider !== "pixpay" && provider !== "pawapay") {
-        return res.status(400).json({ message: "Aucun fournisseur de paiement configuré pour cet opérateur." });
+        return res.status(400).json({ message: "Le paiement n’est pas configuré pour cet opérateur." });
       }
       const fee = await storage.resolveFee("withdrawal", (operator as any).countryId, operatorId);
       let feeAmount = 0;
@@ -6296,7 +6296,7 @@ export async function registerRoutes(
 
       const transferProvider = (operator as any).paymentProvider;
       if (transferProvider !== "afribapay" && transferProvider !== "pixpay" && transferProvider !== "pawapay") {
-        return res.status(400).json({ message: "Aucun fournisseur de paiement configuré pour cet opérateur." });
+        return res.status(400).json({ message: "Le paiement n’est pas configuré pour cet opérateur." });
       }
 
       const fee = await storage.resolveFee("withdrawal", countryId, operatorId);
@@ -6461,7 +6461,7 @@ export async function registerRoutes(
           raw?: unknown;
         } = {
           success: false,
-          message: "Aucun fournisseur de paiement configuré",
+          message: "Le paiement n’est pas configuré",
         };
 
         if (transferProvider === "afribapay") {
@@ -7022,7 +7022,7 @@ export async function registerRoutes(
       // Determine payment provider BEFORE fee calculation — dépôt utilise depositPaymentProvider si défini
       const paymentProvider = (operatorRecord as any)?.depositPaymentProvider || (operatorRecord as any)?.paymentProvider;
       if (paymentProvider !== "afribapay" && paymentProvider !== "pixpay" && paymentProvider !== "pawapay") {
-        return res.status(400).json({ message: "Aucun fournisseur de paiement configuré pour cet opérateur." });
+        return res.status(400).json({ message: "Le paiement n’est pas configuré pour cet opérateur." });
       }
       let pawaPayOperation: Awaited<ReturnType<typeof resolvePawaPayOperationConfiguration>> | undefined;
       if (paymentProvider === "pawapay") {
@@ -7750,7 +7750,7 @@ export async function registerRoutes(
       }
       const withdrawalProvider = withdrawalOperator?.paymentProvider;
       if (withdrawalProvider !== "afribapay" && withdrawalProvider !== "pixpay" && withdrawalProvider !== "pawapay") {
-        return res.status(400).json({ message: "Aucun fournisseur de paiement configuré pour cet opérateur." });
+        return res.status(400).json({ message: "Le paiement n’est pas configuré pour cet opérateur." });
       }
 
       // Calculate fee using fee resolution — provider-aware
@@ -7944,7 +7944,7 @@ export async function registerRoutes(
         raw?: unknown;
       } = {
         success: false,
-        message: "Aucun fournisseur de paiement configuré",
+        message: "Le paiement n’est pas configuré",
       };
 
         if (paymentProvider === "afribapay") {
@@ -11323,7 +11323,7 @@ export async function registerRoutes(
           paymentUrl: iziIntent.paymentUrl,
           intentId: iziIntent.id,
           reference,
-          message: "Intent de paiement IziChange créé",
+          message: "Demande de paiement crypto créée",
         });
       }
 
@@ -11411,7 +11411,7 @@ export async function registerRoutes(
       // Determine provider BEFORE fee calculation — dépôt utilise depositPaymentProvider si défini
       const paymentProvider = (operatorRecord as any)?.depositPaymentProvider || operatorRecord?.paymentProvider;
       if (paymentProvider !== "afribapay" && paymentProvider !== "pixpay" && paymentProvider !== "pawapay") {
-        return res.status(400).json({ message: "Aucun fournisseur de paiement configuré pour cet opérateur." });
+        return res.status(400).json({ message: "Le paiement n’est pas configuré pour cet opérateur." });
       }
        if (paymentProvider === "pixpay" &&
            !PIXPAY_SUPPORTED_COUNTRIES.some((supported: any) => supported.code === paymentCountryCode.toUpperCase())) {
@@ -11458,7 +11458,7 @@ export async function registerRoutes(
         totalFeeAmount = pf.totalFeeAmount.toFixed(2);
         ashtechFeeAmountStr = pf.ashtechFeeAmount.toFixed(2);
       } else {
-        return res.status(400).json({ message: "Fournisseur de paiement non supporté." });
+        return res.status(400).json({ message: "Mode de paiement non pris en charge." });
       }
 
       // Generate unique ASHPAY reference
@@ -14671,7 +14671,7 @@ export async function registerRoutes(
               userId:        transaction.userId,
               type:          "withdrawal_confirmed",
               title:         transaction.type === "withdrawal" ? "Retrait approuvé" : "Transfert approuvé",
-              message:       `Votre ${transaction.type === "withdrawal" ? "retrait" : "transfert"} de ${transaction.amount} ${transaction.currency} a été soumis au fournisseur et attend sa confirmation.`,
+              message:       `Votre ${transaction.type === "withdrawal" ? "retrait" : "transfert"} de ${transaction.amount} ${transaction.currency} est en cours de traitement et attend sa confirmation.`,
               transactionId: transaction.id,
               isRead:        false,
             }).catch((notificationError: any) => {
@@ -19391,7 +19391,7 @@ export async function registerRoutes(
          await storage.updateTransactionStatus(transaction.id, "failed");
          return res.status(502).json({
            error: "provider_missing_memo",
-           message: `Le réseau ${request.assetCode} exige un ${selectedNetwork.memoType || "memo/tag"}, mais le fournisseur n'en a pas retourné.`,
+           message: `Le réseau ${request.assetCode} exige un ${selectedNetwork.memoType || "memo/tag"}, mais aucun n’a été retourné.`,
            request_id: requestId,
          });
        }
@@ -19687,7 +19687,7 @@ export async function registerRoutes(
         const AFRIBAPAY_COLLECT_CODES = new Set(["BF","BJ","CD","CF","CG","CI","CM","GA","GW","ML","NE","SN","TD","TG"]);
       const paymentProvider = ((operatorRecord as any).depositPaymentProvider || (operatorRecord as any).paymentProvider) as string;
       if (paymentProvider !== "afribapay" && paymentProvider !== "pixpay" && paymentProvider !== "pawapay") {
-        return res.status(422).json({ error: "unprocessable", message: "Aucun fournisseur de paiement valide n'est configuré pour cet opérateur." });
+        return res.status(422).json({ error: "unprocessable", message: "Le paiement n’est pas configuré pour cet opérateur." });
       }
        const countryCode = country.code.toUpperCase();
         const providerCountries = paymentProvider === "pixpay" ? PIXPAY_COLLECT_CODES
@@ -19922,7 +19922,7 @@ export async function registerRoutes(
               reference: existingTxOtp.reference || ctx.afribaTransactionId,
               ...(sessionMerchantReference ? { merchant_reference: sessionMerchantReference } : {}),
               status: "pending",
-              message: "Le fournisseur n'a pas confirmé la réponse. Ne renvoyez pas le code OTP; consultez le statut de la transaction.",
+              message: "La réponse n’a pas été confirmée. Ne renvoyez pas le code OTP; consultez le statut de la transaction.",
               created_at: existingTxOtp.createdAt,
             });
           }
@@ -20834,7 +20834,7 @@ export async function registerRoutes(
       }
       const provider = (operator as any).withdrawalPaymentProvider || (operator as any).paymentProvider;
       if (!["afribapay", "pixpay", "pawapay"].includes(provider)) {
-        return res.status(422).json({ error: "provider_unavailable", message: "Aucun fournisseur de payout n'est configuré pour cet opérateur." });
+        return res.status(422).json({ error: "provider_unavailable", message: "Le retrait n’est pas configuré pour cet opérateur." });
       }
       const phone = String(phoneResult.phone || "");
       const phoneError = validateMobileMoneyPhone(phone, countryCode);
@@ -20874,7 +20874,7 @@ export async function registerRoutes(
       if (payoutAmount <= 0) return res.status(422).json({ error: "fees_exceed_amount", message: "Les frais sont supérieurs au montant du payout." });
 
       if (provider === "pixpay" && !getPixPayServiceId(operator.name || "", countryCode, "cash_in")) {
-        return res.status(503).json({ error: "provider_configuration_error", message: "Le service de payout PixPay n'est pas configuré pour cet opérateur." });
+        return res.status(503).json({ error: "provider_configuration_error", message: "Le service de retrait n’est pas configuré pour cet opérateur." });
       }
       if (provider === "pawapay") {
         try {
@@ -20884,7 +20884,7 @@ export async function registerRoutes(
             pawaPayCountry(countryCode),
           );
         } catch {
-          return res.status(503).json({ error: "provider_unavailable", message: "Le service PawaPay est temporairement indisponible." });
+          return res.status(503).json({ error: "provider_unavailable", message: "Le service de paiement est temporairement indisponible." });
         }
       }
 
@@ -21127,7 +21127,7 @@ export async function registerRoutes(
     let payoutLockUntil: number | null = null;
     try {
       if (!isIziPayConfigured()) {
-        return res.status(503).json({ error: "crypto_payout_unavailable", message: "Le fournisseur de payout crypto n'est pas configuré." });
+        return res.status(503).json({ error: "crypto_payout_unavailable", message: "Le service de retrait crypto n’est pas configuré." });
       }
       const referenceInput = typeof req.body?.reference === "string" ? req.body.reference.trim() : "";
       const assetCode = typeof req.body?.asset_code === "string" ? req.body.asset_code.trim().toUpperCase() : "";

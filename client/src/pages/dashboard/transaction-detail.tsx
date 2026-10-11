@@ -279,7 +279,7 @@ export default function TransactionDetailPage({ params }: { params: { id: string
           <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 mb-4">
             <p className="text-sm font-semibold text-sky-700">Sandbox test</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Résultat simulé : aucun solde n’a été modifié, aucun fournisseur appelé et aucun webhook envoyé.
+              Résultat simulé : aucun solde n’a été modifié, aucun paiement réel effectué et aucun webhook envoyé.
             </p>
             {tx.metadata?.simulatedStatus && (
               <p className="text-xs text-muted-foreground mt-1">

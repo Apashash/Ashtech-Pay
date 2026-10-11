@@ -278,7 +278,7 @@ export default function LinkDetailPage() {
                     {totalPages > 1 && (
                       <div className="flex items-center justify-between pt-4 mt-4 border-t">
                         <p className="text-sm text-muted-foreground">
-                          {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, transactions.length)} {ld.of} {transactions.length}
+                          {((page - 1) * PAGE_SIZE) + 1} à {Math.min(page * PAGE_SIZE, transactions.length)} {ld.of} {transactions.length}
                         </p>
                         <div className="flex items-center gap-2">
                           <Button

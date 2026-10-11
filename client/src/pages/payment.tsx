@@ -528,7 +528,7 @@ export default function PaymentPage() {
         };
         const diagnostics = [
           typeof providerError.provider_code === "string"
-            ? `Code fournisseur : ${providerError.provider_code}`
+            ? `Code de traitement : ${providerError.provider_code}`
             : "",
           providerError.provider_status !== undefined &&
           Number.isFinite(Number(providerError.provider_status))
@@ -614,7 +614,7 @@ export default function PaymentPage() {
         throw normalizePaymentLinkRequestError(error);
       }
       if (net.memoRequired && !data.memo) {
-        throw new Error(`Le réseau ${net.label} exige un memo/tag, mais le fournisseur n'en a pas retourné.`);
+        throw new Error(`Le réseau ${net.label} exige un memo/tag, mais aucun memo/tag n’a été retourné.`);
       }
       return data;
     },
@@ -959,7 +959,7 @@ export default function PaymentPage() {
             {/* Info banner (shared address) */}
             {payCryptoShared && (
               <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl px-3 py-2.5 text-xs text-blue-600 dark:text-blue-400">
-                ℹ️ Adresse partagée — envoyez depuis votre propre portefeuille, ne pas utiliser en échange direct.
+                ℹ️ Adresse partagée : envoyez depuis votre propre portefeuille, ne pas utiliser en échange direct.
               </div>
             )}
 

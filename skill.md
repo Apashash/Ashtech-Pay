@@ -134,20 +134,20 @@ Use this Skill when:
 Use the current documentation and catalogues; never assume operators,
 currencies, or networks. The currently documented Direct API includes:
 
-- `GET /v1/countries` — active countries and operators;
-- `GET /v1/fees` — applicable fees;
-- `GET /v1/wallets?user_id=...` — profile wallet balances;
-- `POST /v1/conversions` and `GET /v1/conversions/:id?user_id=...` — immediate wallet conversion and status;
-- `GET /v1/auto-conversion-rules?user_id=...` — list automatic conversion rules;
-- `POST /v1/auto-conversion-rules` — create an automatic conversion rule;
-- `DELETE /v1/auto-conversion-rules/:id?user_id=...` — delete a rule;
-- `POST /v1/collect` — Mobile Money collection;
-- `GET /v1/transaction/:id` — transaction status;
-- `GET /v1/crypto/assets` — active crypto assets and networks;
-- `POST /v1/crypto/collect` — crypto payment creation;
-- `GET /v1/countries?operation=payout` — active payout countries and withdrawal operators;
-- `POST /v1/payouts/mobile-money` — Mobile Money payout;
-- `POST /v1/payouts/crypto` — crypto payout, including USDT.
+- `GET /v1/countries`: active countries and operators;
+- `GET /v1/fees`: applicable fees;
+- `GET /v1/wallets?user_id=...`: profile wallet balances;
+- `POST /v1/conversions` and `GET /v1/conversions/:id?user_id=...`: immediate wallet conversion and status;
+- `GET /v1/auto-conversion-rules?user_id=...`: list automatic conversion rules;
+- `POST /v1/auto-conversion-rules`: create an automatic conversion rule;
+- `DELETE /v1/auto-conversion-rules/:id?user_id=...`: delete a rule;
+- `POST /v1/collect`: Mobile Money collection;
+- `GET /v1/transaction/:id`: transaction status;
+- `GET /v1/crypto/assets`: active crypto assets and networks;
+- `POST /v1/crypto/collect`: crypto payment creation;
+- `GET /v1/countries?operation=payout`: active payout countries and withdrawal operators;
+- `POST /v1/payouts/mobile-money`: Mobile Money payout;
+- `POST /v1/payouts/crypto`: crypto payout, including USDT.
 
 Hosted Checkout endpoints and fields must be taken from the current Hosted
 Checkout documentation.

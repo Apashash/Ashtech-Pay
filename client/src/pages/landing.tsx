@@ -345,7 +345,7 @@ function SolutionsSection() {
       badge: null,
       title: "Ashtech Pay-OUT",
       description:
-        "Ashtech Pay-OUT ou Décaissements Mobile Money vous permet d'effectuer des paiements de masse ou des décaissements en ligne en toute sécurité et simplicité, à destination de vos clients, fournisseurs, salariés et autres bénéficiaires.",
+        "Ashtech Pay-OUT ou Décaissements Mobile Money vous permet d'effectuer des paiements de masse ou des décaissements en ligne en toute sécurité et simplicité, à destination de vos clients, salariés et autres bénéficiaires.",
       link: "/register",
     },
     {

@@ -245,7 +245,7 @@ export default function ReferralsPage() {
               {data.pagination.total > 0 && (
                 <nav aria-label="Pagination des personnes invitées" className="flex flex-col gap-3 border-t border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7">
                   <p aria-live="polite" className="text-sm text-muted-foreground">
-                    {(data.pagination.page - 1) * data.pagination.pageSize + 1}–{Math.min(data.pagination.page * data.pagination.pageSize, data.pagination.total)} sur {data.pagination.total}
+                    {(data.pagination.page - 1) * data.pagination.pageSize + 1} à {Math.min(data.pagination.page * data.pagination.pageSize, data.pagination.total)} sur {data.pagination.total}
                   </p>
                   <div className="flex flex-wrap items-center gap-3">
                     <Button variant="outline" size="sm" disabled={isFetching || data.pagination.page <= 1} onClick={() => setInvitePage(data.pagination.page - 1)}>Précédent</Button>

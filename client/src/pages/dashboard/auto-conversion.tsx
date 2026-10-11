@@ -757,7 +757,7 @@ export default function AutoConversionPage() {
             {/* Source selector button */}
             <div className="space-y-2">
               <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Wallet(s) source — argent reçu
+                Wallet(s) source : argent reçu
               </label>
 
               {sourceOptions.length === 0 ? (

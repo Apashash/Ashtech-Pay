@@ -287,7 +287,7 @@ function PageShell({ children }: { children: React.ReactNode }) {
           {children}
         </div>
         <p className="text-center text-xs text-muted-foreground mt-6">
-          © {new Date().getFullYear()} Ashtech Pay — Paiements sécurisés
+          © {new Date().getFullYear()} Ashtech Pay. Paiements sécurisés
         </p>
       </div>
     </div>

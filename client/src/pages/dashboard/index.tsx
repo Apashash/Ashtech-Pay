@@ -191,7 +191,7 @@ function SendMoneyDialog({ open, onClose, wallets = [] }: { open: boolean; onClo
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
       queryClient.invalidateQueries({ queryKey: ["/api/transactions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/wallets"] });
-      toast({ title: "Transfert effectué ✓", description: `Compte de ${data.recipientName} crédité instantanément — Frais: 0` });
+      toast({ title: "Transfert effectué ✓", description: `Compte de ${data.recipientName} crédité instantanément. Frais: 0` });
       reset();
       onClose();
     },
@@ -255,7 +255,7 @@ function SendMoneyDialog({ open, onClose, wallets = [] }: { open: boolean; onClo
               <SelectContent>
                 {wallets.map((w, idx) => (
                   <SelectItem key={w.currency || idx} value={w.currency}>
-                    {idx === 0 ? "Compte Principal" : `Compte ${w.currency}`} — {parseFloat(w.balance || "0").toLocaleString()} {w.currency}
+                    {idx === 0 ? "Compte Principal" : `Compte ${w.currency}`} : {parseFloat(w.balance || "0").toLocaleString()} {w.currency}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -282,7 +282,7 @@ function SendMoneyDialog({ open, onClose, wallets = [] }: { open: boolean; onClo
           {isInternal && (
             <div className="flex items-center gap-2 px-3 py-2 bg-green-500/10 dark:bg-green-500/10 rounded-lg border border-green-500/20">
               <CheckCircle className="w-4 h-4 text-green-500" />
-              <span className="text-green-500 text-sm font-medium">Frais: 0 — Transfert gratuit et instantané</span>
+              <span className="text-green-500 text-sm font-medium">Frais: 0. Transfert gratuit et instantané</span>
             </div>
           )}
 
@@ -891,7 +891,7 @@ export default function DashboardHome() {
 
         <div className="flex flex-col sm:flex-row gap-4">
           <Button variant="outline" className="justify-between gap-3" onClick={() => setLocation("/dashboard/referrals")} data-testid="button-dashboard-referrals">
-            <span>Parrainage & gains — invitez vos proches</span>
+            <span>Parrainage & gains : invitez vos proches</span>
             <ChevronRight className="h-4 w-4 shrink-0" />
           </Button>
           <div className="flex items-center gap-2">
