@@ -207,13 +207,19 @@ export async function getReferralPromo(userId: string) {
     remainingSeconds: Math.ceil((new Date(account.expires_at).getTime() - now.getTime()) / 1000) };
 }
 
-export async function referralOverview(userId: string) {
+export async function referralOverview(userId: string, requestedPage = 1) {
   const account = await ensureReferralAccount(userId);
   await reconcileReferral(userId);
   const fresh = (await pool.query("SELECT * FROM referral_accounts WHERE user_id=$1", [userId])).rows[0];
+  const pageSize = 15;
+  const total = Number((await pool.query(`SELECT COUNT(*) AS total
+    FROM referral_invites i JOIN users u ON u.id=i.invitee_id WHERE i.referrer_id=$1`, [userId])).rows[0].total);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.min(totalPages, Math.max(1, Number.isSafeInteger(requestedPage) ? requestedPage : 1));
   const invitations = (await pool.query(`SELECT i.*,u.username,u.kyc_status,u.is_verified
     FROM referral_invites i JOIN users u ON u.id=i.invitee_id
-    WHERE i.referrer_id=$1 ORDER BY i.created_at DESC LIMIT 200`, [userId])).rows;
+    WHERE i.referrer_id=$1 ORDER BY i.created_at DESC,i.id DESC LIMIT $2 OFFSET $3`,
+    [userId, pageSize, (page - 1) * pageSize])).rows;
   const invited = await db.transaction(async trx => Promise.all(invitations.map(async (i: any) => ({
     id: i.id, username: i.username, createdAt: iso(i.created_at),
     kycVerified: i.kyc_status === "verified" && !!i.is_verified,
@@ -223,6 +229,7 @@ export async function referralOverview(userId: string) {
   const now = new Date();
   return {
     code: account.code, serverNow: now.toISOString(), invited, rules: REFERRAL_RULES,
+    pagination: { page, pageSize, total, totalPages },
     promo: referralPromoActive(fresh.starts_at, fresh.expires_at, fresh.cancelled_at, now.getTime())
       ? { startsAt: iso(fresh.starts_at), expiresAt: iso(fresh.expires_at),
         remainingSeconds: Math.ceil((new Date(fresh.expires_at).getTime() - now.getTime()) / 1000) } : null,

@@ -36,6 +36,27 @@ test("referral qualification, concurrency, fees, caps and admin cancellation", {
     ids.push(signup.id);
     assert.equal(signup.role, "user");
     await service.ensureReferralAccount(referrer);
+    // Real database pagination: stable order for tied timestamps, complete
+    // totals, a partial final page and safe clamping of stale page requests.
+    for (let index = 0; index < 16; index++) {
+      const id = `REFTEST${randomUUID()}`;
+      ids.push(id);
+      await pool.query(`INSERT INTO users (id,username,email,password,full_name,role,kyc_status,is_verified,created_at)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [id, id, `${id}@example.invalid`, "not-a-login-hash", "Pagination fixture", "user", "not_submitted", false, now]);
+      await pool.query(`INSERT INTO referral_invites (id,referrer_id,invitee_id,created_at)
+        VALUES ($1,$2,$3,$4)`, [randomUUID(), unrelated, id, now]);
+    }
+    const pageOne = await service.referralOverview(unrelated, 1);
+    const pageTwo = await service.referralOverview(unrelated, 2);
+    assert.deepEqual(pageOne.pagination, { page: 1, pageSize: 15, total: 16, totalPages: 2 });
+    assert.equal(pageOne.invited.length, 15);
+    assert.equal(pageTwo.invited.length, 1);
+    assert.equal(new Set([...pageOne.invited, ...pageTwo.invited].map(person => person.id)).size, 16);
+    assert.deepEqual((await service.referralOverview(unrelated, 1)).invited.map(person => person.id), pageOne.invited.map(person => person.id));
+    assert.equal((await service.referralOverview(unrelated, 99)).pagination.page, 2);
+    assert.equal((await service.referralOverview(unrelated, -1)).pagination.page, 1);
+    assert.deepEqual((await service.referralOverview(admin)).pagination, { page: 1, pageSize: 15, total: 0, totalPages: 1 });
     const legacyCode = randomUUID().replaceAll("-", "").slice(0, 20);
     const oldStart = new Date("2020-01-01T00:00:00.000Z");
     const oldExpiry = new Date("2020-01-06T00:00:00.000Z");

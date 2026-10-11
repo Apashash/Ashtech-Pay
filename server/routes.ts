@@ -8292,8 +8292,13 @@ export async function registerRoutes(
   // Fee calculation endpoint
   app.get("/api/referrals/me", requireAuth, async (req, res) => {
     try {
+      const page = req.query.page === undefined ? 1 : Number(req.query.page);
+      if (!Number.isSafeInteger(page) || page < 1 || (req.query.page !== undefined && typeof req.query.page !== "string")) {
+        res.status(400).json({ message: "Numéro de page invalide." });
+        return;
+      }
       res.setHeader("Cache-Control", "no-store");
-      res.json(await referralOverview(req.userId!));
+      res.json(await referralOverview(req.userId!, page));
     } catch (error) {
       console.error("[Referral] Overview failed:", error);
       res.status(500).json({ message: "Impossible de charger le parrainage. Réessayez." });

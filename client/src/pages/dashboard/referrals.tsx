@@ -22,6 +22,7 @@ interface ReferralInvite {
 interface ReferralData {
   code: string;
   serverNow: string;
+  pagination: { page: number; pageSize: number; total: number; totalPages: number };
   promo: null | {
     startsAt: string;
     expiresAt: string;
@@ -48,10 +49,11 @@ export default function ReferralsPage() {
   const { toast } = useToast();
   const [clock, setClock] = useState(() => Date.now());
   const [serverOffset, setServerOffset] = useState(0);
+  const [invitePage, setInvitePage] = useState(1);
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery<ReferralData>({
-    queryKey: ["/api/referrals/me"],
+    queryKey: ["/api/referrals/me", invitePage],
     queryFn: async () => {
-      const response = await apiRequest("GET", "/api/referrals/me");
+      const response = await apiRequest("GET", `/api/referrals/me?page=${invitePage}`);
       return await response.json() as ReferralData;
     },
     refetchInterval: 60_000,
@@ -65,6 +67,10 @@ export default function ReferralsPage() {
   useEffect(() => {
     if (data?.serverNow) setServerOffset(new Date(data.serverNow).getTime() - Date.now());
   }, [data?.serverNow]);
+
+  useEffect(() => {
+    if (data?.pagination && data.pagination.page !== invitePage) setInvitePage(data.pagination.page);
+  }, [data?.pagination, invitePage]);
 
   const referralUrl = useMemo(
     () => data ? `${window.location.origin}/register?ref=${encodeURIComponent(data.code)}` : "",
@@ -190,7 +196,7 @@ export default function ReferralsPage() {
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Votre réseau</p>
                   <h2 className="mt-1 text-lg font-semibold tracking-tight sm:text-xl">Personnes invitées</h2>
                 </div>
-                <p className="text-sm text-muted-foreground">{data.invited.length} compte{data.invited.length === 1 ? "" : "s"} associé{data.invited.length === 1 ? "" : "s"}</p>
+                <p className="text-sm text-muted-foreground">{data.pagination.total} compte{data.pagination.total === 1 ? "" : "s"} associé{data.pagination.total === 1 ? "" : "s"}</p>
               </div>
               {data.invited.length === 0 ? (
                 <div className="flex flex-col items-center px-6 py-12 text-center">
@@ -235,6 +241,18 @@ export default function ReferralsPage() {
                     );
                   })}
                 </ul>
+              )}
+              {data.pagination.total > 0 && (
+                <nav aria-label="Pagination des personnes invitées" className="flex flex-col gap-3 border-t border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7">
+                  <p aria-live="polite" className="text-sm text-muted-foreground">
+                    {(data.pagination.page - 1) * data.pagination.pageSize + 1}–{Math.min(data.pagination.page * data.pagination.pageSize, data.pagination.total)} sur {data.pagination.total}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Button variant="outline" size="sm" disabled={isFetching || data.pagination.page <= 1} onClick={() => setInvitePage(data.pagination.page - 1)}>Précédent</Button>
+                    <span className="text-sm text-muted-foreground">Page {data.pagination.page} / {data.pagination.totalPages}</span>
+                    <Button variant="outline" size="sm" disabled={isFetching || data.pagination.page >= data.pagination.totalPages} onClick={() => setInvitePage(data.pagination.page + 1)}>Suivant</Button>
+                  </div>
+                </nav>
               )}
             </section>
 
