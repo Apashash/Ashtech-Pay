@@ -8,7 +8,7 @@ const LANGUAGES: { code: Language; label: string }[] = [
 ];
 
 export function LanguageSwitcher({ variant = "default" }: { variant?: "default" | "compact" }) {
-  const { language, setLanguage } = useLanguage();
+  const { language, setLanguage, t } = useLanguage();
   const [open, setOpen] = useState(false);
 
   const current = LANGUAGES.find(l => l.code === language) ?? LANGUAGES[0];
@@ -18,7 +18,7 @@ export function LanguageSwitcher({ variant = "default" }: { variant?: "default" 
       <PopoverTrigger asChild>
         <button
           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-accent transition-colors text-sm font-medium text-foreground border border-border"
-          aria-label="Changer de langue"
+          aria-label={t.nav.changeLanguage}
           data-testid="button-language-switcher"
         >
           <img src="/language-icon.png" alt="" aria-hidden="true" className="h-5 w-5 object-contain" />

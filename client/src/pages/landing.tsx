@@ -50,23 +50,23 @@ import { useLanguage } from "@/lib/language";
 import { LanguageSwitcher } from "@/components/language-switcher";
 
 const countryList = [
-  { name: "Cameroun", code: "cm" },
-  { name: "Sénégal", code: "sn" },
-  { name: "Côte d'Ivoire", code: "ci" },
+  { name: "Cameroun", nameEn: "Cameroon", code: "cm" },
+  { name: "Sénégal", nameEn: "Senegal", code: "sn" },
+  { name: "Côte d'Ivoire", nameEn: "Côte d'Ivoire", code: "ci" },
   { name: "Mali", code: "ml" },
-  { name: "Burkina Faso", code: "bf" },
+  { name: "Burkina Faso", nameEn: "Burkina Faso", code: "bf" },
   { name: "Niger", code: "ne" },
   { name: "Togo", code: "tg" },
-  { name: "Bénin", code: "bj" },
+  { name: "Bénin", nameEn: "Benin", code: "bj" },
   { name: "Gabon", code: "ga" },
-  { name: "Congo", code: "cg" },
-  { name: "RD Congo", code: "cd" },
-  { name: "Centrafrique", code: "cf" },
-  { name: "Tchad", code: "td" },
-  { name: "Madagascar", code: "mg" },
-  { name: "Maroc", code: "ma" },
-  { name: "Tunisie", code: "tn" },
-  { name: "Algérie", code: "dz" },
+  { name: "Congo", nameEn: "Congo", code: "cg" },
+  { name: "RD Congo", nameEn: "DR Congo", code: "cd" },
+  { name: "Centrafrique", nameEn: "Central African Republic", code: "cf" },
+  { name: "Tchad", nameEn: "Chad", code: "td" },
+  { name: "Madagascar", nameEn: "Madagascar", code: "mg" },
+  { name: "Maroc", nameEn: "Morocco", code: "ma" },
+  { name: "Tunisie", nameEn: "Tunisia", code: "tn" },
+  { name: "Algérie", nameEn: "Algeria", code: "dz" },
 ];
 
 function useMarqueeScroll(
@@ -163,7 +163,7 @@ function Navbar() {
     {
       title: t.nav.legal,
       items: [
-        { label: "Conditions d'utilisation", href: "/terms", icon: Scale },
+        { label: t.landing.navTerms, href: "/terms", icon: Scale },
       ],
     },
   ];
@@ -193,7 +193,7 @@ function Navbar() {
                 </Link>
               </div>
               <LanguageSwitcher />
-              <button onClick={toggleTheme} className="p-2 rounded-full hover:bg-accent transition-colors" aria-label="Changer de thème" data-testid="button-theme-toggle">
+              <button onClick={toggleTheme} className="p-2 rounded-full hover:bg-accent transition-colors" aria-label={t.nav.changeTheme} data-testid="button-theme-toggle">
                 {theme === "dark" ? <Sun className="w-4 h-4 text-yellow-500" /> : <Moon className="w-4 h-4 text-muted-foreground" />}
               </button>
               <button onClick={() => setMenuOpen(!menuOpen)} className="p-2 rounded-lg hover:bg-accent transition-all duration-300" aria-label="Menu" data-testid="button-hamburger-menu">
@@ -319,7 +319,7 @@ function HeroSection() {
             <div className="relative overflow-hidden rounded-[2rem] border border-border bg-card shadow-2xl">
               <img
                 src={heroPaymentImage}
-                alt="AshTech Pay, une plateforme connectée aux paiements africains"
+                alt={t.hero.imageAlt}
                 className="block w-full aspect-[1752/898] object-cover transition-transform duration-700 group-hover:scale-[1.02]"
               />
             </div>
@@ -331,29 +331,27 @@ function HeroSection() {
 }
 
 function SolutionsSection() {
+  const { t, language } = useLanguage();
   const solutions = [
     {
       icon: LogIn,
       badge: { label: "TOP", color: "bg-primary text-primary-foreground" },
       title: "Ashtech Pay-IN",
-      description:
-        "Ashtech Pay-IN ou Paiement Marchand : une plateforme de paiement sécurisée et simple, spécialement conçue pour répondre aux besoins des particuliers et des entreprises en matière de paiements en ligne.",
+      description: t.landing.solutionPayinDesc,
       link: "/register",
     },
     {
       icon: LogOut,
       badge: null,
       title: "Ashtech Pay-OUT",
-      description:
-        "Ashtech Pay-OUT ou Décaissements Mobile Money vous permet d'effectuer des paiements de masse ou des décaissements en ligne en toute sécurité et simplicité, à destination de vos clients, salariés et autres bénéficiaires.",
+      description: t.landing.solutionPayoutDesc,
       link: "/register",
     },
     {
       icon: Download,
-      badge: { label: "EXCLUSIF", color: "bg-slate-800 text-white" },
+      badge: { label: language === "fr" ? "EXCLUSIF" : "EXCLUSIVE", color: "bg-slate-800 text-white" },
       title: "Ashtech Pay-Link",
-      description:
-        "Ashtech Pay-Link vous permet de créer des liens de paiement en ligne de manière sécurisée et simple. Partagez-les sur WhatsApp, Facebook, Instagram ou par SMS et encaissez instantanément.",
+      description: t.landing.solutionLinkDesc,
       link: "/register",
     },
   ];
@@ -362,8 +360,8 @@ function SolutionsSection() {
     <section className="py-16 lg:py-24 bg-background">
       <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-12 animate-on-scroll">
-          <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-3">Nos solutions</h2>
-          <p className="text-muted-foreground text-base">Tout ce dont vous avez besoin pour vendre et encaisser en ligne en Afrique.</p>
+          <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-3">{t.landing.solutionsTitle}</h2>
+          <p className="text-muted-foreground text-base">{t.landing.solutionsDesc}</p>
         </div>
         <div className="flex flex-col gap-6">
           {solutions.map(({ icon: Icon, badge, title, description, link }, index) => (
@@ -378,7 +376,7 @@ function SolutionsSection() {
               <p className="text-muted-foreground text-sm leading-relaxed mb-5">{description}</p>
               <Link href={link}>
                 <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary border-b-2 border-primary pb-0.5 hover:opacity-75 transition-opacity">
-                  En savoir plus <ExternalLink className="w-3.5 h-3.5" />
+                  {t.landing.learnMore} <ExternalLink className="w-3.5 h-3.5" />
                 </span>
               </Link>
             </div>
@@ -390,6 +388,7 @@ function SolutionsSection() {
 }
 
 function CommerceVisualSection() {
+  const { t } = useLanguage();
   return (
     <section className="py-16 lg:py-24 bg-card/50 overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -397,13 +396,13 @@ function CommerceVisualSection() {
           <div className="order-2 lg:order-1 animate-on-scroll-left">
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/20 mb-5">
               <Globe className="w-4 h-4 text-primary" />
-              <span className="text-sm text-primary font-medium">Le commerce africain, connecté</span>
+              <span className="text-sm text-primary font-medium">{t.landing.commerceTag}</span>
             </div>
             <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-5">
-              Une passerelle simple entre vos clients et leurs moyens de paiement
+              {t.landing.commerceTitle}
             </h2>
             <p className="text-lg text-muted-foreground leading-relaxed max-w-xl">
-              Proposez une expérience de paiement claire et familière, du Mobile Money aux cartes bancaires, avec une infrastructure pensée pour les réalités du marché africain.
+              {t.landing.commerceDesc}
             </p>
           </div>
           <div className="order-1 lg:order-2 relative group animate-on-scroll-right">
@@ -411,7 +410,7 @@ function CommerceVisualSection() {
             <div className="relative overflow-hidden rounded-3xl border border-border bg-background shadow-xl">
               <img
                 src={commercePaymentImage}
-                alt="Paiements en ligne et commerce africain"
+                alt={t.landing.commerceImageAlt}
                 className="block w-full aspect-[1024/576] object-cover transition-transform duration-700 group-hover:scale-[1.02]"
               />
             </div>
@@ -558,6 +557,7 @@ function HowItWorksSection() {
 }
 
 function MarketVisualSection() {
+  const { t } = useLanguage();
   return (
     <section className="py-16 lg:py-24 bg-background overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -567,7 +567,7 @@ function MarketVisualSection() {
             <div className="relative overflow-hidden rounded-3xl border border-border bg-card shadow-xl">
               <img
                 src={marketPaymentImage}
-                alt="Une utilisatrice africaine effectue un paiement mobile"
+                alt={t.landing.mobileExperienceImageAlt}
                 className="block w-full aspect-square object-cover transition-transform duration-700 group-hover:scale-[1.02]"
               />
             </div>
@@ -575,13 +575,13 @@ function MarketVisualSection() {
           <div className="animate-on-scroll-right">
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full border border-primary/20 mb-5">
               <Smartphone className="w-4 h-4 text-primary" />
-              <span className="text-sm text-primary font-medium">Une expérience pensée pour le mobile</span>
+              <span className="text-sm text-primary font-medium">{t.landing.mobileExperienceTag}</span>
             </div>
             <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-5">
-              Des paiements qui inspirent confiance
+              {t.landing.mobileExperienceTitle}
             </h2>
             <p className="text-lg text-muted-foreground leading-relaxed max-w-xl">
-              Offrez à vos clients une expérience fluide, accessible et adaptée à leurs habitudes, quel que soit le pays ou le moyen de paiement choisi.
+              {t.landing.mobileExperienceDesc}
             </p>
           </div>
         </div>
@@ -658,7 +658,7 @@ function TestimonialsSection() {
 }
 
 function CountriesSection() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const duplicatedCountries = [...countryList, ...countryList];
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollHandlers = useMarqueeScroll(containerRef, 105, 2, -1);
@@ -672,7 +672,7 @@ function CountriesSection() {
         <div
           ref={containerRef}
           className="relative overflow-x-auto overflow-y-hidden select-none cursor-grab active:cursor-grabbing touch-pan-y [scrollbar-width:none] [&::-webkit-scrollbar]:hidden animate-on-scroll-right"
-          aria-label="Faire défiler les pays disponibles"
+          aria-label={t.landing.countriesAria}
           {...scrollHandlers}
         >
           <div className="flex w-max">
@@ -680,10 +680,10 @@ function CountriesSection() {
               <div key={index} className="flex-shrink-0 mx-4 px-6 py-3 bg-background rounded-lg border border-border flex items-center gap-3">
                 <img
                   src={`https://flagcdn.com/w40/${country.code}.png`}
-                  alt={`Drapeau ${country.name}`}
+                  alt={`${language === "fr" ? "Drapeau" : "Flag"} ${language === "fr" ? country.name : country.nameEn ?? country.name}`}
                   className="w-8 h-6 rounded object-cover"
                 />
-                <span className="text-foreground font-medium whitespace-nowrap">{country.name}</span>
+                <span className="text-foreground font-medium whitespace-nowrap">{language === "fr" ? country.name : country.nameEn ?? country.name}</span>
               </div>
             ))}
           </div>
@@ -720,7 +720,7 @@ function OperatorLogosSection() {
       <div
         ref={containerRef}
         className="relative overflow-x-auto overflow-y-hidden select-none cursor-grab active:cursor-grabbing touch-pan-y [scrollbar-width:none] [&::-webkit-scrollbar]:hidden animate-on-scroll-left"
-        aria-label="Faire défiler les opérateurs Mobile Money"
+        aria-label={t.landing.operatorsAria}
         {...scrollHandlers}
       >
         <div className="flex w-max">
@@ -739,11 +739,11 @@ function OperatorLogosSection() {
 }
 
 function ApiDeveloperSection() {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [example, setExample] = useState<"payin" | "payout">("payin");
   const apiItems = [t.landing.apiItem1, t.landing.apiItemPayout, t.landing.apiItem2, t.landing.apiItem3, t.landing.apiItem4];
   const stats = [
-    { label: "22 pays", sub: t.landing.apiStat1sub },
+    { label: language === "fr" ? "22 pays" : "22 countries", sub: t.landing.apiStat1sub },
     { label: "< 500ms", sub: t.landing.apiStat2sub },
     { label: "99.9%", sub: t.landing.apiStat3sub },
     { label: "Webhooks", sub: t.landing.apiStat4sub },
@@ -811,10 +811,10 @@ function ApiDeveloperSection() {
                 </a>
               </div>
               <div className="flex gap-2 bg-zinc-900 px-4 py-3">
-                <Button size="sm" variant={example === "payin" ? "default" : "outline"} className={example === "payin" ? "" : "bg-zinc-800 text-zinc-200 border-zinc-700 hover:bg-zinc-700 hover:text-white"} aria-pressed={example === "payin"} onClick={() => setExample("payin")}>Payin</Button>
-                <Button size="sm" variant={example === "payout" ? "default" : "outline"} className={example === "payout" ? "" : "bg-zinc-800 text-zinc-200 border-zinc-700 hover:bg-zinc-700 hover:text-white"} aria-pressed={example === "payout"} onClick={() => setExample("payout")}>Payout</Button>
+                <Button size="sm" variant={example === "payin" ? "default" : "outline"} className={example === "payin" ? "" : "bg-zinc-800 text-zinc-200 border-zinc-700 hover:bg-zinc-700 hover:text-white"} aria-pressed={example === "payin"} onClick={() => setExample("payin")}>{t.landing.apiTabPayin}</Button>
+                <Button size="sm" variant={example === "payout" ? "default" : "outline"} className={example === "payout" ? "" : "bg-zinc-800 text-zinc-200 border-zinc-700 hover:bg-zinc-700 hover:text-white"} aria-pressed={example === "payout"} onClick={() => setExample("payout")}>{t.landing.apiTabPayout}</Button>
               </div>
-              <p className="bg-zinc-950 px-6 pt-4 text-xs text-zinc-400">{t.landing.apiExample} ({example === "payin" ? "Payin" : "Payout"})</p>
+              <p className="bg-zinc-950 px-6 pt-4 text-xs text-zinc-400">{t.landing.apiExample} ({example === "payin" ? t.landing.apiTabPayin : t.landing.apiTabPayout})</p>
               {example === "payin" ? <pre className="text-sm leading-relaxed p-6 bg-zinc-950 overflow-x-auto max-w-full whitespace-pre-wrap break-words text-left font-mono">
                 <span className="text-sky-400">const</span>
                 <span className="text-zinc-300"> response = </span>
@@ -831,7 +831,7 @@ function ApiDeveloperSection() {
                 <span className="text-green-400">"Content-Type"</span>
                 <span className="text-zinc-300">: </span>
                 <span className="text-green-400">"application/json"</span>
-                <span className="text-zinc-300">{"\n"}    {"}"},{"\n"}    body: JSON.stringify({"{"}{"\n"}      user_id: "VOTRE_USER_ID",{"\n"}      country_code: "CM",{"\n"}      amount:    </span>
+                <span className="text-zinc-300">{"\n"}    {"}"},{"\n"}    body: JSON.stringify({"{"}{"\n"}      user_id: "{language === "fr" ? "VOTRE_USER_ID" : "YOUR_USER_ID"}",{"\n"}      country_code: "CM",{"\n"}      amount:    </span>
                 <span className="text-violet-400">5000</span>
                 <span className="text-zinc-300">,{"\n"}      currency:  </span>
                 <span className="text-green-400">"XAF"</span>
@@ -844,7 +844,7 @@ function ApiDeveloperSection() {
                 <span className="text-zinc-300">{"\n"}    {"}"}){"\n"}  {"}"}{"\n"});</span>
               </pre> : (
                 <pre className="text-sm leading-relaxed p-6 bg-zinc-950 overflow-x-auto max-w-full whitespace-pre-wrap break-words text-left font-mono text-zinc-300">
-                  {`const response = await fetch(
+      {`const response = await fetch(
   "https://www.ashtechpay.com/v1/payouts/mobile-money",
   {
     method: "POST",
@@ -853,7 +853,7 @@ function ApiDeveloperSection() {
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      user_id: "VOTRE_USER_ID",
+      user_id: "${language === "fr" ? "VOTRE_USER_ID" : "YOUR_USER_ID"}",
       reference: "PAYOUT-123",
       country_code: "CM",
       operator: "MTN Money",
@@ -911,8 +911,9 @@ function useCountUp(target: number, duration: number, started: boolean) {
 }
 
 function AnimatedStat({ target, suffix, label, started }: { target: number; suffix: string; label: string; started: boolean }) {
+  const { language } = useLanguage();
   const count = useCountUp(target, 1400, started);
-  const formatted = count >= 1000 ? count.toLocaleString("fr-FR") : count.toString();
+  const formatted = count >= 1000 ? count.toLocaleString(language === "fr" ? "fr-FR" : "en-US") : count.toString();
   return (
     <div className="text-center">
       <p className="text-4xl sm:text-5xl font-extrabold text-foreground leading-none">
@@ -1023,7 +1024,7 @@ function Footer() {
           <div>
             <h4 className="font-semibold text-foreground mb-3 sm:mb-4 text-xs sm:text-sm uppercase tracking-wider">{t.landing.footerCol3}</h4>
             <ul className="space-y-2 sm:space-y-3">
-              <li><Link href="/terms" className="text-muted-foreground hover:text-primary text-xs sm:text-sm transition-colors">Conditions d'utilisation</Link></li>
+              <li><Link href="/terms" className="text-muted-foreground hover:text-primary text-xs sm:text-sm transition-colors">{t.landing.navTerms}</Link></li>
             </ul>
           </div>
         </div>
