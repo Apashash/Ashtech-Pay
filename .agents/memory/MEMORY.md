@@ -89,5 +89,5 @@
 - [Isolated preview capture](isolated-preview-capture.md) — app screenshots target the main app, not the mockup artifact route; use the canvas iframe for isolated previews.
 - [CommonJS server bundle loading](cjs-server-bundle-loading.md) — the production server bundle is CommonJS; ESM-only `import.meta` require paths can work in dev but fail after bundling.
 - [Local dependency security forks](local-security-forks.md) — npm local-file overrides need packed installs, and vulnerability fixes must cover direct AST callers too.
-- [Referral pricing boundaries](referral-decisions.md) — never invent provider costs; separate currency caps, non-stacking renewals and legacy timestamp precision.
+- [Referral program boundaries](referral-decisions.md) — pricing safety, renewal rules, durable eligibility, shared-code compatibility and dashboard theme.
 - [Isolated PostgreSQL tests](isolated-postgres-tests.md) — temporary compatibility tests need their own writable socket directory, without changing the app database.

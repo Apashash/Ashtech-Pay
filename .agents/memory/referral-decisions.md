@@ -37,3 +37,9 @@ Changes to the referral-code format must preserve links already shared by users.
 **Why:** The user requested six-character codes for easier sharing after twenty-character codes had already been exposed in production.
 
 **How to apply:** Keep earlier codes usable as aliases, enforce uniqueness for new codes, and preserve existing attribution and promotion periods. Referral codes are public sharing identifiers, not authentication credentials.
+
+The user-facing referral page must follow the existing dashboard's typography and theme, rather than a separate visual identity.
+
+**Why:** The user explicitly asked for the same writing style, theme and colors as the dashboard after seeing the independently styled referral page.
+
+**How to apply:** Use shared dashboard components and semantic light/dark theme colors when extending this page; do not reintroduce an independent green/beige palette.

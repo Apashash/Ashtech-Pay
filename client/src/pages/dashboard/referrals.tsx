@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/dashboard-layout";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -105,15 +106,15 @@ export default function ReferralsPage() {
   return (
     <DashboardLayout>
       <div className="mx-auto w-full min-w-0 max-w-5xl space-y-6 pb-8">
-        <header className="relative overflow-hidden rounded-3xl bg-[#172b55] px-6 py-7 text-white shadow-sm sm:px-9 sm:py-9">
-          <div aria-hidden="true" className="pointer-events-none absolute -right-14 -top-24 h-64 w-64 rounded-full border-[1px] border-white/10" />
-          <div aria-hidden="true" className="pointer-events-none absolute -right-2 -top-12 h-48 w-48 rounded-full border-[1px] border-white/10" />
+        <Card className="relative overflow-hidden border-card-border bg-card px-6 py-7 shadow-sm transition-colors sm:px-9 sm:py-9">
+          <div aria-hidden="true" className="pointer-events-none absolute -right-14 -top-24 h-64 w-64 rounded-full border border-primary/15" />
+          <div aria-hidden="true" className="pointer-events-none absolute -right-2 -top-12 h-48 w-48 rounded-full border border-primary/15" />
           <div className="relative max-w-2xl">
-            <p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#c4d9a7]">
+            <p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
               <Users className="h-4 w-4" /> Programme de parrainage
             </p>
-            <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Faites découvrir AshTech Pay.</h1>
-            <p className="mt-3 max-w-xl text-sm leading-relaxed text-white/75 sm:text-base">
+            <h1 className="text-2xl font-semibold text-foreground">Faites découvrir AshTech Pay.</h1>
+            <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground sm:text-base">
               Invitez vos proches. Lorsqu’un compte invité atteint les conditions, il bénéficie d’une période de frais réduits sur ses opérations éligibles.
             </p>
           </div>
@@ -123,13 +124,13 @@ export default function ReferralsPage() {
               ["02", "3 opérations"],
               ["03", "5 jours"],
             ].map(([number, label]) => (
-              <div key={number} className="border-t border-white/25 pt-3">
-                <p className="font-mono text-xs text-[#c4d9a7]">{number}</p>
-                <p className="mt-1 text-sm font-medium">{label}</p>
+              <div key={number} className="border-t border-border pt-3">
+                <p className="text-xs font-semibold tabular-nums text-muted-foreground">{number}</p>
+                <p className="mt-1 text-sm font-medium text-foreground">{label}</p>
               </div>
             ))}
           </div>
-        </header>
+        </Card>
 
         {isLoading ? (
           <section aria-label="Chargement des informations de parrainage" className="space-y-4">
@@ -150,13 +151,13 @@ export default function ReferralsPage() {
         ) : data ? (
           <>
             <section className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-              <div className="min-w-0 rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-7">
+              <Card className="min-w-0 p-5 transition-colors sm:p-7">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Votre lien personnel</p>
-                    <h2 className="mt-2 text-xl font-semibold">Un lien, un compte invité.</h2>
+                    <h2 className="mt-2 text-lg font-semibold tracking-tight sm:text-xl">Un lien, un compte invité.</h2>
                   </div>
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#e8efda] text-[#415a32]">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
                     <Link2 className="h-5 w-5" />
                   </span>
                 </div>
@@ -176,53 +177,53 @@ export default function ReferralsPage() {
                 <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
                   Partagez ce lien directement. Si le partage natif n’est pas disponible, le lien sera copié.
                 </p>
-              </div>
+              </Card>
 
-              <div className="relative overflow-hidden rounded-2xl border border-[#d7e2c6] bg-[#eff4e6] p-5 sm:p-7">
+              <Card className="relative overflow-hidden bg-muted/55 p-5 transition-colors sm:p-7">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#536947]">Période de frais réduits</p>
-                    <p className="mt-2 text-xl font-semibold text-[#263c28]">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Période de frais réduits</p>
+                    <p className="mt-2 text-lg font-semibold tracking-tight text-foreground sm:text-xl">
                       {data.promo ? (remainingSeconds > 0 ? "En cours" : "Terminée") : "À débloquer"}
                     </p>
                   </div>
-                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/70 text-[#536947]">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
                     <Clock3 className="h-5 w-5" />
                   </span>
                 </div>
                 {data.promo ? (
                   <>
-                    <p className="mt-4 font-mono text-3xl font-semibold tracking-tight text-[#263c28]" aria-live="polite">
+                    <p className="mt-4 text-3xl font-bold tabular-nums tracking-tight text-foreground" aria-live="polite">
                       {remainingDays}<span className="ml-1 text-sm font-sans font-medium">j</span>
                       <span className="ml-3">{String(remainingHours).padStart(2, "0")}<span className="ml-1 text-sm font-sans font-medium">h</span></span>
                     </p>
-                    <p className="mt-3 text-sm text-[#536947]">
+                    <p className="mt-3 text-sm text-muted-foreground">
                       {remainingSeconds > 0 ? `Fin prévue le ${formatDate(data.promo.expiresAt)}` : "Cette période est arrivée à son terme."}
                     </p>
                   </>
                 ) : (
-                  <p className="mt-4 text-sm leading-relaxed text-[#536947]">
+                  <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
                     La période commence lorsque votre invité remplit les conditions et que son compte est vérifié.
                   </p>
                 )}
-                <div className="mt-5 flex items-center gap-2 border-t border-[#d7e2c6] pt-4 text-xs text-[#536947]">
+                <div className="mt-5 flex items-center gap-2 border-t border-border pt-4 text-xs text-muted-foreground">
                   <ShieldCheck className="h-4 w-4 shrink-0" />
                   <span>Durée du programme : {data.rules.durationDays} jours</span>
                 </div>
-              </div>
+              </Card>
             </section>
 
-            <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+            <section className="shadcn-card overflow-hidden rounded-xl border border-card-border bg-card text-card-foreground shadow-sm">
               <div className="flex flex-col gap-3 border-b border-border px-5 py-5 sm:flex-row sm:items-end sm:justify-between sm:px-7">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Votre réseau</p>
-                  <h2 className="mt-1 text-xl font-semibold">Personnes invitées</h2>
+                  <h2 className="mt-1 text-lg font-semibold tracking-tight sm:text-xl">Personnes invitées</h2>
                 </div>
                 <p className="text-sm text-muted-foreground">{data.invited.length} compte{data.invited.length === 1 ? "" : "s"} associé{data.invited.length === 1 ? "" : "s"}</p>
               </div>
               {data.invited.length === 0 ? (
                 <div className="flex flex-col items-center px-6 py-12 text-center">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted text-muted-foreground"><Users className="h-6 w-6" /></div>
+                  <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10 text-primary"><Users className="h-6 w-6" /></div>
                   <h3 className="mt-4 font-semibold">Votre réseau commence ici</h3>
                   <p className="mt-1 max-w-sm text-sm leading-relaxed text-muted-foreground">Partagez votre lien. Les comptes créés avec celui-ci apparaîtront ici avec leur progression.</p>
                 </div>
@@ -234,7 +235,7 @@ export default function ReferralsPage() {
                     return (
                       <li key={person.id} className="grid gap-4 px-5 py-4 sm:grid-cols-[minmax(0,1fr)_minmax(200px,0.8fr)_auto] sm:items-center sm:px-7">
                         <div className="flex min-w-0 items-center gap-3">
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#e8efda] font-semibold text-[#415a32]">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 font-semibold text-primary">
                             {(person.username || "?").slice(0, 1).toUpperCase()}
                           </div>
                           <div className="min-w-0">
@@ -249,12 +250,12 @@ export default function ReferralsPage() {
                           </div>
                           <div className="flex gap-1.5" aria-label={`${progress} opérations terminées sur ${data.rules.requiredTransactions}`}>
                             {Array.from({ length: data.rules.requiredTransactions }, (_, index) => (
-                              <span key={index} className={`h-1.5 flex-1 rounded-full ${index < progress ? "bg-[#718c55]" : "bg-muted"}`} />
+                              <span key={index} className={`h-1.5 flex-1 rounded-full ${index < progress ? "bg-primary" : "bg-muted"}`} />
                             ))}
                           </div>
                         </div>
                         <div className="sm:text-right">
-                          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${qualified ? "bg-[#e8efda] text-[#415a32]" : "bg-muted text-muted-foreground"}`}>
+                          <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${qualified ? "bg-primary/10 text-foreground" : "bg-muted text-muted-foreground"}`}>
                             {qualified ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Clock3 className="h-3.5 w-3.5" />}
                             {qualified ? "Admissible" : "En progression"}
                           </span>
@@ -268,9 +269,9 @@ export default function ReferralsPage() {
             </section>
 
             <section className="grid gap-5 lg:grid-cols-[0.85fr_1.15fr]">
-              <div className="rounded-2xl border border-border bg-card p-5 sm:p-7">
+              <Card className="p-5 transition-colors sm:p-7">
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Comment ça marche</p>
-                <h2 className="mt-2 text-xl font-semibold">Trois opérations complétées.</h2>
+                <h2 className="mt-2 text-lg font-semibold tracking-tight sm:text-xl">Trois opérations complétées.</h2>
                 <ol className="mt-5 space-y-4">
                   {[
                     ["01", "Votre invité crée son compte avec votre lien."],
@@ -278,28 +279,28 @@ export default function ReferralsPage() {
                     ["03", `Une période de ${data.rules.durationDays} jours de frais réduits commence.`],
                   ].map(([step, text]) => (
                     <li key={step} className="flex gap-3 text-sm leading-relaxed">
-                      <span className="font-mono text-xs text-[#718c55]">{step}</span><span>{text}</span>
+                      <span className="text-xs font-semibold tabular-nums text-muted-foreground">{step}</span><span>{text}</span>
                     </li>
                   ))}
                 </ol>
-              </div>
-              <div className="rounded-2xl border border-[#eadfcb] bg-[#faf6ed] p-5 sm:p-7">
-                <div className="flex items-center gap-2 text-[#765f3c]">
+              </Card>
+              <Card className="bg-muted/55 p-5 transition-colors sm:p-7">
+                <div className="flex items-center gap-2 text-foreground">
                   <WalletCards className="h-5 w-5" />
-                  <h2 className="font-semibold">Des frais expliqués clairement</h2>
+                  <h2 className="font-semibold tracking-tight">Des frais expliqués clairement</h2>
                 </div>
-                <ul className="mt-4 space-y-3 text-sm leading-relaxed text-[#625640]">
-                  <li>• L’avantage est une réduction de frais, pas un versement en espèces. Il s’applique aux dépôts et retraits Mobile Money éligibles, pas aux opérations USDT.</li>
-                  <li>• Les frais réduits restent calculés à partir du coût du prestataire, avec une marge de {data.rules.marginPercent}%.</li>
-                  <li>• Le tarif habituel est conservé si le coût de traitement n’est pas renseigné, si ce tarif est déjà plus bas, ou si les plafonds promotionnels sont atteints.</li>
-                  <li>• La troisième opération requise est facturée normalement. Il n’y a pas de promesse de réduction de 50%.</li>
-                  <li>• Jusqu’à {data.rules.maxDiscountedOperations} opérations peuvent bénéficier de l’avantage. Le volume cumulé, par devise, est plafonné à {data.rules.maxVolumeMultiplier}× le maximum d’opération configuré.</li>
-                  <li>• Les plafonds d’opération configurés pour le pays concerné continuent de s’appliquer.</li>
+                <ul className="mt-4 list-disc space-y-3 pl-5 text-sm leading-relaxed text-muted-foreground marker:text-primary">
+                  <li>L’avantage est une réduction de frais, pas un versement en espèces. Il s’applique aux dépôts et retraits Mobile Money éligibles, pas aux opérations USDT.</li>
+                  <li>Les frais réduits restent calculés à partir du coût du prestataire, avec une marge de {data.rules.marginPercent}%.</li>
+                  <li>Le tarif habituel est conservé si le coût de traitement n’est pas renseigné, si ce tarif est déjà plus bas, ou si les plafonds promotionnels sont atteints.</li>
+                  <li>La troisième opération requise est facturée normalement. Il n’y a pas de promesse de réduction de 50%.</li>
+                  <li>Jusqu’à {data.rules.maxDiscountedOperations} opérations peuvent bénéficier de l’avantage. Le volume cumulé, par devise, est plafonné à {data.rules.maxVolumeMultiplier}× le maximum d’opération configuré.</li>
+                  <li>Les plafonds d’opération configurés pour le pays concerné continuent de s’appliquer.</li>
                 </ul>
-                <p className="mt-4 border-t border-[#eadfcb] pt-3 text-xs leading-relaxed text-[#765f3c]">
+                <p className="mt-4 border-t border-border pt-3 text-xs leading-relaxed text-muted-foreground">
                   Les plafonds et l’éligibilité dépendent des limites en vigueur dans votre pays et chez l’opérateur Mobile Money.
                 </p>
-              </div>
+              </Card>
             </section>
           </>
         ) : (
