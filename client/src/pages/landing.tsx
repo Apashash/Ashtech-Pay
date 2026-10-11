@@ -43,7 +43,7 @@ import heroPaymentImage from "@assets/file_00000000b290820e8318daa118934236_1788
 import marketPaymentImage from "@assets/images_(1)~2_1788747988443.jpeg";
 import commercePaymentImage from "@assets/barkapay-african-payment-hub-for-e-commerce_1788747792967.webp";
 import { useState, useEffect, useRef, type PointerEvent, type RefObject } from "react";
-import { PUBLIC_API_DOCS_URL, PUBLIC_CHECKOUT_DOCS_URL, PUBLIC_DOCS_INTRO_URL } from "@/lib/public-links";
+import { PUBLIC_CHECKOUT_DOCS_URL, PUBLIC_DOCS_INTRO_URL, PUBLIC_PAYOUT_DOCS_URL } from "@/lib/public-links";
 import { useTheme } from "@/components/theme-provider";
 import { useScrollAnimation } from "@/hooks/use-scroll-animation";
 import { useLanguage } from "@/lib/language";
@@ -149,7 +149,7 @@ function Navbar() {
         { label: t.nav.faq, href: "/faq", icon: MessageCircleQuestion },
         { label: t.nav.blog, href: "/blog", icon: BookOpen },
         { label: t.nav.contact, href: "/contact", icon: Mail },
-        { label: t.nav.apiDocs, href: PUBLIC_API_DOCS_URL, icon: Terminal, external: true },
+        { label: t.nav.apiDocs, href: PUBLIC_DOCS_INTRO_URL, icon: Terminal, external: true },
         { label: t.nav.hostedDocs, href: PUBLIC_CHECKOUT_DOCS_URL, icon: Code2, external: true },
       ],
     },
@@ -740,7 +740,8 @@ function OperatorLogosSection() {
 
 function ApiDeveloperSection() {
   const { t } = useLanguage();
-  const apiItems = [t.landing.apiItem1, t.landing.apiItem2, t.landing.apiItem3, t.landing.apiItem4];
+  const [example, setExample] = useState<"payin" | "payout">("payin");
+  const apiItems = [t.landing.apiItem1, t.landing.apiItemPayout, t.landing.apiItem2, t.landing.apiItem3, t.landing.apiItem4];
   const stats = [
     { label: "22 pays", sub: t.landing.apiStat1sub },
     { label: "< 500ms", sub: t.landing.apiStat2sub },
@@ -749,7 +750,7 @@ function ApiDeveloperSection() {
   ];
 
   return (
-    <section className="py-20 lg:py-32 bg-card/50">
+    <section id="api-documentation" className="py-20 lg:py-32 bg-card/50 scroll-mt-40">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center min-w-0">
           <div className="animate-on-scroll min-w-0 w-full">
@@ -771,7 +772,7 @@ function ApiDeveloperSection() {
                 </li>
               ))}
             </ul>
-            <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3">
               <a href={PUBLIC_DOCS_INTRO_URL}>
                 <Button size="lg" className="gap-2" data-testid="button-api-docs">
                   <BookOpen className="w-4 h-4" />
@@ -782,6 +783,12 @@ function ApiDeveloperSection() {
                 <Button size="lg" variant="outline" className="gap-2" data-testid="button-api-hosted-docs">
                   <Globe className="w-4 h-4" />
                   {t.landing.apiBtn2}
+                </Button>
+              </a>
+              <a href={PUBLIC_PAYOUT_DOCS_URL}>
+                <Button size="lg" variant="outline" className="gap-2" data-testid="button-api-payout-docs">
+                  <Send className="w-4 h-4" />
+                  {t.landing.apiBtnPayout}
                 </Button>
               </a>
             </div>
@@ -795,9 +802,13 @@ function ApiDeveloperSection() {
                   <div className="w-3 h-3 rounded-full bg-amber-500" />
                   <div className="w-3 h-3 rounded-full bg-green-500" />
                 </div>
-                <span className="text-xs text-zinc-400 ml-2 flex items-center gap-1.5"><Terminal className="w-3 h-3" />collect.js</span>
+                <span className="text-xs text-zinc-400 ml-2 flex items-center gap-1.5"><Terminal className="w-3 h-3" />{example === "payin" ? "collect.js" : "payout.js"}</span>
               </div>
-              <pre className="text-sm leading-relaxed p-6 bg-zinc-950 overflow-x-auto max-w-full whitespace-pre-wrap break-words text-left font-mono">
+              <div className="flex gap-2 bg-zinc-900 px-4 py-3">
+                <Button size="sm" variant={example === "payin" ? "default" : "outline"} aria-pressed={example === "payin"} onClick={() => setExample("payin")}>Payin</Button>
+                <Button size="sm" variant={example === "payout" ? "default" : "outline"} aria-pressed={example === "payout"} onClick={() => setExample("payout")}>Payout</Button>
+              </div>
+              {example === "payin" ? <pre className="text-sm leading-relaxed p-6 bg-zinc-950 overflow-x-auto max-w-full whitespace-pre-wrap break-words text-left font-mono">
                 <span className="text-sky-400">const</span>
                 <span className="text-zinc-300"> response = </span>
                 <span className="text-amber-300">await</span>
@@ -808,23 +819,48 @@ function ApiDeveloperSection() {
                 <span className="text-zinc-300">,{"\n"}    headers: {"{"}{"\n"}      </span>
                 <span className="text-green-400">"Authorization"</span>
                 <span className="text-zinc-300">: </span>
-                <span className="text-green-400">"Bearer ak_live_…"</span>
+                <span className="text-green-400">{"`Bearer ${process.env.ASHTECH_API_KEY}`"}</span>
                 <span className="text-zinc-300">,{"\n"}      </span>
                 <span className="text-green-400">"Content-Type"</span>
                 <span className="text-zinc-300">: </span>
                 <span className="text-green-400">"application/json"</span>
-                <span className="text-zinc-300">{"\n"}    {"}"},{"\n"}    body: JSON.stringify({"{"}{"\n"}      amount:    </span>
+                <span className="text-zinc-300">{"\n"}    {"}"},{"\n"}    body: JSON.stringify({"{"}{"\n"}      user_id: "VOTRE_USER_ID",{"\n"}      country_code: "CM",{"\n"}      amount:    </span>
                 <span className="text-violet-400">5000</span>
                 <span className="text-zinc-300">,{"\n"}      currency:  </span>
                 <span className="text-green-400">"XAF"</span>
                 <span className="text-zinc-300">,{"\n"}      phone:     </span>
-                <span className="text-green-400">"670000000"</span>
+                <span className="text-green-400">"237000000000"</span>
                 <span className="text-zinc-300">,{"\n"}      operator:  </span>
-                <span className="text-green-400">"MTN"</span>
+                <span className="text-green-400">"MTN Money"</span>
                 <span className="text-zinc-300">,{"\n"}      reference: </span>
                 <span className="text-green-400">"ORDER-123"</span>
                 <span className="text-zinc-300">{"\n"}    {"}"}){"\n"}  {"}"}{"\n"});</span>
-              </pre>
+              </pre> : (
+                <pre className="text-sm leading-relaxed p-6 bg-zinc-950 overflow-x-auto max-w-full whitespace-pre-wrap break-words text-left font-mono text-zinc-300">
+                  {`const response = await fetch(
+  "https://www.ashtechpay.com/v1/payouts/mobile-money",
+  {
+    method: "POST",
+    headers: {
+      Authorization: \`Bearer \${process.env.ASHTECH_API_KEY}\`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      user_id: "VOTRE_USER_ID",
+      reference: "PAYOUT-123",
+      country_code: "CM",
+      operator: "MTN Money",
+      phone: "237000000000",
+      recipient_name: "Client",
+      amount: "5000",
+      fee_bearer: "sender",
+      notify_url: "https://example.com/webhooks/ashtechpay"
+    })
+  }
+);
+const payout = await response.json();`}
+                </pre>
+              )}
               <div className="px-6 py-4 bg-zinc-900 border-t border-zinc-800">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
