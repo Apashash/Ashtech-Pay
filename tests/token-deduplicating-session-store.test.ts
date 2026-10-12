@@ -191,3 +191,63 @@ test("does not delete a session when its token revocation cannot be persisted", 
   assert.equal(fixture.rows.length, 5, "keep the old row rather than leave its token usable after deletion");
   assert.equal(errors.length, 1);
 });
+
+test("enforces the device limit again when an existing session is saved", async () => {
+  const now = Date.now();
+  const fixture = makeFixture(Array.from({ length: 5 }, (_, index) => {
+    const tokenIssuedAt = now - (5 - index) * 1_000;
+    return {
+      sid: `device-${index + 1}`,
+      sess: {
+        userId: "user-1",
+        tokenIssuedAt,
+        loginAt: new Date(tokenIssuedAt).toISOString(),
+      },
+      expire: new Date(now + 86_400_000),
+    };
+  }));
+  const revoked: number[] = [];
+  const store = wrapSessionStoreWithTokenDedup(fixture.store as any, {
+    pool: fixture.pool,
+    isMysql: false,
+    maxDevices: 4,
+    onDeviceEvicted: ({ tokenIssuedAt }) => {
+      if (tokenIssuedAt !== null) revoked.push(tokenIssuedAt);
+    },
+  });
+
+  await saveSession(store, "device-5", now - 1_000);
+
+  assert.equal(fixture.rows.length, 4);
+  assert.deepEqual(revoked, [now - 5_000]);
+  assert(!fixture.rows.some((row) => row.sess.tokenIssuedAt === now - 5_000));
+});
+
+test("also counts and evicts legacy authenticated sessions without Bearer timestamps", async () => {
+  const now = Date.now();
+  const fixture = makeFixture(Array.from({ length: 5 }, (_, index) => ({
+    sid: `legacy-${index + 1}`,
+    sess: {
+      userId: "user-1",
+      loginAt: new Date(now - (5 - index) * 1_000).toISOString(),
+    },
+    expire: new Date(now + 86_400_000),
+  })));
+  const evicted: string[] = [];
+  const store = wrapSessionStoreWithTokenDedup(fixture.store as any, {
+    pool: fixture.pool,
+    isMysql: false,
+    maxDevices: 4,
+    onDeviceEvicted: ({ sid }) => { evicted.push(sid); },
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    store.set("legacy-5", {
+      userId: "user-1",
+      loginAt: new Date(now - 1_000).toISOString(),
+    } as any, (error?: Error) => error ? reject(error) : resolve());
+  });
+
+  assert.equal(fixture.rows.length, 4);
+  assert.deepEqual(evicted, ["legacy-1"]);
+});
