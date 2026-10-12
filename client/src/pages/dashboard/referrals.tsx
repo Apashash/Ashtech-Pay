@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import {
-  CheckCircle2, Clock3, Copy, Link2, Loader2,
-  RefreshCw, Share2, ShieldCheck, Users,
+  BadgeCheck, Clock3, Copy, Link2, Loader2, RefreshCw,
+  Share2, ShieldCheck, Timer, UsersRound,
 } from "lucide-react";
 
 interface ReferralInvite {
@@ -43,6 +43,29 @@ function formatDate(value: string) {
   return Number.isNaN(date.getTime())
     ? "—"
     : new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "long", year: "numeric" }).format(date);
+}
+
+function ReferralIconTile({
+  icon: Icon,
+  size = "standard",
+}: {
+  icon: React.ElementType;
+  size?: "standard" | "large";
+}) {
+  const large = size === "large";
+  return (
+    <span
+      className={`flex shrink-0 items-center justify-center rounded-xl border border-primary/15 bg-gradient-to-br from-primary/15 to-primary/5 text-primary shadow-sm ${
+        large ? "h-14 w-14" : "h-11 w-11"
+      }`}
+      aria-hidden="true"
+    >
+      <Icon
+        className={large ? "h-6 w-6" : "h-5 w-5"}
+        strokeWidth={1.75}
+      />
+    </span>
+  );
 }
 
 export default function ReferralsPage() {
@@ -137,9 +160,7 @@ export default function ReferralsPage() {
                     <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Votre lien personnel</p>
                     <h2 className="mt-2 text-lg font-semibold tracking-tight sm:text-xl">Un lien, un compte invité.</h2>
                   </div>
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                    <Link2 className="h-5 w-5" />
-                  </span>
+                  <ReferralIconTile icon={Link2} />
                 </div>
                 <div className="mt-5 flex flex-col gap-2 sm:flex-row">
                   <div className="flex min-h-12 min-w-0 flex-1 items-center rounded-xl border border-border bg-muted/40 px-3">
@@ -164,9 +185,7 @@ export default function ReferralsPage() {
                       {data.promo ? (remainingSeconds > 0 ? "En cours" : "Terminée") : "À débloquer"}
                     </p>
                   </div>
-                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                    <Clock3 className="h-5 w-5" />
-                  </span>
+                  <ReferralIconTile icon={Timer} />
                 </div>
                 {data.promo ? (
                   <>
@@ -200,7 +219,7 @@ export default function ReferralsPage() {
               </div>
               {data.invited.length === 0 ? (
                 <div className="flex flex-col items-center px-6 py-12 text-center">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10 text-primary"><Users className="h-6 w-6" /></div>
+                  <ReferralIconTile icon={UsersRound} size="large" />
                   <h3 className="mt-4 font-semibold">Votre réseau commence ici</h3>
                 </div>
               ) : (
@@ -232,7 +251,9 @@ export default function ReferralsPage() {
                         </div>
                         <div className="sm:text-right">
                           <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${qualified ? "bg-primary/10 text-foreground" : "bg-muted text-muted-foreground"}`}>
-                            {qualified ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Clock3 className="h-3.5 w-3.5" />}
+                            {qualified
+                              ? <BadgeCheck className="h-3.5 w-3.5" strokeWidth={1.8} />
+                              : <Clock3 className="h-3.5 w-3.5" strokeWidth={1.8} />}
                             {qualified ? "Admissible" : "En progression"}
                           </span>
                           {person.qualifiedAt && <p className="mt-1 text-xs text-muted-foreground">Depuis le {formatDate(person.qualifiedAt)}</p>}
