@@ -91,3 +91,4 @@
 - [Local dependency security forks](local-security-forks.md) — npm local-file overrides need packed installs, and vulnerability fixes must cover direct AST callers too.
 - [Referral program boundaries](referral-decisions.md) — pricing safety, renewal rules, durable eligibility, shared-code compatibility and dashboard theme.
 - [Isolated PostgreSQL tests](isolated-postgres-tests.md) — temporary compatibility tests need their own writable socket directory, without changing the app database.
+- [Four-device session limit](device-session-limit.md) — enforce four active devices per account, evicting and revoking the oldest on later session saves.
