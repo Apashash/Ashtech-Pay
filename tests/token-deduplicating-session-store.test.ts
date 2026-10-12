@@ -60,7 +60,13 @@ function makeFixture(initialRows: Row[]) {
 
   const originalStore = {
     set(sid: string, sess: Record<string, any>, callback: (error?: Error) => void) {
-      rows.push({ sid, sess, expire: new Date(Date.now() + 86_400_000) });
+      const existing = rows.find((row) => row.sid === sid);
+      if (existing) {
+        existing.sess = sess;
+        existing.expire = new Date(Date.now() + 86_400_000);
+      } else {
+        rows.push({ sid, sess, expire: new Date(Date.now() + 86_400_000) });
+      }
       callback();
     },
     destroy(sid: string, callback: (error?: Error) => void) {
