@@ -558,7 +558,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                   src="/notification-icon.png"
                   alt=""
                   aria-hidden="true"
-                  className={`w-5 h-5 object-contain dark:brightness-0 dark:invert ${(notificationData?.unreadCount || 0) > 0 ? "animate-bell-ring" : ""}`}
+                  className={`w-5 h-5 object-contain dark:brightness-0 dark:invert dark:mix-blend-screen ${(notificationData?.unreadCount || 0) > 0 ? "animate-bell-ring" : ""}`}
                 />
                 {(notificationData?.unreadCount || 0) > 0 && (
                   <>
