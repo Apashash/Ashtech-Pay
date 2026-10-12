@@ -46,7 +46,7 @@ export function wrapSessionStoreWithTokenDedup(
       const userId = sessionData?.userId;
       const tokenIssuedAt = sessionData?.tokenIssuedAt;
 
-      if (userId == null || tokenIssuedAt == null) {
+      if (userId == null) {
         await new Promise<void>((resolve, reject) => {
           originalSet(sid, sessionData, (error?: any) => error ? reject(error) : resolve());
         });
@@ -54,43 +54,46 @@ export function wrapSessionStoreWithTokenDedup(
         return;
       }
 
+      const hasTokenIdentity = tokenIssuedAt != null;
       let existingSid: string | null = null;
       let existingData: Record<string, any> | null = null;
-      try {
-        const result = options.isMysql
-          ? await options.pool.query(
-              `SELECT sid, sess
-                 FROM \`${tableName}\`
-                WHERE JSON_UNQUOTE(JSON_EXTRACT(sess, '$.userId')) = ?
-                  AND JSON_UNQUOTE(JSON_EXTRACT(sess, '$.tokenIssuedAt')) = ?
-                ORDER BY (sid = ?) DESC, expire DESC
-                LIMIT 1`,
-              [String(userId), String(tokenIssuedAt), sid],
-            )
-          : await options.pool.query(
-              `SELECT sid, sess
-                 FROM "${tableName}"
-                WHERE sess->>'userId' = $1
-                  AND sess->>'tokenIssuedAt' = $2
-                ORDER BY (sid = $3) DESC, expire DESC
-                LIMIT 1`,
-              [String(userId), String(tokenIssuedAt), sid],
-            );
+      if (hasTokenIdentity) {
+        try {
+          const result = options.isMysql
+            ? await options.pool.query(
+                `SELECT sid, sess
+                   FROM \`${tableName}\`
+                  WHERE JSON_UNQUOTE(JSON_EXTRACT(sess, '$.userId')) = ?
+                    AND JSON_UNQUOTE(JSON_EXTRACT(sess, '$.tokenIssuedAt')) = ?
+                  ORDER BY (sid = ?) DESC, expire DESC
+                  LIMIT 1`,
+                [String(userId), String(tokenIssuedAt), sid],
+              )
+            : await options.pool.query(
+                `SELECT sid, sess
+                   FROM "${tableName}"
+                  WHERE sess->>'userId' = $1
+                    AND sess->>'tokenIssuedAt' = $2
+                  ORDER BY (sid = $3) DESC, expire DESC
+                  LIMIT 1`,
+                [String(userId), String(tokenIssuedAt), sid],
+              );
 
-        const row = result.rows?.[0];
-        if (row?.sid) {
-          existingSid = String(row.sid);
-          try {
-            existingData = typeof row.sess === "string"
-              ? JSON.parse(row.sess)
-              : (row.sess || {});
-          } catch {
-            existingData = null;
+          const row = result.rows?.[0];
+          if (row?.sid) {
+            existingSid = String(row.sid);
+            try {
+              existingData = typeof row.sess === "string"
+                ? JSON.parse(row.sess)
+                : (row.sess || {});
+            } catch {
+              existingData = null;
+            }
           }
+        } catch (error) {
+          // A deduplication lookup must never prevent a valid login/session write.
+          errorLog(error instanceof Error ? error : new Error(String(error)));
         }
-      } catch (error) {
-        // A deduplication lookup must never prevent a valid login/session write.
-        errorLog(error instanceof Error ? error : new Error(String(error)));
       }
 
       const targetSid = existingSid || sid;
@@ -120,34 +123,37 @@ export function wrapSessionStoreWithTokenDedup(
       }
 
       // Clean older duplicates left by the previous cookie-less behavior.
-      try {
-        if (options.isMysql) {
-          await options.pool.query(
-            `DELETE FROM \`${tableName}\`
-              WHERE JSON_UNQUOTE(JSON_EXTRACT(sess, '$.userId')) = ?
-                AND JSON_UNQUOTE(JSON_EXTRACT(sess, '$.tokenIssuedAt')) = ?
-                AND sid <> ?`,
-            [String(userId), String(tokenIssuedAt), targetSid],
-          );
-        } else {
-          await options.pool.query(
-            `DELETE FROM "${tableName}"
-              WHERE sess->>'userId' = $1
-                AND sess->>'tokenIssuedAt' = $2
-                AND sid <> $3`,
-            [String(userId), String(tokenIssuedAt), targetSid],
-          );
+      if (hasTokenIdentity) {
+        try {
+          if (options.isMysql) {
+            await options.pool.query(
+              `DELETE FROM \`${tableName}\`
+                WHERE JSON_UNQUOTE(JSON_EXTRACT(sess, '$.userId')) = ?
+                  AND JSON_UNQUOTE(JSON_EXTRACT(sess, '$.tokenIssuedAt')) = ?
+                  AND sid <> ?`,
+              [String(userId), String(tokenIssuedAt), targetSid],
+            );
+          } else {
+            await options.pool.query(
+              `DELETE FROM "${tableName}"
+                WHERE sess->>'userId' = $1
+                  AND sess->>'tokenIssuedAt' = $2
+                  AND sid <> $3`,
+              [String(userId), String(tokenIssuedAt), targetSid],
+            );
+          }
+        } catch (error) {
+          errorLog(error instanceof Error ? error : new Error(String(error)));
         }
-      } catch (error) {
-        errorLog(error instanceof Error ? error : new Error(String(error)));
       }
 
       // Keep a hard upper bound on authenticated devices. This runs only when
-      // a token is first persisted, not on every subsequent session update.
+      // a session is saved. This also repairs users with more devices than the
+      // limit from before enforcement was enabled.
       // The token timestamp is the device identity; the oldest timestamp is
       // the device that must be evicted first.
       const maxDevices = options.maxDevices;
-      if (!existingSid && maxDevices && maxDevices > 0) {
+      if (maxDevices && maxDevices > 0) {
         try {
           const result = options.isMysql
             ? await options.pool.query(

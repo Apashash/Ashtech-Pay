@@ -42,6 +42,8 @@ import {
   Zap,
   Camera,
   Upload,
+  Bell,
+  LockKeyhole,
 } from "lucide-react";
 import { useRef, useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -85,7 +87,10 @@ function SettingsRow({
       data-testid={testId}
     >
       {imageSrc ? (
-        <img src={imageSrc} alt="" aria-hidden="true" className="w-5 h-5 shrink-0 object-contain" />
+        <>
+          <img src={imageSrc} alt="" aria-hidden="true" className="w-5 h-5 shrink-0 object-contain dark:hidden" />
+          <Icon className={`hidden dark:block w-4 h-4 shrink-0 ${iconColor || "text-muted-foreground"}`} aria-hidden="true" />
+        </>
       ) : (
         <Icon className={`w-4 h-4 shrink-0 ${iconColor || "text-muted-foreground"}`} />
       )}
@@ -730,7 +735,7 @@ export default function SettingsPage() {
           <Collapsible open={notifOpen} onOpenChange={setNotifOpen}>
             <CollapsibleTrigger asChild>
               <button className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-muted/50 transition-colors text-left" data-testid="row-notifications">
-                <img src="/notification-icon.png" alt="" aria-hidden="true" className="w-4 h-4 object-contain shrink-0" />
+                <Bell className="w-4 h-4 shrink-0 text-amber-500" aria-hidden="true" />
                 <span className="flex-1 text-sm font-medium text-foreground">{t.settings.notifPreferences}</span>
                 <ChevronDown className={`w-4 h-4 text-muted-foreground/50 transition-transform duration-200 ${notifOpen ? "rotate-180" : ""}`} />
               </button>
@@ -746,7 +751,7 @@ export default function SettingsPage() {
                   <div key={key} className="flex items-center gap-3 px-4 py-3.5 bg-muted/20">
                     {Icon
                       ? <Icon className={`w-4 h-4 ${color} shrink-0`} />
-                      : <img src="/notification-icon.png" alt="" aria-hidden="true" className="w-4 h-4 object-contain shrink-0" />}
+                      : <Bell className="w-4 h-4 shrink-0 text-purple-500" aria-hidden="true" />}
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-foreground">{label}</p>
                       <p className="text-xs text-muted-foreground">{desc}</p>
@@ -782,7 +787,7 @@ export default function SettingsPage() {
           <Collapsible open={securityOpen} onOpenChange={setSecurityOpen}>
             <CollapsibleTrigger asChild>
               <button className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-muted/50 transition-colors text-left" data-testid="row-security">
-                <img src="/settings-security-icon.png" alt="" aria-hidden="true" className="w-5 h-5 object-contain shrink-0" />
+                <LockKeyhole className="w-4 h-4 shrink-0 text-amber-500" aria-hidden="true" />
                 <span className="flex-1 text-sm font-medium text-foreground">{t.settings.changePassword}</span>
                 <ChevronDown className={`w-4 h-4 text-muted-foreground/50 transition-transform duration-200 ${securityOpen ? "rotate-180" : ""}`} />
               </button>
@@ -810,7 +815,7 @@ export default function SettingsPage() {
                 >
                   {requestPasswordChangeMutation.isPending
                     ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                    : <img src="/settings-security-icon.png" alt="" aria-hidden="true" className="w-4 h-4 mr-1.5 object-contain" />}
+                    : <LockKeyhole className="w-4 h-4 mr-1.5 text-amber-500" aria-hidden="true" />}
                   {t.settings.changePasswordBtn}
                 </Button>
               </div>

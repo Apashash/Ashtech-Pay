@@ -53,6 +53,7 @@ import {
   Phone,
   Wrench,
   Gift,
+  Bell,
 } from "lucide-react";
 import { SiWhatsapp, SiFacebook } from "react-icons/si";
 import { BottomSheet, BottomSheetContent, BottomSheetHeader, BottomSheetTitle, BottomSheetFooter, BottomSheetDescription } from "@/components/ui/bottom-sheet";
@@ -554,11 +555,9 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
                 onClick={() => setLocation("/dashboard/notifications")}
                 data-testid="button-user-notifications"
               >
-                <img
-                  src="/notification-icon.png"
-                  alt=""
+                <Bell
                   aria-hidden="true"
-                  className={`w-5 h-5 object-contain ${(notificationData?.unreadCount || 0) > 0 ? "animate-bell-ring" : ""}`}
+                  className={`w-5 h-5 text-amber-500 ${(notificationData?.unreadCount || 0) > 0 ? "animate-bell-ring" : ""}`}
                 />
                 {(notificationData?.unreadCount || 0) > 0 && (
                   <>
