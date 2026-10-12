@@ -92,3 +92,4 @@
 - [Referral program boundaries](referral-decisions.md) — pricing safety, renewal rules, durable eligibility, shared-code compatibility and dashboard theme.
 - [Isolated PostgreSQL tests](isolated-postgres-tests.md) — temporary compatibility tests need their own writable socket directory, without changing the app database.
 - [Four-device session limit](device-session-limit.md) — enforce four active devices per account, evicting and revoking the oldest on later session saves.
+- [Preserve existing icons](icon-preservation.md) — never replace existing icon artwork unless the user explicitly asks; improve its visibility instead.
