@@ -9,6 +9,18 @@ const AFRIBAPAY_API_URL     = "https://api.afribapay.com";
 const AFRIBAPAY_PAYIN_URL   = AFRIBAPAY_API_URL;
 const AFRIBAPAY_PAYOUT_URL  = "https://api-payout.afribapay.com";
 
+export const AFRIBAPAY_ISO_CURRENCY: Record<string, string> = {
+  BF: "XOF", BJ: "XOF", CD: "CDF", CF: "XAF", CG: "XAF",
+  CI: "XOF", CM: "XAF", GA: "XAF", GN: "GNF",
+  GQ: "XAF", GW: "XOF", ML: "XOF", NE: "XOF", RW: "RWF",
+  SN: "XOF", TD: "XAF", TG: "XOF",
+  UG: "UGX",
+};
+
+export const AFRIBAPAY_CONFIRMED_COUNTRIES: ReadonlySet<string> = new Set([
+  "BF", "BJ", "CD", "CF", "CG", "CI", "CM", "GA", "GN", "GW", "ML", "NE", "SN", "TD", "TG",
+]);
+
 const TOKEN_FILE = appPath(".local", "afribapay_token.json");
 const TOKEN_REFRESH_SKEW_MS = 60_000;
 const TOKEN_FALLBACK_TTL_MS = 15 * 60_000;
@@ -21,12 +33,6 @@ function isAbortError(error: unknown): boolean {
     || candidate?.code === "ABORT_ERR"
     || /aborted|abort/i.test(String(candidate?.message || ""));
 }
-
-export const AFRIBAPAY_MIN_PAYIN_AMOUNT = 100;
-// AfribaPay's public docs currently state both 2,000,000 and 2,500,000 for
-// PAYIN. Use the lower documented ceiling until the provider confirms which
-// limit is authoritative.
-export const AFRIBAPAY_MAX_PAYIN_AMOUNT = 2_000_000;
 
 function getAfribaPayCredentials() {
   return {
@@ -321,11 +327,10 @@ async function fetchAfribaPayJson(
 }
 
 export function validateAfribaPayinAmount(amount: number): string | undefined {
-  if (!Number.isFinite(amount) || amount < AFRIBAPAY_MIN_PAYIN_AMOUNT) {
-    return `Le montant AfribaPay doit être supérieur ou égal à ${AFRIBAPAY_MIN_PAYIN_AMOUNT}.`;
-  }
-  if (amount > AFRIBAPAY_MAX_PAYIN_AMOUNT) {
-    return `Le montant AfribaPay doit être inférieur ou égal à ${AFRIBAPAY_MAX_PAYIN_AMOUNT}.`;
+  // Country-specific limits are configured by admins and checked by routes.
+  // The provider adapter rejects only values that cannot represent a payment.
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return "Le montant AfribaPay doit être un nombre positif.";
   }
   return undefined;
 }
@@ -339,32 +344,18 @@ export function verifyAfribaPayWebhookSignature(
   rawBody: Buffer | string | undefined,
   signature: string | string[] | undefined,
   apiKey?: string,
-  timestamp?: string,
 ): boolean {
   if (!rawBody || !signature || Array.isArray(signature)) return false;
   const secret = apiKey || getAfribaPayCredentials().secretKey;
   if (!secret) return false;
-  const received = signature.trim().replace(/^sha256=/i, "");
+  const received = signature.trim();
   if (!/^[a-f0-9]{64}$/i.test(received)) return false;
   const receivedBuffer = Buffer.from(received, "hex");
   const bodyBuffer = Buffer.isBuffer(rawBody) ? rawBody : Buffer.from(rawBody);
-  const signedMessages = [bodyBuffer];
-  if (timestamp?.trim()) {
-    const timestampValue = timestamp.trim();
-    // The current public docs specify raw-body signing. Retain timestamp-prefixed
-    // forms only for explicitly timestamped legacy callbacks.
-    signedMessages.push(
-      Buffer.from(`${timestampValue}${bodyBuffer.toString("utf8")}`),
-      Buffer.from(`${timestampValue}.${bodyBuffer.toString("utf8")}`),
-      Buffer.from(`${timestampValue}/${bodyBuffer.toString("utf8")}`),
-    );
-  }
-  return signedMessages.some(message => {
-    const expected = crypto.createHmac("sha256", secret).update(message).digest("hex");
-    const expectedBuffer = Buffer.from(expected, "hex");
-    return receivedBuffer.length === expectedBuffer.length
-      && crypto.timingSafeEqual(receivedBuffer, expectedBuffer);
-  });
+  const expected = crypto.createHmac("sha256", secret).update(bodyBuffer).digest("hex");
+  const expectedBuffer = Buffer.from(expected, "hex");
+  return receivedBuffer.length === expectedBuffer.length
+    && crypto.timingSafeEqual(receivedBuffer, expectedBuffer);
 }
 
 // ─── Fetch countries (from AfribaPay) ────────────────────────────────────────
@@ -444,8 +435,6 @@ export async function initiateAfribaPayin(params: AfribaPayinParams): Promise<Af
       reference_id: params.reference_id || params.order_id,
       lang: params.lang || "fr",
       notify_url: params.notify_url || "",
-      return_url: params.return_url || "",
-      cancel_url: params.cancel_url || "",
     };
 
     console.log(`[AfribaPay Payin] Initiating ${params.amount} ${params.currency} (${params.operator}/${params.country})`);
@@ -470,7 +459,7 @@ export async function initiateAfribaPayin(params: AfribaPayinParams): Promise<Af
     }
 
     const d = data.data;
-    if (d?.status === "FAILED" || d?.status === "ERROR") {
+    if (d?.status === "FAILED") {
       return {
         success: false,
         message: d.message || "Échec AfribaPay",
@@ -545,10 +534,7 @@ export async function initiateAfribaPayout(params: AfribaPayoutParams): Promise<
       order_id: params.order_id,
       merchant_key: merchantKey,
       reference_id: params.reference_id || params.order_id,
-      lang: params.lang || "fr",
       notify_url: params.notify_url,
-      return_url: "",
-      cancel_url: "",
     };
 
     console.log(`[AfribaPay Payout] Initiating ${params.amount} ${params.currency} (${params.operator}/${params.country})`);
@@ -574,7 +560,7 @@ export async function initiateAfribaPayout(params: AfribaPayoutParams): Promise<
 
     const d = data.data;
     const payoutStatus = String(d?.status || "").toUpperCase();
-    if (["FAILED", "ERROR", "REJECTED", "CANCELLED", "EXPIRED", "NOT_FOUND", "NOT FOUND"].includes(payoutStatus)) {
+    if (payoutStatus === "FAILED") {
       return {
         success: false,
         transaction_id: d?.transaction_id,
@@ -633,10 +619,10 @@ export function classifyAfribaPayinStatus(
   // response may carry a terminal pay-in state.
   if (httpStatus < 200 || httpStatus >= 300) return "pending";
   const status = String(providerStatus || "").toUpperCase();
-  if (["SUCCESS", "COMPLETED", "SUCCESSFUL", "PAID", "APPROVED"].includes(status)) {
+  if (status === "SUCCESS") {
     return "completed";
   }
-  if (["FAILED", "CANCELLED", "REJECTED", "EXPIRED"].includes(status)) {
+  if (status === "FAILED") {
     return "failed";
   }
   return "pending";
@@ -668,10 +654,10 @@ export function classifyAfribaPayoutStatus(
   if (httpStatus < 200 || httpStatus >= 300) return "pending";
 
   const status = String(providerStatus || "").toUpperCase();
-  if (["SUCCESS", "COMPLETED", "SUCCESSFUL", "PAID", "APPROVED", "PROCESSED"].includes(status)) {
+  if (status === "SUCCESS") {
     return "completed";
   }
-  if (["FAILED", "CANCELLED", "REJECTED", "EXPIRED"].includes(status)) {
+  if (status === "FAILED") {
     return "failed";
   }
   // NOT_FOUND is not treated as terminal until AfribaPay confirms that
@@ -777,14 +763,12 @@ async function getCachedCountries(): Promise<Record<string, AfribaPayCountry>> {
 }
 
 // ─── Static OTP-required overrides ────────────────────────────────────────────
-// Source of truth: AfribaPay /v1/countries API (verified 2026-07).
-// Used as a typed fallback when the live API is unreachable or returns stale data.
+// Union of the latest published OTP requirements and the live /v1/countries
+// catalogue. A stale live flag must not erase a currently documented requirement.
 //
 // type "ussd" = user must dial the USSD code to obtain OTP, then submit it.
-// type "api"  = AfribaPay sends the OTP by SMS via POST /v1/pay/otp (otp_code: "").
+// type "api"  = AfribaPay sends the OTP by SMS via the documented /v1/pay/otp request.
 //
-// Only operators with otp_required: 1 in the live API belong here.
-// DO NOT add operators that are otp_required: 0 (e.g. CI/moov, BF/moov, GN/orange).
 const AFRIBAPAY_STATIC_OTP_TABLE: Record<string, Record<string, { type: "api" | "ussd"; ussdCode: string }>> = {
   BF: {
     orange:     { type: "ussd", ussdCode: "*144*4*6*montant#" },
@@ -796,13 +780,39 @@ const AFRIBAPAY_STATIC_OTP_TABLE: Record<string, Record<string, { type: "api" | 
   SN: {
     orange: { type: "ussd", ussdCode: "#144*391#" },
   },
-  // GN/orange → otp_required: 0 per live API — NOT in this table.
+  // Latest published OTP documentation marks Guinea Orange as OTP-required.
+  // Use the SMS OTP endpoint because no Guinea Orange USSD code is documented.
+  GN: {
+    orange: { type: "api", ussdCode: "" },
+  },
   // CI/moov   → otp_required: 0 per live API — NOT in this table.
   // BF/moov   → otp_required: 0 per live API — NOT in this table.
 };
 
 function staticOtpEntry(country: string, operatorCode: string): { type: "api" | "ussd"; ussdCode: string } | null {
   return AFRIBAPAY_STATIC_OTP_TABLE[country.toUpperCase()]?.[operatorCode.toLowerCase()] ?? null;
+}
+
+export function resolveAfribaPayOtpInfo(
+  country: string,
+  operatorCode: string,
+  liveOperator?: { otp_required?: number; ussd_code?: string } | null,
+): { required: boolean; type: "api" | "ussd" | "none"; ussdCode: string } {
+  const staticEntry = staticOtpEntry(country, operatorCode);
+  if (!liveOperator || liveOperator.otp_required !== 1) {
+    return staticEntry
+      ? { required: true, type: staticEntry.type, ussdCode: staticEntry.ussdCode }
+      : { required: false, type: "none", ussdCode: "" };
+  }
+
+  const isApiOtp = !liveOperator.ussd_code
+    || liveOperator.ussd_code.toLowerCase().includes("endpoint")
+    || liveOperator.ussd_code.toLowerCase().includes("/pay/otp");
+  return {
+    required: true,
+    type: isApiOtp ? "api" : "ussd",
+    ussdCode: isApiOtp ? "" : liveOperator.ussd_code || staticEntry?.ussdCode || "",
+  };
 }
 
 /** True if an AfribaPay error message is the upstream "OTP required" rejection. */
@@ -830,43 +840,29 @@ export async function getAfribaPayOtpInfo(country: string, operatorCode: string)
       for (const [, curData] of Object.entries(countryData.currencies)) {
         const op = curData.operators.find(o => o.operator_code === operatorCode.toLowerCase());
         if (op) {
-          if (op.otp_required !== 1) {
-            // Live API says not required — trust it. The static table is only for
-            // operators confirmed as otp_required:1, so no override needed here.
-            return { required: false, type: "none", ussdCode: "" };
-          }
-          // Detect type from ussd_code field:
-          //   "endpoint" or "/pay/otp" → AfribaPay sends SMS (api)
-          //   otherwise               → user dials the USSD code themselves (ussd)
-          const isApiOtp = !op.ussd_code
-            || op.ussd_code.toLowerCase().includes("endpoint")
-            || op.ussd_code.toLowerCase().includes("/pay/otp");
-          const liveUssdCode = isApiOtp ? "" : op.ussd_code;
-          return {
-            required: true,
-            type: isApiOtp ? "api" : "ussd",
-            // Prefer static USSD code if live one is missing/empty — static table
-            // has the exact dial strings from the official AfribaPay docs.
-            ussdCode: liveUssdCode || staticEntry?.ussdCode || "",
-          };
+          return resolveAfribaPayOtpInfo(country, operatorCode, op);
         }
       }
     }
     // Operator not found in live data — fall back to the static table.
     // This preserves correct type/ussdCode even when the live API is down.
-    if (staticEntry) return { required: true, type: staticEntry.type, ussdCode: staticEntry.ussdCode };
+    if (staticEntry) return resolveAfribaPayOtpInfo(country, operatorCode);
+    if (_countriesFetchFailed) {
+      throw new Error("Impossible de vérifier les règles OTP AfribaPay pour cet opérateur.");
+    }
     return { required: false, type: "none", ussdCode: "" };
   } catch (err: any) {
     console.error(`[AfribaPay] getAfribaPayOtpInfo(${country}, ${operatorCode}) failed:`, err?.message || err);
-    if (staticEntry) return { required: true, type: staticEntry.type, ussdCode: staticEntry.ussdCode };
-    return { required: false, type: "none", ussdCode: "" };
+    if (staticEntry) return resolveAfribaPayOtpInfo(country, operatorCode);
+    throw err;
   }
 }
 
-// ─── OTP initiation (POST /v1/pay/otp with empty otp_code — sends SMS) ──────
-// AfribaPay requires otp_code to be present in the body (even empty "") to
-// distinguish initiation from confirmation. Without it the endpoint returns 500.
-export async function initiateAfribaPayOtp(params: Omit<AfribaPayinParams, "return_url" | "cancel_url">): Promise<{
+// ─── OTP initiation (POST /v1/pay/otp sends the documented SMS request) ──────
+export async function initiateAfribaPayOtp(params: Pick<
+  AfribaPayinParams,
+  "operator" | "country" | "phone_number" | "amount" | "currency"
+>): Promise<{
   success: boolean;
   message?: string;
   providerCode?: string;
@@ -890,12 +886,7 @@ export async function initiateAfribaPayOtp(params: Omit<AfribaPayinParams, "retu
       phone_number: params.phone_number,
       amount: params.amount,
       currency: params.currency,
-      order_id: params.order_id,
       merchant_key: merchantKey,
-      reference_id: params.reference_id || params.order_id,
-      lang: params.lang || "fr",
-      notify_url: params.notify_url || "",
-      otp_code: "",   // Required by AfribaPay even for initiation; empty = "send SMS"
     };
 
     console.log(`[AfribaPay OTP Init] Sending OTP SMS: ${params.amount} ${params.currency} (${params.operator}/${params.country})`);
@@ -942,7 +933,7 @@ export async function initiateAfribaPayOtp(params: Omit<AfribaPayinParams, "retu
 }
 
 // ─── OTP confirmation (POST /v1/pay/payin with otp_code) ─────────────────────
-// Per AfribaPay docs: step 1 = POST /v1/pay/otp (sends SMS, otp_code:"")
+// Per AfribaPay docs: step 1 = POST /v1/pay/otp (sends SMS)
 //                    step 2 = POST /v1/pay/payin WITH otp_code filled
 // Do NOT call /v1/pay/otp again for confirmation — it must go to /v1/pay/payin.
 export interface AfribaPayOtpParams {
@@ -983,8 +974,6 @@ export async function confirmAfribaPayOtp(params: AfribaPayOtpParams): Promise<A
       reference_id: params.reference_id || params.order_id,
       otp_code: params.otp_code,
       notify_url: params.notify_url || "",
-      return_url: params.return_url || "",
-      cancel_url: params.cancel_url || "",
       lang: params.lang || "fr",
     };
 
@@ -1014,7 +1003,7 @@ export async function confirmAfribaPayOtp(params: AfribaPayOtpParams): Promise<A
     }
 
     const d = data?.data;
-    if (d?.status === "FAILED" || d?.status === "ERROR") {
+    if (d?.status === "FAILED") {
       return {
         success: false,
         message: d?.message || "OTP rejeté par l'opérateur",
@@ -1070,11 +1059,9 @@ export function parseAfribaPayWebhook(payload: any): {
   const statusRaw = (d?.status || d?.transaction_status || d?.payment_status || "").toUpperCase();
 
   let status: "completed" | "failed" | "pending" = "pending";
-  if (statusRaw === "SUCCESS" || statusRaw === "COMPLETED" || statusRaw === "SUCCESSFUL"
-      || statusRaw === "PAID" || statusRaw === "APPROVED" || statusRaw === "PROCESSED") {
+  if (statusRaw === "SUCCESS") {
     status = "completed";
-  } else if (statusRaw === "FAILED" || statusRaw === "ERROR" || statusRaw === "CANCELLED"
-      || statusRaw === "REJECTED" || statusRaw === "EXPIRED") {
+  } else if (statusRaw === "FAILED") {
     status = "failed";
   }
 

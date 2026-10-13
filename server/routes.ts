@@ -100,7 +100,7 @@ import {
   sandboxStatusLabel,
   type SandboxCollectStatus,
 } from "./sandboxTestNumbers";
-import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, resolveAfribaPayPayoutOrderId, checkAfribaPayStatus, checkAfribaPayoutStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, isAfribaPayOtpRequired, getAfribaPayOtpInfo, confirmAfribaPayOtp, isAfribaPayOtpRequiredMessage, isRetryableAfribaOtpRejection, verifyAfribaPayWebhookSignature, validateAfribaPayinAmount } from "./afribapay";
+import { initiateAfribaPayin, initiateAfribaPayOtp, initiateAfribaPayout, resolveAfribaPayPayoutOrderId, checkAfribaPayStatus, checkAfribaPayoutStatus, computeAfribaPayFees, fetchAfribaPayCountries, parseAfribaPayWebhook, AFRIBAPAY_DEFAULT_MARGIN, AFRIBAPAY_CONFIRMED_COUNTRIES, AFRIBAPAY_ISO_CURRENCY, isAfribaPayOtpRequired, getAfribaPayOtpInfo, confirmAfribaPayOtp, isAfribaPayOtpRequiredMessage, isRetryableAfribaOtpRejection, verifyAfribaPayWebhookSignature } from "./afribapay";
 import { initiatePixPayUssd, initiatePixPayOtp, initiatePixPayWave, initiatePixPayPayout, checkPixPayStatus, computePixPayFees, parsePixPayWebhook, PIXPAY_CURRENCY_MAP, PIXPAY_SUPPORTED_COUNTRIES, detectPixPayFlowType, getPixPayServiceId, PIXPAY_OTP_USSD_CODES } from "./pixpay";
 import { assertPawaPayProviderActive, classifyPawaPayControlledTransaction, createPawaPayDeposit, createPawaPayId, createPawaPayPayout, createPawaPayPaymentPage, getPawaPayActiveConfiguration, getPawaPayDeposit, getPawaPayPayout, resolvePawaPayOperationConfiguration, PAWAPAY_CUSTOMER_MESSAGE } from "./pawapay";
 import { addPendingPayment, removePendingPayment, expireCryptoPaymentIfNeeded } from "./paymentPoller";
@@ -258,28 +258,17 @@ function parseHostedBearerKey(authorization: unknown): string | null {
 
 function buildWebhookUrl(path: string, baseUrl = process.env.APP_URL || ""): string {
   const base = baseUrl.replace(/\/$/, "");
+  // AfribaPay requires an HMAC-signed callback and must never receive the
+  // generic query-string webhook token used by older provider integrations.
+  if (path.split("?")[0] === "/api/afribapay/webhook") {
+    return `${base}${path}`;
+  }
   const token = process.env.WEBHOOK_SECRET;
   return token
     ? `${base}${path}?token=${encodeURIComponent(token)}`
     : `${base}${path}`;
 }
 
-// ─── AfribaPay: country → ISO currency (authoritative, from AfribaPay API) ───
-// Used to always send the correct ISO currency code regardless of DB value.
-const AFRIBAPAY_ISO_CURRENCY: Record<string, string> = {
-  BF: "XOF", BJ: "XOF", CD: "CDF", CF: "XAF", CG: "XAF",
-  CI: "XOF", CM: "XAF", GA: "XAF",
-  GQ: "XAF", GW: "XOF", ML: "XOF", NE: "XOF", RW: "RWF",
-  SN: "XOF", TD: "XAF", TG: "XOF",
-  UG: "UGX",
-};
-
-// Countries currently returned by AfribaPay's live /v1/countries endpoint.
-// Keep this list aligned with the live catalogue; this is only a warning guard,
-// while the operator/provider configuration remains controlled in the database.
-const AFRIBAPAY_CONFIRMED_COUNTRIES = new Set([
-  "BF", "BJ", "CD", "CF", "CG", "CI", "CM", "GA", "GW", "ML", "NE", "SN", "TD", "TG",
-]);
 function warnIfAfribaPayUnsupportedCountry(countryCode: string, context: string) {
   if (!AFRIBAPAY_CONFIRMED_COUNTRIES.has(countryCode.toUpperCase())) {
     console.warn("[AfribaPay] Request uses a country outside the confirmed list.");
@@ -7207,9 +7196,6 @@ export async function registerRoutes(
                   phone_number: localPhone,
                   amount: totalAmount,
                   currency: afribapayCurrency,
-                  order_id: depositRef,
-                  reference_id: depositRef,
-                  notify_url: callbackUrl,
                 });
 
                 if (!otpInitResult.success) {
@@ -11598,9 +11584,6 @@ export async function registerRoutes(
                   phone_number: localPhone,
                   amount: numAmount,
                   currency: afribapayCurrency,
-                  order_id: reference,
-                  reference_id: reference,
-                  notify_url: callbackUrl,
                 });
 
                 if (!otpInitResult.success) {
@@ -18196,24 +18179,14 @@ export async function registerRoutes(
   // ─── AfribaPay Webhook ────────────────────────────────────────────────────
   app.post("/api/afribapay/webhook", webhookLimiter, async (req, res) => {
     try {
-      // AfribaPay documents AfribaPAY-Sign as an HMAC over the exact raw body.
-      // Keep the old callback token as a compatibility fallback for deployments
-      // whose provider account has not yet enabled the documented signature.
-      const webhookSecret = process.env.WEBHOOK_SECRET;
-      const webhookToken = (req.query.token as string) || (req.headers["x-webhook-token"] as string);
+      // AfribaPay requires HMAC-SHA256 over the exact raw body. Unsigned
+      // callbacks and generic query-string tokens are never accepted.
       const providerSignature = req.headers["afribapay-sign"] as string | undefined;
-      const providerTimestamp = (req.headers["afribapay-timestamp"]
-        || req.headers["x-afribapay-timestamp"]) as string | undefined;
       const rawBody = (req as any).rawBody as Buffer | undefined;
-      const signatureValid = verifyAfribaPayWebhookSignature(rawBody, providerSignature, undefined, providerTimestamp);
-      const tokenValid = Boolean(webhookSecret && webhookToken === webhookSecret);
-      const requireSignature = process.env.AFRIBAPAY_REQUIRE_SIGNED_WEBHOOKS === "true";
-      if (providerSignature ? !signatureValid : (requireSignature ? !signatureValid : !tokenValid)) {
-        console.warn("[AfribaPay Webhook] Signature/token invalide — requête rejetée");
-        return res.status(401).json({ message: "Unauthorized" });
-      }
-      if (!providerSignature && tokenValid) {
-        console.warn("[AfribaPay Webhook] Legacy callback token accepted; configure AfribaPAY-Sign verification.");
+      const signatureValid = verifyAfribaPayWebhookSignature(rawBody, providerSignature);
+      if (!signatureValid) {
+        console.warn("[AfribaPay Webhook] Signature Afribapay-Sign absente ou invalide — requête rejetée");
+        return res.status(403).json({ message: "Forbidden" });
       }
       const payload = req.body;
       console.log("[AfribaPay Webhook] Received callback");
@@ -19684,14 +19657,13 @@ export async function registerRoutes(
 
       // ── Resolve payment provider (use operator tag, fallback to country-based detection) ─
         const PIXPAY_COLLECT_CODES = new Set(["CM","CD","CI","SN","BF"]);
-        const AFRIBAPAY_COLLECT_CODES = new Set(["BF","BJ","CD","CF","CG","CI","CM","GA","GW","ML","NE","SN","TD","TG"]);
       const paymentProvider = ((operatorRecord as any).depositPaymentProvider || (operatorRecord as any).paymentProvider) as string;
       if (paymentProvider !== "afribapay" && paymentProvider !== "pixpay" && paymentProvider !== "pawapay") {
         return res.status(422).json({ error: "unprocessable", message: "Le paiement n’est pas configuré pour cet opérateur." });
       }
        const countryCode = country.code.toUpperCase();
         const providerCountries = paymentProvider === "pixpay" ? PIXPAY_COLLECT_CODES
-          : paymentProvider === "afribapay" ? AFRIBAPAY_COLLECT_CODES : null;
+          : paymentProvider === "afribapay" ? AFRIBAPAY_CONFIRMED_COUNTRIES : null;
         if (providerCountries && !providerCountries.has(countryCode)) {
          return res.status(422).json({
            error: "unprocessable",
@@ -19699,12 +19671,15 @@ export async function registerRoutes(
          });
        }
         if (paymentProvider === "afribapay") {
-          const amountError = validateAfribaPayinAmount(amountNum);
-          if (amountError) {
+          const minDeposit = Number(country.minDeposit ?? 100);
+          const maxDeposit = Number(country.maxDeposit ?? 5000000);
+          if (amountNum < minDeposit || amountNum > maxDeposit) {
             return res.status(422).json({
               error: "unprocessable",
               code: "AMOUNT_OUT_OF_RANGE",
-              message: amountError,
+              message: amountNum < minDeposit
+                ? `Le montant minimum de dépôt est de ${minDeposit.toLocaleString()} ${country.currency}.`
+                : `Le montant maximum de dépôt est de ${maxDeposit.toLocaleString()} ${country.currency}.`,
             });
           }
         }
@@ -19974,7 +19949,7 @@ export async function registerRoutes(
       // Two OTP sub-types handled differently:
       //
       //   type "api"  (Orange CI, LigdiCash BF…):
-      //     AfribaPay sends an SMS when we POST /v1/pay/otp with otp_code: "".
+      //     AfribaPay sends an SMS when we POST the documented /v1/pay/otp body.
       //     → Call initiateAfribaPayOtp, cache session, return 400 with reference.
       //
       //   type "ussd" (Orange BF *144*4*6*montant#, Orange SN #144*391#…):
@@ -20033,9 +20008,6 @@ export async function registerRoutes(
               phone_number: localPhonePre,
               amount: amountNum,
               currency: afribapayCurrencyPre,
-              order_id: depositRef,
-              reference_id: depositRef,
-              notify_url: callbackUrlPre,
             });
             if (!otpInitResultPre.success) {
               await storage.updateTransactionStatus(txPre.id, "failed");
@@ -22197,9 +22169,6 @@ export async function registerRoutes(
                  phone_number: localPhone,
                  amount,
                  currency: afribapayCurrency,
-                 order_id: txRef,
-                 reference_id: txRef,
-                 notify_url: afribapayCallbackUrl,
                });
                if (!otpInitResult.success && !isAmbiguousProviderInitiationFailure(otpInitResult)) {
                  throw createProviderFailure(otpInitResult.message || "Impossible d'envoyer le code OTP.", {

@@ -2,14 +2,15 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import {
-  AFRIBAPAY_MAX_PAYIN_AMOUNT,
-  AFRIBAPAY_MIN_PAYIN_AMOUNT,
+  AFRIBAPAY_CONFIRMED_COUNTRIES,
+  AFRIBAPAY_ISO_CURRENCY,
   buildAfribaPayStatusUrl,
   classifyAfribaPayinStatus,
   classifyAfribaPayoutStatus,
   isRetryableAfribaOtpRejection,
   parseAfribaPayWebhook,
   resolveAfribaPayPayoutOrderId,
+  resolveAfribaPayOtpInfo,
   resolveAfribaPayPayinTransactionId,
   validateAfribaPayinAmount,
   verifyAfribaPayWebhookSignature,
@@ -21,16 +22,10 @@ test("AfribaPay webhook signature validates the exact raw body", () => {
   const signature = crypto.createHmac("sha256", secret).update(body).digest("hex");
 
   assert.equal(verifyAfribaPayWebhookSignature(body, signature, secret), true);
-  assert.equal(verifyAfribaPayWebhookSignature(body, `sha256=${signature}`, secret), true);
+  assert.equal(verifyAfribaPayWebhookSignature(body, `sha256=${signature}`, secret), false);
   assert.equal(verifyAfribaPayWebhookSignature(Buffer.from(`${body} `), signature, secret), false);
   assert.equal(verifyAfribaPayWebhookSignature(body, signature, "wrong-secret"), false);
-
-  const timestamp = "1720000000";
-  const timestampSignature = crypto
-    .createHmac("sha256", secret)
-    .update(`${timestamp}.${body.toString("utf8")}`)
-    .digest("hex");
-  assert.equal(verifyAfribaPayWebhookSignature(body, timestampSignature, secret, timestamp), true);
+  assert.equal(verifyAfribaPayWebhookSignature(body, undefined, secret), false);
 });
 
 test("AfribaPay webhook parser keeps reference_id and terminal statuses", () => {
@@ -51,14 +46,17 @@ test("AfribaPay webhook parser keeps reference_id and terminal statuses", () => 
     data: {
       reference_id: "merchant-ref",
       transaction_id: "provider-tx",
-      status: "APPROVED",
+      status: "SUCCESS",
     },
   });
   assert.equal(parsed.order_id, undefined);
   assert.equal(parsed.reference_id, "merchant-ref");
   assert.equal(parsed.transaction_id, "provider-tx");
   assert.equal(parsed.status, "completed");
-  assert.equal(parseAfribaPayWebhook({ status: "EXPIRED" }).status, "failed");
+  assert.equal(parseAfribaPayWebhook({ status: "FAILED" }).status, "failed");
+  assert.equal(parseAfribaPayWebhook({ status: "APPROVED" }).status, "pending");
+  assert.equal(parseAfribaPayWebhook({ status: "EXPIRED" }).status, "pending");
+  assert.equal(parseAfribaPayWebhook({ status: "ERROR" }).status, "pending");
   assert.equal(parseAfribaPayWebhook({ status: "PENDING" }).status, "pending");
   assert.equal(parseAfribaPayWebhook({ status: "NOT_FOUND" }).status, "pending");
 });
@@ -69,6 +67,9 @@ test("AfribaPay payout HTTP 404 and NOT_FOUND are non-final", () => {
   assert.equal(classifyAfribaPayoutStatus(503, "FAILED"), "pending");
   assert.equal(classifyAfribaPayoutStatus(200, "NOT_FOUND"), "pending");
   assert.equal(classifyAfribaPayoutStatus(200, "ERROR"), "pending");
+  assert.equal(classifyAfribaPayoutStatus(200, "APPROVED"), "pending");
+  assert.equal(classifyAfribaPayoutStatus(200, "PROCESSED"), "pending");
+  assert.equal(classifyAfribaPayoutStatus(200, "CANCELLED"), "pending");
   assert.equal(classifyAfribaPayoutStatus(200, "FAILED"), "failed");
   assert.equal(classifyAfribaPayoutStatus(200, "SUCCESS"), "completed");
 });
@@ -100,6 +101,9 @@ test("AfribaPay pay-in lookup errors and missing IDs remain pending", () => {
   assert.equal(classifyAfribaPayinStatus(503, "SUCCESS"), "pending");
   assert.equal(classifyAfribaPayinStatus(200, "NOT_FOUND"), "pending");
   assert.equal(classifyAfribaPayinStatus(200, "ERROR"), "pending");
+  assert.equal(classifyAfribaPayinStatus(200, "APPROVED"), "pending");
+  assert.equal(classifyAfribaPayinStatus(200, "PAID"), "pending");
+  assert.equal(classifyAfribaPayinStatus(200, "CANCELLED"), "pending");
   assert.equal(classifyAfribaPayinStatus(200, "FAILED"), "failed");
   assert.equal(classifyAfribaPayinStatus(200, "SUCCESS"), "completed");
 });
@@ -130,11 +134,26 @@ test("AfribaPay payin status accepts only the dedicated persisted provider trans
   );
 });
 
-test("AfribaPay payin amount validation uses the conservative documented range", () => {
-  assert.equal(validateAfribaPayinAmount(AFRIBAPAY_MIN_PAYIN_AMOUNT), undefined);
-  assert.equal(validateAfribaPayinAmount(AFRIBAPAY_MAX_PAYIN_AMOUNT), undefined);
-  assert.match(validateAfribaPayinAmount(99) || "", /supérieur ou égal/);
-  assert.match(validateAfribaPayinAmount(AFRIBAPAY_MAX_PAYIN_AMOUNT + 1) || "", /inférieur ou égal/);
+test("AfribaPay adapter leaves admin-configured country limits to routes", () => {
+  assert.equal(validateAfribaPayinAmount(1), undefined);
+  assert.equal(validateAfribaPayinAmount(2_500_000), undefined);
+  assert.equal(validateAfribaPayinAmount(5_000_000), undefined);
+  assert.match(validateAfribaPayinAmount(0) || "", /positif/);
+  assert.match(validateAfribaPayinAmount(-1) || "", /positif/);
+  assert.match(validateAfribaPayinAmount(Number.NaN) || "", /positif/);
+});
+
+test("AfribaPay latest catalogue supports Guinea and keeps its documented Orange OTP requirement", () => {
+  assert.equal(AFRIBAPAY_CONFIRMED_COUNTRIES.has("GN"), true);
+  assert.equal(AFRIBAPAY_ISO_CURRENCY.GN, "GNF");
+  assert.deepEqual(
+    resolveAfribaPayOtpInfo("GN", "orange", { otp_required: 0 }),
+    { required: true, type: "api", ussdCode: "" },
+  );
+  assert.deepEqual(
+    resolveAfribaPayOtpInfo("XX", "unknown", { otp_required: 0 }),
+    { required: false, type: "none", ussdCode: "" },
+  );
 });
 
 test("AfribaPay OTP rejection classifier keeps invalid codes retryable only", () => {

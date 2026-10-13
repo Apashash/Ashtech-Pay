@@ -41,3 +41,11 @@ Public payment-country catalogs must return only countries with at least one act
 **Why:** An active country row with zero usable operators was still exposed publicly, allowing GQ to appear in selectors despite having no supported payment flow.
 
 **How to apply:** Filter public country responses after loading operators, then re-check the provider-specific country allowlist during collection; keep historical transactions unaffected.
+
+## OTP documentation takes precedence over stale country flags
+
+The latest published OTP documentation marks Guinea Orange as OTP-required, while a previously verified live country response reported `otp_required: 0`. Keep GN/Orange enabled as an OTP flow using the documented wallet OTP endpoint; merge live requirements with the current static documented requirements instead of allowing a stale `0` to disable OTP.
+
+**Why:** A stale catalogue flag can bypass a newly documented OTP step and make the payment fail or proceed incorrectly.
+
+**How to apply:** When live and published OTP requirements conflict, preserve the current documented requirement as a fallback. If the country endpoint is unavailable and no static rule exists, fail explicitly rather than silently assuming OTP is unnecessary.
