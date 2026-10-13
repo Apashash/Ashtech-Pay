@@ -475,7 +475,11 @@ export default function AutoConversionPage() {
 
   const { data: user } = useQuery<User>({ queryKey: ["/api/user"] });
   const { data: wallets = [] } = useQuery<WalletEntry[]>({ queryKey: ["/api/wallets"] });
-  const { data: rules = [], isLoading: rulesLoading } = useQuery<AutoConversionRule[]>({
+  const {
+    data: rules = [],
+    isLoading: rulesLoading,
+    error: rulesError,
+  } = useQuery<AutoConversionRule[]>({
     queryKey: ["/api/auto-conversion"],
   });
   const { data: conversionSettings } = useQuery<{ conversionMinimumXaf: number }>({
@@ -597,24 +601,23 @@ export default function AutoConversionPage() {
   async function handleCreate() {
     if (selectedSources.size === 0 || !toCurrency) return;
     setCreating(true);
-    let successCount = 0;
-    const errors: string[] = [];
-
     const sources = Array.from(selectedSources).filter((f) => f !== toCurrency);
+    let result: { created?: number; skipped?: number };
     try {
-      const result = await apiRequest("POST", "/api/auto-conversion/bulk", { fromCurrencies: sources, toCurrency });
-      successCount = (result as any)?.created ?? sources.length;
+      const response = await apiRequest("POST", "/api/auto-conversion/bulk", { fromCurrencies: sources, toCurrency });
+      result = await response.json() as { created?: number; skipped?: number };
     } catch (err: any) {
-      // Fallback: create one by one if bulk endpoint fails
-      for (const from of sources) {
-        try {
-          await apiRequest("POST", "/api/auto-conversion", { fromCurrency: from, toCurrency });
-          successCount++;
-        } catch (e: any) {
-          errors.push(`${from}: ${e?.message || "Erreur"}`);
-        }
-      }
+      setCreating(false);
+      toast({
+        title: "Création des règles impossible",
+        description: err?.message || "Le serveur n’a pas pu enregistrer les règles sélectionnées.",
+        variant: "destructive",
+      });
+      return;
     }
+
+    const successCount = Number(result?.created ?? 0);
+    const skippedCount = Number(result?.skipped ?? 0);
 
     // Refresh all balances and rules after creation — conversion may have started
     await Promise.all([
@@ -630,8 +633,12 @@ export default function AutoConversionPage() {
         description: "La conversion démarre immédiatement si un solde est disponible.",
       });
     }
-    if (errors.length > 0) {
-      toast({ title: "Certaines règles n'ont pas pu être créées", description: errors.join("\n"), variant: "destructive" });
+    if (skippedCount > 0) {
+      toast({
+        title: "Certaines règles n’ont pas été créées",
+        description: `${skippedCount} devise(s) sont déjà configurées ou incompatibles avec les règles existantes.`,
+        variant: "destructive",
+      });
     }
 
     setSelectedSources(new Set());
@@ -685,6 +692,15 @@ export default function AutoConversionPage() {
         )}
 
         {/* Existing rules grouped */}
+        {rulesError && (
+          <div
+            role="alert"
+            className="mx-4 mb-4 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+          >
+            <p className="font-semibold">Impossible de charger les règles de conversion.</p>
+            <p className="mt-1">{rulesError instanceof Error ? rulesError.message : "Erreur inconnue du serveur."}</p>
+          </div>
+        )}
         {rulesLoading ? (
           <div className="flex justify-center py-10">
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />

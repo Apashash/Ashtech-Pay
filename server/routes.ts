@@ -8656,14 +8656,81 @@ export async function registerRoutes(
   });
 
   // ── Auto-conversion rules ───────────────────────────────────────────────────
+  const classifyAutoConversionError = (error: any) => {
+    const cause = error?.cause ?? {};
+    const code = String(error?.code ?? cause.code ?? "");
+    const errno = Number(error?.errno ?? cause.errno ?? 0);
+    const message = String(error?.sqlMessage ?? error?.message ?? cause.message ?? "");
+    const diagnostic = `${code} ${errno} ${message} ${error?.query ?? cause.query ?? ""}`;
+    const referencesRuleTable = /auto_conversion_rules/i.test(diagnostic);
+    const missingTable =
+      referencesRuleTable &&
+      (code === "ER_NO_SUCH_TABLE" ||
+        code === "42P01" ||
+        errno === 1146 ||
+        /auto_conversion_rules.*doesn.t exist|relation .*auto_conversion_rules.*does not exist/i.test(diagnostic));
+    if (missingTable) {
+      return {
+        status: 503,
+        code: "AUTO_CONVERSION_TABLE_MISSING",
+        message: "La table des règles de conversion automatique manque dans la base de données. L’administrateur doit appliquer le SQL de création.",
+      };
+    }
+
+    const missingColumn =
+      referencesRuleTable &&
+      (code === "ER_BAD_FIELD_ERROR" ||
+        code === "42703" ||
+        errno === 1054 ||
+        /unknown column|column .* does not exist/i.test(diagnostic));
+    if (missingColumn) {
+      return {
+        status: 503,
+        code: "AUTO_CONVERSION_SCHEMA_OUTDATED",
+        message: "Le schéma de la table des conversions automatiques est incomplet. L’administrateur doit vérifier ses colonnes et appliquer la mise à jour SQL requise.",
+      };
+    }
+
+    if (code === "ER_NO_REFERENCED_ROW_2" || code === "23503" || errno === 1452) {
+      return {
+        status: 409,
+        code: "AUTO_CONVERSION_USER_REFERENCE_INVALID",
+        message: "Le compte n’a pas pu être associé à cette règle dans la base de données. Réessayez ou contactez l’assistance.",
+      };
+    }
+
+    return {
+      status: 500,
+      code: "AUTO_CONVERSION_DB_WRITE_FAILED",
+      message: "Le serveur n’a pas pu enregistrer la règle de conversion. Réessayez plus tard et communiquez le code AUTO_CONVERSION_DB_WRITE_FAILED à l’assistance.",
+    };
+  };
+
+  const isAutoConversionDuplicate = (error: any) =>
+    error?.code === "ER_DUP_ENTRY" ||
+    error?.code === "23505" ||
+    error?.cause?.code === "ER_DUP_ENTRY" ||
+    error?.cause?.code === "23505" ||
+    Number(error?.errno ?? error?.cause?.errno) === 1062;
+
+  const logAutoConversionError = (operation: string, error: any) => {
+    console.error(`[AutoConversion] ${operation} failed`, {
+      code: error?.code ?? error?.cause?.code,
+      errno: error?.errno ?? error?.cause?.errno,
+      sqlState: error?.sqlState ?? error?.cause?.sqlState,
+      message: String(error?.sqlMessage ?? error?.message ?? error?.cause?.message ?? "Unknown database error").slice(0, 1000),
+    });
+  };
+
   // GET /api/auto-conversion — list the user's auto-conversion rules
   app.get("/api/auto-conversion", requireAuth, async (req, res) => {
     try {
       const rules = await storage.getAutoConversionRules(req.userId!);
       res.json(rules);
     } catch (error) {
-      console.error("Get auto-conversion rules error:", error);
-      res.status(500).json({ message: "Erreur serveur" });
+      logAutoConversionError("list rules", error);
+      const failure = classifyAutoConversionError(error);
+      res.status(failure.status).json({ message: failure.message, code: failure.code });
     }
   });
 
@@ -8703,37 +8770,40 @@ export async function registerRoutes(
       res.json(rule);
 
       // After saving, immediately check if there's a balance to convert right now
-      const user = await storage.getUser(userId);
-      if (user) {
-        // Notify Telegram — rule activated
-        notifyAutoConversionRuleCreated({
-          userName: user.username,
-          userEmail: user.email,
-          fromCurrency,
-          toCurrency,
-          userCountry: user.country ?? undefined,
-        }).catch((err) => console.error("[Telegram] notifyAutoConversionRuleCreated failed:", err?.message ?? err));
-
-        const primary = user.preferredCurrency || "XAF";
-        let currentBalance = 0;
-        if (fromCurrency === primary) {
-          currentBalance = parseFloat(user.balance);
-        } else {
-          const w = await storage.getWallet(userId, fromCurrency);
-          currentBalance = w ? parseFloat(w.balance) : 0;
-        }
-        if (currentBalance > 0) {
-          maybeAutoConvert(userId, fromCurrency, currentBalance).catch((err) => {
-            console.error(`[AutoConversion] Immediate trigger error for user ${userId}:`, err?.message || err);
+      try {
+        const user = await storage.getUser(userId);
+        if (user) {
+          notifyAutoConversionRuleCreated({
+            userName: user.username,
+            userEmail: user.email,
+            fromCurrency,
+            toCurrency,
+            userCountry: user.country ?? undefined,
           });
+          const primary = user.preferredCurrency || "XAF";
+          let currentBalance = 0;
+          if (fromCurrency === primary) {
+            currentBalance = parseFloat(user.balance);
+          } else {
+            const w = await storage.getWallet(userId, fromCurrency);
+            currentBalance = w ? parseFloat(w.balance) : 0;
+          }
+          if (currentBalance > 0) {
+            maybeAutoConvert(userId, fromCurrency, currentBalance).catch((err) => {
+              console.error(`[AutoConversion] Immediate trigger error for user ${userId}:`, err?.message || err);
+            });
+          }
         }
+      } catch (postCreateError) {
+        logAutoConversionError("post-create processing", postCreateError);
       }
     } catch (error: any) {
-      if (error?.code === "23505") {
+      if (isAutoConversionDuplicate(error)) {
         return res.status(400).json({ message: "Une conversion automatique existe déjà pour cette devise." });
       }
-      console.error("Create auto-conversion rule error:", error);
-      res.status(500).json({ message: "Erreur serveur" });
+      logAutoConversionError("create rule", error);
+      const failure = classifyAutoConversionError(error);
+      res.status(failure.status).json({ message: failure.message, code: failure.code });
     }
   });
 
@@ -8767,42 +8837,51 @@ export async function registerRoutes(
           created.push({ fromCurrency, toCurrency });
           // Also add to allRules so subsequent iterations see correct state
           allRules.push({ id: "", userId, fromCurrency, toCurrency, notifyUrl: null, isActive: true, createdAt: new Date() });
-        } catch {
-          skipped.push(fromCurrency);
+        } catch (error: any) {
+          if (isAutoConversionDuplicate(error)) {
+            skipped.push(fromCurrency);
+            continue;
+          }
+          throw error;
         }
       }
 
       res.json({ created: created.length, skipped: skipped.length });
 
       // Single grouped Telegram notification for all created rules
-      if (user && created.length > 0) {
-        notifyAutoConversionRulesBulkCreated({
-          userName: user.username,
-          userEmail: user.email,
-          userCountry: user.country ?? undefined,
-          rules: created,
-        }).catch((err) => console.error("[Telegram] notifyAutoConversionRulesBulkCreated failed:", err?.message ?? err));
+      try {
+        if (user && created.length > 0) {
+          notifyAutoConversionRulesBulkCreated({
+            userName: user.username,
+            userEmail: user.email,
+            userCountry: user.country ?? undefined,
+            rules: created,
+          }).catch((err) => console.error("[Telegram] notifyAutoConversionRulesBulkCreated failed:", err?.message ?? err));
 
-        // Trigger immediate conversion for each rule if balance exists
-        for (const { fromCurrency } of created) {
-          const primary = user.preferredCurrency || "XAF";
-          let currentBalance = 0;
-          if (fromCurrency === primary) {
-            currentBalance = parseFloat(user.balance);
-          } else {
-            const w = await storage.getWallet(userId, fromCurrency);
-            currentBalance = w ? parseFloat(w.balance) : 0;
-          }
-          if (currentBalance > 0) {
-            maybeAutoConvert(userId, fromCurrency, currentBalance).catch((err) => {
-              console.error(`[AutoConversion] Bulk immediate trigger error for user ${userId}:`, err?.message || err);
-            });
+          // Trigger immediate conversion for each rule if balance exists
+          for (const { fromCurrency } of created) {
+            const primary = user.preferredCurrency || "XAF";
+            let currentBalance = 0;
+            if (fromCurrency === primary) {
+              currentBalance = parseFloat(user.balance);
+            } else {
+              const w = await storage.getWallet(userId, fromCurrency);
+              currentBalance = w ? parseFloat(w.balance) : 0;
+            }
+            if (currentBalance > 0) {
+              maybeAutoConvert(userId, fromCurrency, currentBalance).catch((err) => {
+                console.error(`[AutoConversion] Bulk immediate trigger error for user ${userId}:`, err?.message || err);
+              });
+            }
           }
         }
+      } catch (postCreateError) {
+        logAutoConversionError("bulk post-create processing", postCreateError);
       }
     } catch (error: any) {
-      console.error("Bulk create auto-conversion rules error:", error);
-      res.status(500).json({ message: "Erreur serveur" });
+      logAutoConversionError("bulk create rules", error);
+      const failure = classifyAutoConversionError(error);
+      res.status(failure.status).json({ message: failure.message, code: failure.code });
     }
   });
 
